@@ -9,14 +9,12 @@ name: Unity WebGL build
 # already on a branch of this repository.
 #
 # Before the first run:
-#   1. Open unity/MyAtras once locally and commit ProjectSettings/, including
-#      ProjectVersion.txt — game-ci reads the Unity version from that file and
-#      ignores the workflow's unityVersion input, so the build cannot start
-#      without it.
-#   2. Check that game-ci publishes an editor image for exactly that version.
-#      A missing image is the usual reason this fails; `customImage` is the escape
+#   1. Check that game-ci publishes an editor image for the version in
+#      unity/MyAtras/ProjectSettings/ProjectVersion.txt (6000.4.8f1). game-ci reads
+#      the version from that file and ignores the workflow's unityVersion input, so
+#      a missing image is the usual reason this fails; `customImage` is the escape
 #      hatch, and changing the project's version instead can change the output.
-#   3. Add the repository secrets below. On a personal licence, activations are
+#   2. Add the repository secrets below. On a personal licence, activations are
 #      limited and every run consumes one, so keep this workflow manual until it
 #      is known to work.
 #

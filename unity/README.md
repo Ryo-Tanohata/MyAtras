@@ -25,16 +25,18 @@ generates `Assets/Scenes/Main.unity` on every build, so nothing hand-written has
 kept in step with the editor version. Commit the generated `.meta` files and
 `ProjectSettings/` after the first open; the generated scene is ignored by git.
 
-`ProjectSettings/ProjectVersion.txt` in particular has to be committed before the CI
-build can run: game-ci reads the editor version from that file in the checked-out
-project and ignores the workflow's `unityVersion` input (`src/build-args.ts` and
-`src/resolve-project-path.ts` in game-ci/unity-builder). Which version it names also
-decides whether a matching editor image exists, so check that before relying on CI.
+`ProjectSettings/ProjectVersion.txt` is the exception: it is committed, pinned to
+**6000.4.8f1**, the version the author's other Unity WebGL project ships from. It has
+to exist before CI can build, because game-ci reads the editor version from that file
+in the checked-out project and ignores the workflow's `unityVersion` input
+(`src/build-args.ts` and `src/resolve-project-path.ts` in game-ci/unity-builder).
+Whether game-ci publishes an editor image for that exact version is still unverified —
+the other project builds locally, not in CI.
 
 ## Build
 
-Open `unity/MyAtras` in Unity Hub with **Unity 6 LTS (6000.x)**, Web (WebGL) build
-support installed, then either:
+Open `unity/MyAtras` in Unity Hub with **6000.4.8f1** (the pinned version), Web (WebGL)
+build support installed, then either:
 
 - editor: **MyAtras > Build Web (WebGL) to dist-unity**
 - terminal:
@@ -55,7 +57,14 @@ committing the output is what lets any later session, and any phone, check the r
 | Decompression Fallback | On | Pages sends no `Content-Encoding`; the loader inflates instead |
 | Name Files As Hashes | On | Cache-safe file names across deploys |
 | Graphics API | OpenGL ES 3.0 (WebGL 2.0) | What the compositing needs |
-| Managed Stripping | High | Keeps the download down |
+| Strip Engine Code | On | Keeps the download down |
+| Splash Screen | Off | Nothing should sit between the viewer and the globe |
+
+It also registers `MyAtras/EarthComposite` in **Always Included Shaders** before
+building. Nothing references that shader through a material asset — the scene is
+generated and the material is created at runtime — so the build would strip it,
+`Shader.Find` would return null in the browser, and the page would come up empty while
+the editor still looked fine.
 
 ## Observation data
 
