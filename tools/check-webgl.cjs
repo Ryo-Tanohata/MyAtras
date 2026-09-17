@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawn, execFileSync } = require('child_process');
+const png = require('./png.cjs');
 
 // Chromium is driven with node's built-in WebSocket, which arrived in node 22.
 if (typeof WebSocket === 'undefined') {
@@ -177,13 +178,17 @@ async function connect(port) {
       }
       throw new Error(label || expr);
     },
+    // Always decodes the frame, so the checks can look at what was drawn rather
+    // than trusting that no exception means something appeared. Writes the file
+    // too when --shots was asked for.
     async shot(name) {
-      if (!SHOTS) return null;
-      fs.mkdirSync(SHOT_DIR, { recursive: true });
       const r = await send('Page.captureScreenshot', { format: 'png' });
-      const file = path.join(SHOT_DIR, `${name}.png`);
-      fs.writeFileSync(file, Buffer.from(r.data, 'base64'));
-      return file;
+      const buffer = Buffer.from(r.data, 'base64');
+      if (SHOTS) {
+        fs.mkdirSync(SHOT_DIR, { recursive: true });
+        fs.writeFileSync(path.join(SHOT_DIR, `${name}.png`), buffer);
+      }
+      return png.decode(buffer);
     },
     async drag(x0, y0, x1, y1) {
       const points = sep => [{ x: sep, y: y0, id: 1 }];
@@ -223,6 +228,20 @@ function consoleProblems(events) {
   return out;
 }
 
+// ---------------------------------------------------------------- what was drawn
+
+// The globe sits in the upper half of both layouts. Looking at a band of it is
+// enough to tell a rendered sphere from a page that came up blank.
+function globeRegion(image) {
+  return png.region(image,
+    Math.round(image.width * 0.15), Math.round(image.height * 0.25),
+    Math.round(image.width * 0.85), Math.round(image.height * 0.55));
+}
+
+// A blank page is one flat colour; a drawn globe has hundreds. The threshold sits
+// far from both, so this fails on a black frame and passes on a real render.
+const DRAWN_COLOURS = 100;
+
 // ---------------------------------------------------------------- the checks
 
 // The first page load in a cold container can lose the race with the GPU process
@@ -254,11 +273,17 @@ async function checkJavaScriptGlobe(page) {
   check(status.hidden, 'the globe started', status.hidden ? '' : `status: ${status.text}`);
   check(true, 'observation shown',
     await page.js("document.getElementById('observationTime').textContent.trim()"));
-  await page.shot('01-load');
+
+  const first = await page.shot('01-load');
+  const drawn = globeRegion(first);
+  check(drawn.colours >= DRAWN_COLOURS, 'the globe is drawn, not a blank frame',
+    `${drawn.colours} colours, mean brightness ${drawn.mean.toFixed(1)}`);
 
   // The time-lapse runs on its own; watching the timestamp change proves the stored
-  // observations are really being swapped rather than one frame being spun.
-  const seen = new Set();
+  // observations are really being swapped rather than one frame being spun, and the
+  // frames either side of the change prove the swap reached the screen.
+  const startTime = await page.js("document.getElementById('observationTime').textContent.trim()");
+  const seen = new Set([startTime]);
   const deadline = Date.now() + 40000;
   while (Date.now() < deadline && seen.size < 3) {
     seen.add(await page.js("document.getElementById('observationTime').textContent.trim()"));
@@ -266,10 +291,18 @@ async function checkJavaScriptGlobe(page) {
   }
   check(seen.size >= 3, 'observations play back', `${seen.size} distinct times seen`);
 
+  const later = await page.shot('02-later-observation');
+  const moved = png.changed(first, later);
+  check(moved >= 0.005, 'the picture changes with the observation',
+    `${(moved * 100).toFixed(1)}% of pixels differ`);
+
+  const before = await page.shot('03-before-drag');
   await page.drag(200, 420, 320, 470);
-  await sleep(1000);
-  check(true, 'touch drag handled without throwing');
-  await page.shot('02-after-drag');
+  await sleep(1500);
+  const after = await page.shot('04-after-drag');
+  const rotated = png.changed(before, after);
+  check(rotated >= 0.02, 'a touch drag rotates the globe',
+    `${(rotated * 100).toFixed(1)}% of pixels differ`);
 }
 
 async function checkUnityBuild(page) {
@@ -283,11 +316,18 @@ async function checkUnityBuild(page) {
   check(await page.js("typeof createUnityInstance === 'function' || !!window.unityInstance"),
     'unity loader present');
   await sleep(5000);
-  await page.shot('unity-01-load');
+
+  const first = await page.shot('unity-01-load');
+  const drawn = globeRegion(first);
+  check(drawn.colours >= DRAWN_COLOURS, 'the globe is drawn, not a blank frame',
+    `${drawn.colours} colours, mean brightness ${drawn.mean.toFixed(1)}`);
+
   await page.drag(200, 420, 320, 470);
-  await sleep(1000);
-  check(true, 'touch drag handled without throwing');
-  await page.shot('unity-02-after-drag');
+  await sleep(1500);
+  const after = await page.shot('unity-02-after-drag');
+  const rotated = png.changed(first, after);
+  check(rotated >= 0.02, 'a touch drag rotates the globe',
+    `${(rotated * 100).toFixed(1)}% of pixels differ`);
 }
 
 // ---------------------------------------------------------------- main
