@@ -19,11 +19,17 @@ unity/MyAtras/
   Assets/Editor/WebGlBuild.cs               applies the player settings, generates the scene, builds
 ```
 
-No scene asset and no `ProjectSettings/` are committed. Unity writes `ProjectSettings/`
-itself the first time the project is opened, and `WebGlBuild` generates
-`Assets/Scenes/Main.unity` on every build, so nothing hand-written has to be kept in
-step with the editor version. Commit the generated `.meta` files and `ProjectSettings/`
-after the first open; the generated scene is ignored by git.
+No scene asset and no `ProjectSettings/` are committed yet. Unity writes
+`ProjectSettings/` itself the first time the project is opened, and `WebGlBuild`
+generates `Assets/Scenes/Main.unity` on every build, so nothing hand-written has to be
+kept in step with the editor version. Commit the generated `.meta` files and
+`ProjectSettings/` after the first open; the generated scene is ignored by git.
+
+`ProjectSettings/ProjectVersion.txt` in particular has to be committed before the CI
+build can run: game-ci reads the editor version from that file in the checked-out
+project and ignores the workflow's `unityVersion` input (`src/build-args.ts` and
+`src/resolve-project-path.ts` in game-ci/unity-builder). Which version it names also
+decides whether a matching editor image exists, so check that before relying on CI.
 
 ## Build
 
@@ -77,6 +83,21 @@ Not yet ported: playback of all 13 observations, the grayscale observation toggl
 day/night mode, the wind model, and a Japanese UI. The on-screen text is ASCII because
 the built-in font has no CJK glyphs; Japanese labels need a font asset (Noto Sans JP
 subset) added first.
+
+## Building in CI
+
+`.github/workflows/unity-build.yml` runs the same build with game-ci and then opens the
+result in a browser. It is manual (`workflow_dispatch`) on purpose: it is the only
+workflow here that needs Unity credentials, so it must never be reachable from a pull
+request. It needs the secrets `UNITY_LICENSE` (the `.ulf` contents), `UNITY_EMAIL` and
+`UNITY_PASSWORD`, and on a personal licence every run consumes an activation.
+
+It uploads the build as a workflow artifact and does not commit it. Committing
+`dist/unity/` stays a person's decision, so that whatever is published can be checked
+out and opened again later, and so a broken workflow cannot take the published version
+down with it. A Unity build also takes tens of minutes, against about twenty seconds
+for the Pages deploy, which is why it is a separate workflow rather than a step in
+`pages.yml`.
 
 ## Checking a build
 

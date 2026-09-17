@@ -21,6 +21,12 @@ const path = require('path');
 const os = require('os');
 const { spawn, execFileSync } = require('child_process');
 
+// Chromium is driven with node's built-in WebSocket, which arrived in node 22.
+if (typeof WebSocket === 'undefined') {
+  console.error(`This needs node 22 or newer for its built-in WebSocket; this is ${process.version}.`);
+  process.exit(2);
+}
+
 const ROOT = path.resolve(__dirname, '..');
 const ARGS = process.argv.slice(2);
 const flag = name => ARGS.includes(name);

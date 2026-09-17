@@ -1,0 +1,107 @@
+name: Unity WebGL build
+
+# Builds unity/MyAtras with game-ci and checks the result in a browser.
+#
+# Manual only, deliberately. This is the one workflow in the repository that needs
+# Unity credentials, so it must never run on `pull_request` (and never on
+# `pull_request_target`, which would hand a fork's branch access to the secrets).
+# Adding `push: paths: unity/**` later is safe — push events only run code that is
+# already on a branch of this repository.
+#
+# Before the first run:
+#   1. Open unity/MyAtras once locally and commit ProjectSettings/, including
+#      ProjectVersion.txt — game-ci reads the Unity version from that file and
+#      ignores the workflow's unityVersion input, so the build cannot start
+#      without it.
+#   2. Check that game-ci publishes an editor image for exactly that version.
+#      A missing image is the usual reason this fails; `customImage` is the escape
+#      hatch, and changing the project's version instead can change the output.
+#   3. Add the repository secrets below. On a personal licence, activations are
+#      limited and every run consumes one, so keep this workflow manual until it
+#      is known to work.
+#
+# Secrets: UNITY_LICENSE (the .ulf file's contents), UNITY_EMAIL, UNITY_PASSWORD.
+# game-ci reads them from the environment, never as command-line arguments.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The project must carry its Unity version
+        run: |
+          if [ ! -f unity/MyAtras/ProjectSettings/ProjectVersion.txt ]; then
+            echo "unity/MyAtras/ProjectSettings/ProjectVersion.txt is missing." >&2
+            echo "game-ci detects the editor version from it. Open the project" >&2
+            echo "locally once and commit ProjectSettings/, then run this again." >&2
+            exit 1
+          fi
+          cat unity/MyAtras/ProjectSettings/ProjectVersion.txt
+
+      - name: Reuse the imported assets between runs
+        uses: actions/cache@v4
+        with:
+          path: unity/MyAtras/Library
+          key: unity-library-${{ hashFiles('unity/MyAtras/Packages/manifest.json', 'unity/MyAtras/ProjectSettings/ProjectVersion.txt') }}-${{ github.sha }}
+          restore-keys: |
+            unity-library-${{ hashFiles('unity/MyAtras/Packages/manifest.json', 'unity/MyAtras/ProjectSettings/ProjectVersion.txt') }}-
+            unity-library-
+
+      - name: Build the Web (WebGL) player into dist/unity
+        uses: game-ci/unity-builder@v6
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: WebGL
+          projectPath: unity/MyAtras
+          # WebGlBuild writes dist/unity itself and exits with its own status,
+          # which is what manualExit suppresses `-quit` for.
+          buildMethod: MyAtras.WebGlBuild.Build
+          manualExit: true
+          # The editor runs as root in the container; hand the output back to the
+          # runner user so later steps can read and upload it.
+          chownFilesTo: 1001:1001
+
+      - name: Report what was built
+        run: |
+          ls -la dist/unity
+          du -sh dist/unity
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Find the browser on the runner
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "No Chromium or Chrome on this runner image." >&2
+            exit 1
+          fi
+          echo "CHROMIUM=$CHROME" >> "$GITHUB_ENV"
+
+      - name: The build starts in a browser
+        run: node tools/check-webgl.cjs --unity --shots
+
+      # The build is not committed from here. dist/unity/ stays something a person
+      # commits, so that whatever is published can be checked out again later and
+      # opened offline, and so a broken workflow cannot take the published version
+      # down with it.
+      - name: Keep the build and the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-webgl-build
+          path: |
+            dist/unity/
+            .check-shots/
+          if-no-files-found: warn
