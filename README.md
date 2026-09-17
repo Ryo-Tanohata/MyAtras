@@ -1,12 +1,12 @@
 # MyAtras — 青い地球と雲の流れ
 
-単体HTMLは `python scripts/export-html.py` で生成できます。生成した `dist/geo-cosmos-clouds.html` をChromeなどで開くと、SSECの異なる観測時刻の雲を自動で連続再生します。地球の回転を止めたままでも雲が変化します。取得済みの実観測を同梱し、ネット接続なしでも再生できます。
+単体HTMLは `python scripts/export-html.py` で生成できます。生成した `dist/myatras-clouds.html` をChromeなどで開くと、SSECの異なる観測時刻の雲を自動で連続再生します。地球の回転を止めたままでも雲が変化します。取得済みの実観測を同梱し、ネット接続なしでも再生できます。
 
 ## Default: actual observed cloud flow
 
 13 distinct hourly infrared observations from 2026-09-16 09:00–21:00 UTC (12 hours) are played in order. Each downloaded frame was verified against the SSEC response `RE-Time` header, and the timestamp shown changes with the actual frame. Images/logos are retained. No translation of a fixed image or globe rotation is used to fake the cloud movement. The loop pauses briefly at the last frame then restarts, and supports pause, speed selection and individual observation-time selection. New available data can be fetched; playback reuses cached frames. Infrared observations are grayscale and include cold surface signatures, not only clouds. This does not reproduce Miraikan’s full-color composite processing.
 
-The default now composites white clouds over the blue ground reference texture. An uncalibrated smooth brightness threshold (0.38–0.82) controls opacity; it is a display approximation, not a validated cloud mask. Cold land can be included and warm low clouds can be missed. Reference-map snow, ice and residual polar clouds stay fixed. The checkbox restores the original grayscale observation. Source image files are unchanged, and the watermark region is preserved in the shader. This is not the same processing used by Miraikan.
+The default now composites white clouds over the blue ground reference texture. An uncalibrated smooth brightness threshold (0.38–0.82) controls opacity; it is a display approximation, not a validated cloud mask. Cold land can be included and warm low clouds can be missed. The reference map is cloud-free, so every cloud on the globe comes from an observation; its snow and ice stay fixed. The checkbox restores the original grayscale observation. Source image files are unchanged, and the watermark region is preserved in the shader. This is not the same processing used by Miraikan.
 
 `python scripts/export-inline-earth.py` produces a compact offline conversation preview at `/workspace/blue-earth.html`, with 13 downsampled observations, drag rotation, time scrubber and playback. It uses the same Earth shader, makes no network calls and does not publish the site.
 
@@ -45,17 +45,19 @@ Altitude is estimated from pressure under a standard-atmosphere approximation. D
 - https://tropic.ssec.wisc.edu/misc/winds/info.html
 - https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_190000
 - https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_190000
-- Ground reference texture: https://github.com/mrdoob/three.js/blob/dev/examples/textures/planets/earth_atmos_2048.jpg
+- Ground reference texture: NASA Blue Marble, https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_2048.jpg (cloud-free; NASA still images are not copyrighted in the US)
 
 ## Development and validation
 
+- `dist/data-sources.js` reads the bundled observations: the served tree fetches `weather/snapshot.json`, `weather/sequence/manifest.json` and `data/amv.json`, while the standalone export uses the copies inlined into the page. Both builds show the same frames.
 - `node scripts/build-amv.cjs TIME LOW_GEOJSON MID_GEOJSON` validates and samples downloaded observations.
 - `python scripts/export-html.py` regenerates the standalone file.
 - `node tests/cloud-model.test.cjs` checks wind units/direction, pressure altitude, spherical advection, longitude wrapping, timestamps, stale/malformed records and finite 3-hour positions of all bundled vectors.
 - `node tests/weather.test.cjs` covers observation loading and failure retention.
 - `node tests/weather-playback.test.cjs` verifies changing frames/timestamps, looping, pausing, cache reuse and reference-mode guards.
-- Earth and cloud GLSL shaders compiled and linked in an offscreen GLES context successfully.
-- Browser/device visual QA has not been performed.
+- `python scripts/export-html.py` re-checks every bundled frame against the SHA-256 in its manifest and fails the build on a mismatch.
+- Earth and cloud GLSL shaders compile and link in Chrome (headless, SwiftShader); the composite view, the grayscale view, the 13-frame playback, the 3-D model mode and the standalone export opened from file:// were each rendered and checked.
+- QA on a real Android device, touch gestures and a live network refresh have not been performed.
 
 ## Local browser preview
 
