@@ -1,0 +1,14 @@
+{
+ "globalir": {
+  "time": "20260916.170000",
+  "file": "snapshot/globalir_20260916_170000.png",
+  "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260916_170000&bounds=-85.05112878%2C-180%2C85.05112878%2C180&width=1024&height=1024&format=png",
+  "sha256": "a61f4e4b0802487e3c0a9ee5f1ef6a7ca45c6ccfe8acbc8cf0d6eecd0276ff3b"
+ },
+ "globalvis": {
+  "time": "20260916.170000",
+  "file": "snapshot/globalvis_20260916_170000.png",
+  "source": "https://realearth.ssec.wisc.edu/api/image?products=globalvis_20260916_170000&bounds=-85.05112878%2C-180%2C85.05112878%2C180&width=1024&height=1024&format=png",
+  "sha256": "9dbe6d6cb35548e5bde83a8bedc4230db73ce0bdbe1fbd72645bb1a49e839336"
+ }
+}

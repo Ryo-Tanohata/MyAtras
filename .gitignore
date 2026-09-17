@@ -1,0 +1,6 @@
+# Generated standalone exports: rebuild with python scripts/export-html.py
+dist/myatras-clouds.html
+# Reference copies of earlier exports kept locally, not part of the source
+/geo-cosmos-clouds.html
+/geo-cosmos-weather.html
+__pycache__/
