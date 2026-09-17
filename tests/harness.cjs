@@ -47,6 +47,8 @@ function install(ids) {
   const loads = [];
   global.document = document;
   global.window = global;
+  // The cloud model asks whether motion is reduced before it starts playing.
+  global.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   global.Image = class {
     constructor() { this.width = 512; this.height = 512; }
     set src(value) {

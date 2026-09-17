@@ -45,10 +45,10 @@ Unity版は観測を独自取得せず、`dist/weather/` と `dist/data/` の同
 4. 単なるテクスチャ平行移動や生成した雲を実観測として見せない。出典とロゴを維持する。
 
 ## 検証済みと未検証
-`node tests/weather.test.cjs`（9件）、`node tests/weather-playback.test.cjs`（10件）、`node tests/cloud-model.test.cjs`（9件）はこの環境で成功。同梱3,333ベクトルすべてが3時間後まで有限であることも確認済み。
+`node tests/weather.test.cjs`（9件）、`node tests/weather-playback.test.cjs`（10件）、`node tests/cloud-model.test.cjs`（9件）、`node tests/cloud-simulation.test.cjs`（10件）はこの環境で成功。同梱3,333ベクトルすべてが3時間後まで有限であることも確認済み。
 Windows上のChrome（`--headless=new` + SwiftShader）で実描画を確認：配信版の合成表示・13時刻の再生、白黒観測モード、立体の模型モード（3,333地点）、および単体HTMLのfile://単体起動。地球・雲模型のGLSLは実ブラウザでコンパイル・リンク成功。
 2026-09-17、Linuxコンテナの同梱Chromium（SwiftShader）とAndroid幅412×915のタッチ操作エミュレーションでも再確認：地球描画、13時刻が一巡してループ、一時停止で時刻が止まること、白黒観測トグル、可視光への切替（追加取得は失敗し、設計どおり表示中の観測を保持）、立体の模型（3,333地点の移流）、昼夜モード。約56fps。
 Android実機でのUI QA、実機のタッチ操作、実ネットワークでの「最新を取得」は未検証。エミュレーションのタッチは実機の代わりにならない。
-未解決：立体の模型の「↺ 戻す」を押しても経過時間が0に戻らない場合がある（0時間09分のまま再開する挙動を観測）。
+解決済：立体の模型の「↺ 戻す」。実装を読み実機で確認したところ、`elapsed` は正しく0になっていた。再生中は次のフレームから計算が進むため、毎秒5〜10分の速さでは目で追う前に数分に戻って見えていた。「戻す」は計算開始位置で停止するようにし（`dist/cloud-simulation.js`）、`tests/cloud-simulation.test.cjs` 10件で固定した。
 
 出典・第三者データは `THIRD_PARTY_NOTICES.md` を参照。

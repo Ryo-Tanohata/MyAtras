@@ -32,6 +32,8 @@ jobs:
         run: node tests/weather-playback.test.cjs
       - name: Wind model and bundled vectors
         run: node tests/cloud-model.test.cjs
+      - name: Model playback controls
+        run: node tests/cloud-simulation.test.cjs
 
   build:
     needs: test
