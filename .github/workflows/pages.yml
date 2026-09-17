@@ -1,0 +1,61 @@
+name: Publish site
+
+# Serves dist/ on GitHub Pages. The standalone single-file build is produced here
+# rather than committed, so the published copy is always rebuilt from the same
+# observations the site serves.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Observation loading and failure retention
+        run: node tests/weather.test.cjs
+      - name: Time-lapse playback
+        run: node tests/weather-playback.test.cjs
+      - name: Wind model and bundled vectors
+        run: node tests/cloud-model.test.cjs
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # Re-checks every bundled frame against the SHA-256 in its manifest and
+      # fails the build on a mismatch.
+      - name: Build the standalone export
+        run: python scripts/export-html.py
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
