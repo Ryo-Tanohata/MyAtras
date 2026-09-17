@@ -3,12 +3,13 @@
 ## 目的とユーザーの希望
 日本科学未来館のジオ・コスモスのように、青い海と白い雲の地球をブラウザ（特にAndroid Chrome）で操作して、実際の雲の流れを見たい。静止画像を単に回す演出ではなく、SSECの異なる観測時刻を再生することが主目的。
 
-GitHubへの公開コード登録はユーザーが了承済み。Webサイトの追加公開・デプロイは依頼されていないため実施しない。公式の未来館製品と表示しない。展示名「ジオ・コスモス」をサイト名や見出しに使わず、着想元として本文で触れるだけにする（画面上の名称は MYATRAS）。
+GitHubへの公開コード登録はユーザーが了承済み。GitHub Pagesでの公開も了承済みで、`.github/workflows/pages.yml` が main への push ごとに `dist/` を公開する。公開先は https://ryo-tanohata.github.io/MyAtras/ で、ユーザーはこのURLをAndroid Chromeで開いて確認する。公式の未来館製品と表示しない。展示名「ジオ・コスモス」をサイト名や見出しに使わず、着想元として本文で触れるだけにする（画面上の名称は MYATRAS）。
 
 ## 起動
 フレームワークやnpmインストールは不要。Python 3で `python -m http.server 8000 --directory dist` を実行し、ブラウザで http://localhost:8000 を開く。
 単体HTMLは `python scripts/export-html.py` で生成。出力 `dist/myatras-clouds.html` はGit管理外。
 `scripts/export-inline-earth.py` はChatGPT内表示専用で、Pillowと固定の `/workspace` 出力先を使用する。通常のブラウザ起動には不要。
+ヘッドレスでの自動確認は `node tools/check-webgl.cjs`（`--shots` で画面保存、`--unity` で `dist/unity/` を確認、`--desktop` でPC幅）。npm依存はなく、Chromiumがあれば動く。
 
 ## 実装済み
 - 生のWebGLで地球、ドラッグ・ピンチ、回転、照明を描画。
@@ -29,6 +30,11 @@ GitHubへの公開コード登録はユーザーが了承済み。Webサイト�
 - `scripts/build-amv.cjs`: 取得したAMV GeoJSONから `dist/data/amv.json` を作る。
 - `tests/harness.cjs`: テスト用の最小DOMと通信スタブ。観測の中身は偽装しない。
 
+## Unity版の方針
+ユーザーの決定により、Unity版はWebGL（Unity 6の表示名は「Web」、実体は `BuildTarget.WebGL`）で作り、ビルド成果物を `dist/unity/` にcommitして同じPagesサイトの `/unity/` で公開する。JS版はルートのまま残す（併存）。
+エージェントのコンテナにはUnity Editorもライセンスも無いためビルドはできない。ビルドはユーザーのローカルで行い、成果物をcommitする。詳細と必要なPlayer設定は `unity/README.md`。
+Unity版は観測を独自取得せず、`dist/weather/` と `dist/data/` の同じファイルを読む。SHA-256マニフェストを唯一の正とし、両版が同じ観測を表示する状態を保つ。
+
 ## 科学的な限界
 白い層は未校正の赤外線輝度閾値0.38–0.82による簡易合成。冷たい地表を雲として含み、暖かい低層雲を見落とす。未来館と同じカラー合成を再現したものではない。地表参考画像はNASA Blue Marbleの雲のない地表で、雪氷は固定。球面に見える雲はすべて観測由来。観測範囲外や欠測を晴天と断定しない。
 
@@ -41,6 +47,8 @@ GitHubへの公開コード登録はユーザーが了承済み。Webサイト�
 ## 検証済みと未検証
 `node tests/weather.test.cjs`（9件）、`node tests/weather-playback.test.cjs`（10件）、`node tests/cloud-model.test.cjs`（9件）はこの環境で成功。同梱3,333ベクトルすべてが3時間後まで有限であることも確認済み。
 Windows上のChrome（`--headless=new` + SwiftShader）で実描画を確認：配信版の合成表示・13時刻の再生、白黒観測モード、立体の模型モード（3,333地点）、および単体HTMLのfile://単体起動。地球・雲模型のGLSLは実ブラウザでコンパイル・リンク成功。
-Android実機でのUI QA、タッチ操作（ドラッグ・ピンチ）、実ネットワークでの「最新を取得」は未検証。
+2026-09-17、Linuxコンテナの同梱Chromium（SwiftShader）とAndroid幅412×915のタッチ操作エミュレーションでも再確認：地球描画、13時刻が一巡してループ、一時停止で時刻が止まること、白黒観測トグル、可視光への切替（追加取得は失敗し、設計どおり表示中の観測を保持）、立体の模型（3,333地点の移流）、昼夜モード。約56fps。
+Android実機でのUI QA、実機のタッチ操作、実ネットワークでの「最新を取得」は未検証。エミュレーションのタッチは実機の代わりにならない。
+未解決：立体の模型の「↺ 戻す」を押しても経過時間が0に戻らない場合がある（0時間09分のまま再開する挙動を観測）。
 
 出典・第三者データは `THIRD_PARTY_NOTICES.md` を参照。

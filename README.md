@@ -57,7 +57,15 @@ Altitude is estimated from pressure under a standard-atmosphere approximation. D
 - `node tests/weather-playback.test.cjs` verifies changing frames/timestamps, looping, pausing, cache reuse and reference-mode guards.
 - `python scripts/export-html.py` re-checks every bundled frame against the SHA-256 in its manifest and fails the build on a mismatch.
 - Earth and cloud GLSL shaders compile and link in Chrome (headless, SwiftShader); the composite view, the grayscale view, the 13-frame playback, the 3-D model mode and the standalone export opened from file:// were each rendered and checked.
-- QA on a real Android device, touch gestures and a live network refresh have not been performed.
+- `node tools/check-webgl.cjs` serves `dist/` and drives headless Chromium at an Android viewport: it checks that a WebGL context is granted, the globe finishes loading, the stored observations advance, a touch drag is handled and nothing throws. `--shots` writes screenshots to `.check-shots/`, `--unity` checks `dist/unity/` instead, `--desktop` uses a desktop viewport. It needs no npm packages — any Chromium will do. Requests to the live observation API are reported but do not fail the run, since the site is meant to keep the stored observations on screen when a fetch fails.
+- QA on a real Android device and a live network refresh have not been performed. Touch drag and pinch were exercised only through emulated touch events in headless Chromium.
+
+## Published site
+
+`.github/workflows/pages.yml` runs the three test suites, rebuilds the standalone
+export and publishes `dist/` to GitHub Pages on every push to `main`:
+https://ryo-tanohata.github.io/MyAtras/ . A Unity WebGL build of the same globe is
+planned under `dist/unity/`; see `unity/README.md` for how it is built and checked.
 
 ## Local browser preview
 
