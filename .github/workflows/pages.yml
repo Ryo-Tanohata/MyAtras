@@ -26,14 +26,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Observation loading and failure retention
-        run: node tests/weather.test.cjs
-      - name: Time-lapse playback
-        run: node tests/weather-playback.test.cjs
-      - name: Wind model and bundled vectors
-        run: node tests/cloud-model.test.cjs
-      - name: Model playback controls
-        run: node tests/cloud-simulation.test.cjs
+      - name: Test suites
+        run: |
+          for suite in tests/*.test.cjs; do
+            echo "--- $suite"
+            node "$suite" || exit 1
+          done
 
   build:
     needs: test
