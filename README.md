@@ -6,6 +6,8 @@
 
 13 distinct hourly infrared observations from 2026-09-16 09:00–21:00 UTC (12 hours) are played in order. Each downloaded frame was verified against the SSEC response `RE-Time` header, and the timestamp shown changes with the actual frame. Images/logos are retained. No translation of a fixed image or globe rotation is used to fake the cloud movement. The loop pauses briefly at the last frame then restarts, and supports pause, speed selection and individual observation-time selection. New available data can be fetched; playback reuses cached frames. Infrared observations are grayscale and include cold surface signatures, not only clouds. This does not reproduce Miraikan’s full-color composite processing.
 
+Consecutive observations dissolve into one another instead of being swapped in a single frame, so the sequence reads as weather moving rather than as a flicker. Both frames on screen during a dissolve are real observations: the brightness threshold is applied to each of them separately and only the drawn cloud layers are mixed, so no interpolated brightness is ever passed through the cloud threshold and shown as if it had been observed. The timestamp names the observation being faded to, the dissolve is capped at 380 ms and always ends before the next observation arrives, and 「観測の切り替わりをなめらかに」 turns it off.
+
 The default now composites white clouds over the blue ground reference texture. An uncalibrated smooth brightness threshold (0.38–0.82) controls opacity; it is a display approximation, not a validated cloud mask. Cold land can be included and warm low clouds can be missed. The reference map is cloud-free, so every cloud on the globe comes from an observation; its snow and ice stay fixed. The checkbox restores the original grayscale observation. Source image files are unchanged, and the watermark region is preserved in the shader. This is not the same processing used by Miraikan.
 
 `python scripts/export-inline-earth.py` produces a compact offline conversation preview at `/workspace/blue-earth.html`, with 13 downsampled observations, drag rotation, time scrubber and playback. It uses the same Earth shader, makes no network calls and does not publish the site.
@@ -55,9 +57,19 @@ Altitude is estimated from pressure under a standard-atmosphere approximation. D
 - `node tests/cloud-model.test.cjs` checks wind units/direction, pressure altitude, spherical advection, longitude wrapping, timestamps, stale/malformed records and finite 3-hour positions of all bundled vectors.
 - `node tests/weather.test.cjs` covers observation loading and failure retention.
 - `node tests/weather-playback.test.cjs` verifies changing frames/timestamps, looping, pausing, cache reuse and reference-mode guards.
+- `node tests/observation-fade.test.cjs` covers the dissolve between observations: the first observation appearing at once, the timing, restarting on each observation, the toggle, and the cap that keeps a dissolve inside one playback step.
+- `node tests/cloud-simulation.test.cjs` covers the model's playback clock: the rate, the 0.1 s cap that stops a background tab fast-forwarding it, pausing, returning to the start, the three-hour bound and the pressure-band filter.
 - `python scripts/export-html.py` re-checks every bundled frame against the SHA-256 in its manifest and fails the build on a mismatch.
 - Earth and cloud GLSL shaders compile and link in Chrome (headless, SwiftShader); the composite view, the grayscale view, the 13-frame playback, the 3-D model mode and the standalone export opened from file:// were each rendered and checked.
-- QA on a real Android device, touch gestures and a live network refresh have not been performed.
+- `node tools/check-webgl.cjs` serves `dist/` and drives headless Chromium at an Android viewport: it checks that a WebGL context is granted, the globe finishes loading, the stored observations advance and nothing throws, and it decodes the frames it captures (`tools/png.cjs`, on node's own zlib) to check that the globe was actually drawn, that the picture changes when the observation does, and that a touch drag rotates it. A build whose page loads but renders nothing fails here. `--shots` writes screenshots to `.check-shots/`, `--unity` checks `dist/unity/` instead, `--desktop` uses a desktop viewport. It needs no npm packages — any Chromium will do. Requests to the live observation API are reported but do not fail the run, since the site is meant to keep the stored observations on screen when a fetch fails.
+- QA on a real Android device and a live network refresh have not been performed. Touch drag and pinch were exercised only through emulated touch events in headless Chromium.
+
+## Published site
+
+`.github/workflows/pages.yml` runs the three test suites, rebuilds the standalone
+export and publishes `dist/` to GitHub Pages on every push to `main`:
+https://ryo-tanohata.github.io/MyAtras/ . A Unity WebGL build of the same globe is
+planned under `dist/unity/`; see `unity/README.md` for how it is built and checked.
 
 ## Local browser preview
 

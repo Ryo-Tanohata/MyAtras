@@ -1,0 +1,62 @@
+name: Browser check
+
+# Opens the built site in headless Chromium on every push and pull request, so a
+# change that leaves the globe blank, breaks playback or throws in the browser is
+# caught here rather than on someone's phone. Needs no secrets.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # tools/check-webgl.cjs drives Chromium over the DevTools protocol with
+          # node's built-in WebSocket, which arrived in node 22.
+          node-version: '22'
+
+      - name: Test suites
+        run: |
+          for suite in tests/*.test.cjs; do
+            echo "--- $suite"
+            node "$suite" || exit 1
+          done
+
+      - name: Find the browser on the runner
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "No Chromium or Chrome on this runner image." >&2
+            exit 1
+          fi
+          echo "CHROMIUM=$CHROME" >> "$GITHUB_ENV"
+          "$CHROME" --version
+
+      - name: The JavaScript globe starts and plays back
+        run: node tools/check-webgl.cjs --shots
+
+      # Runs only once a Unity build has been committed; until then there is
+      # nothing to open and the step reports that instead of failing.
+      - name: The Unity build starts
+        run: |
+          if [ -d dist/unity ]; then
+            node tools/check-webgl.cjs --unity --shots
+          else
+            echo "dist/unity/ is not in the tree yet - skipping."
+          fi
+
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-check-screenshots
+          path: .check-shots/
+          if-no-files-found: ignore
