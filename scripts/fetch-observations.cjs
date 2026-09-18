@@ -2,10 +2,18 @@
 'use strict';
 // Replace the bundled observations with the newest ones SSEC is serving.
 //
-//   node scripts/fetch-observations.cjs            # 13 hourly frames + both snapshots
-//   node scripts/fetch-observations.cjs --frames 8
-//   node scripts/fetch-observations.cjs --wind     # also rebuild dist/data/amv.json
+//   node scripts/fetch-observations.cjs                  # the 13 newest observations
+//   node scripts/fetch-observations.cjs --frames 25      # more of them
+//   node scripts/fetch-observations.cjs --every 30       # one every 30 minutes
+//   node scripts/fetch-observations.cjs --frames 25 --every 30   # 12 hours, twice as fine
+//   node scripts/fetch-observations.cjs --wind           # also rebuild dist/data/amv.json
 //   node scripts/fetch-observations.cjs --out /tmp/try   # write somewhere else
+//
+// Without --every the newest listed observations are taken as they come, whatever
+// spacing SSEC is publishing. The run prints that spacing, so the cadence actually
+// on offer is visible before choosing. Every frame is around 200 KB and the page
+// loads all of them before playback starts, so more frames means a longer wait on a
+// phone and a larger repository.
 //
 // Run it where SSEC is reachable - the agent containers used for this repository
 // cannot reach realearth.ssec.wisc.edu - then commit dist/weather/ (and dist/data/
@@ -32,6 +40,8 @@ const opt = (name, fallback) => {
 const BASE = process.env.MYATRAS_API_BASE || 'https://realearth.ssec.wisc.edu/api/';
 const OUT = path.resolve(ROOT, opt('--out', 'dist/weather'));
 const FRAMES = Number(opt('--frames', 13));
+// Minutes between kept frames. 0 keeps the listing's own spacing.
+const EVERY = Number(opt('--every', 0));
 const WIND = flag('--wind');
 const BOUNDS = '-85.05112878,-180,85.05112878,180';
 const SEQUENCE_SIZE = 512;   // the frames playback cycles through
@@ -111,10 +121,51 @@ function prune(directory, keep) {
   return removed;
 }
 
+/// "20260918.063000" as milliseconds, so spacings can be compared.
+function stamp(time) {
+  const [date, clock] = time.split(/[._]/);
+  return Date.UTC(+date.slice(0, 4), +date.slice(4, 6) - 1, +date.slice(6, 8),
+    +clock.slice(0, 2), +clock.slice(2, 4), +clock.slice(4, 6));
+}
+
+/// The gap SSEC is currently publishing at, in minutes - the most common one, so a
+/// single missing observation does not misreport it.
+function cadence(listed) {
+  const gaps = listed.slice(1).map((t, i) => (stamp(t) - stamp(listed[i])) / 60000);
+  if (!gaps.length) return 0;
+  const counts = new Map();
+  for (const gap of gaps) counts.set(gap, (counts.get(gap) || 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+/// The newest observations, thinned to one every `every` minutes when asked. Walking
+/// back from the newest keeps the most recent observation whatever the spacing is.
+function choose(listed, count, every) {
+  if (!every) return listed.slice(-count);
+  const kept = [];
+  let last = null;
+  for (let i = listed.length - 1; i >= 0 && kept.length < count; i--) {
+    const time = listed[i];
+    // A tolerance of a minute: published times drift by seconds around the cadence.
+    if (last === null || (last - stamp(time)) >= (every - 1) * 60000) {
+      kept.push(time);
+      last = stamp(time);
+    }
+  }
+  return kept.reverse();
+}
+
 async function sequence() {
   const listed = await times('globalir');
-  const wanted = listed.slice(-FRAMES);
+  const spacing = cadence(listed);
+  console.log(`  SSEC lists ${listed.length} observation times` +
+    (spacing ? `, about ${spacing} minutes apart` : ''));
+
+  const wanted = choose(listed, FRAMES, EVERY);
   if (wanted.length < 2) throw new Error('playback needs at least two observation times');
+  if (EVERY && wanted.length < FRAMES) {
+    console.log(`  only ${wanted.length} of the ${FRAMES} asked for fit in what is listed`);
+  }
 
   const directory = path.join(OUT, 'sequence');
   const entries = [];
@@ -128,7 +179,15 @@ async function sequence() {
   const removed = prune(directory, new Set(entries.map(e => e.file)));
   fs.writeFileSync(path.join(directory, 'manifest.json'),
     JSON.stringify({ globalir: entries }, null, 1) + '\n');
-  return { count: entries.length, first: entries[0].time, last: entries.at(-1).time, removed };
+  const hours = (stamp(entries.at(-1).time) - stamp(entries[0].time)) / 3600000;
+  const megabytes = entries.reduce((sum, e) => sum + e.bytes, 0) / (1024 * 1024);
+  return {
+    count: entries.length,
+    first: entries[0].time,
+    last: entries.at(-1).time,
+    span: `${hours.toFixed(1)} hours, ${megabytes.toFixed(1)} MB`,
+    removed,
+  };
 }
 
 async function snapshot() {
@@ -191,7 +250,7 @@ async function main() {
   const windTime = WIND ? await wind() : null;
 
   console.log('\nstored');
-  console.log(`  ${frames.count} hourly frames  ${frames.first} → ${frames.last}`);
+  console.log(`  ${frames.count} frames  ${frames.first} → ${frames.last}  (${frames.span})`);
   console.log(`  snapshots  ${Object.entries(snapshots.times).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   if (windTime) console.log(`  observed wind  ${windTime}`);
   const removed = frames.removed + snapshots.removed;

@@ -15,7 +15,12 @@ const { spawn } = require('child_process');
 const { suite } = require('./harness.cjs');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'fetch-observations.cjs');
-const TIMES = ['20260918.060000', '20260918.070000', '20260918.080000', '20260918.090000'];
+// Half-hourly, as SSEC publishes some products: enough to tell "as listed" apart
+// from a chosen spacing.
+const TIMES = [
+  '20260918.060000', '20260918.063000', '20260918.070000', '20260918.073000',
+  '20260918.080000', '20260918.083000', '20260918.090000',
+];
 
 // Bytes standing in for an image: distinct per product and time so a mix-up shows.
 const body = (product, time, size) => Buffer.from(`${product}:${time}:${size}`.repeat(8));
@@ -53,7 +58,10 @@ function api({ reTime = time => time, omitHeader = false } = {}) {
 // would leave it unable to answer the request it is waiting for.
 function run(base, out, extra = []) {
   return new Promise(resolve => {
-    const child = spawn('node', [SCRIPT, '--out', out, '--frames', '3', ...extra],
+    // A test that sets its own --frames means it, so the default is not also passed:
+    // the script reads the first occurrence of an option.
+    const frames = extra.includes('--frames') ? [] : ['--frames', '3'];
+    const child = spawn('node', [SCRIPT, '--out', out, ...frames, ...extra],
       { env: { ...process.env, MYATRAS_API_BASE: base } });
     let stdout = '', stderr = '';
     child.stdout.on('data', chunk => { stdout += chunk; });
@@ -155,6 +163,52 @@ s.test('an observation whose time is not confirmed at all is refused', async () 
     assert.notStrictEqual(result.status, 0);
     assert.ok(/RE-Time/.test(result.stderr), result.stderr);
     assert.ok(!fs.existsSync(path.join(out, 'sequence', 'manifest.json')));
+  } finally {
+    server.close();
+    fs.rmSync(out, { recursive: true, force: true });
+  }
+});
+
+// More frames, or finer ones, is a question of which listed times are kept: the
+// spacing on offer is reported, and --every thins it without ever skipping the
+// newest observation.
+s.test('the spacing SSEC publishes at is reported', async () => {
+  const { server, base } = await api();
+  const out = temp();
+  try {
+    const result = await run(base, out);
+    assert.strictEqual(result.status, 0, result.stderr);
+    assert.ok(/7 observation times, about 30 minutes apart/.test(result.stdout), result.stdout);
+  } finally {
+    server.close();
+    fs.rmSync(out, { recursive: true, force: true });
+  }
+});
+
+s.test('--every keeps one observation per interval, newest first', async () => {
+  const { server, base } = await api();
+  const out = temp();
+  try {
+    assert.strictEqual((await run(base, out, ['--every', '60'])).status, 0);
+    const manifest = read(path.join(out, 'sequence', 'manifest.json'));
+    assert.deepStrictEqual(manifest.globalir.map(f => f.time),
+      ['20260918.070000', '20260918.080000', '20260918.090000'],
+      'an hour apart, ending at the newest observation');
+  } finally {
+    server.close();
+    fs.rmSync(out, { recursive: true, force: true });
+  }
+});
+
+s.test('asking for more frames than are listed takes what there is', async () => {
+  const { server, base } = await api();
+  const out = temp();
+  try {
+    const result = await run(base, out, ['--frames', '99', '--every', '60']);
+    assert.strictEqual(result.status, 0, result.stderr);
+    const manifest = read(path.join(out, 'sequence', 'manifest.json'));
+    assert.strictEqual(manifest.globalir.length, 4, 'four hourly steps fit in the listing');
+    assert.ok(/only 4 of the 99/.test(result.stdout), result.stdout);
   } finally {
     server.close();
     fs.rmSync(out, { recursive: true, force: true });
