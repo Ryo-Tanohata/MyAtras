@@ -66,11 +66,14 @@ Shader "MyAtras/EarthComposite"
                 float2 p = (i.uv * 2.0 - 1.0) * res / min(res.x, res.y);
                 p /= _Zoom * 0.77;
                 float rr = dot(p, p);
-                float3 background = tex2D(_MainTex, i.uv).rgb;
                 if (rr > 1.0)
                 {
+                    // Outside the sphere only the halo is drawn, as a translucent colour,
+                    // exactly as the WebGL version does: the page's own background shows
+                    // through. Unity asks for the same context the JavaScript globe does -
+                    // alpha on, premultipliedAlpha off - so the browser composites this alpha.
                     float halo = exp(-(sqrt(rr) - 1.0) * 25.0) * 0.11;
-                    return float4(lerp(background, float3(0.25, 0.55, 0.75), halo), 1.0);
+                    return float4(0.25, 0.55, 0.75, halo);
                 }
 
                 float z = sqrt(1.0 - rr);

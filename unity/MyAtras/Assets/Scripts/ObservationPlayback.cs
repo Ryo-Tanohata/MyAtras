@@ -65,6 +65,20 @@ namespace MyAtras
             return Mathf.Clamp01((now - fadeStarted) / fadeDuration);
         }
 
+        /// <summary>
+        /// Puts a chosen observation up at once and pauses there. A hand on the time
+        /// slider is not playback, and a jump of hours is not weather moving, so nothing
+        /// is dissolved.
+        /// </summary>
+        public void Show(int index, float now)
+        {
+            if (Count == 0) return;
+            Current = Previous = Mathf.Clamp(index, 0, Count - 1);
+            fadeDuration = 0f;
+            Playing = false;
+            nextStep = now + Hold();
+        }
+
         public void SetPlaying(bool playing, float now)
         {
             if (Playing == playing) return;

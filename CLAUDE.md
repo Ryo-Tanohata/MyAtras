@@ -36,6 +36,7 @@ GitHubへの公開コード登録はユーザーが了承済み。GitHub Pages�
 エージェントのコンテナにはUnity Editorもライセンスも無いためビルドはできない。ビルドはユーザーのローカルで行い、成果物をcommitする。詳細と必要なPlayer設定は `unity/README.md`。
 2026-09-18、Windows（SHINYLABRY0）に Unity 6000.4.8f1 と Web Build Support を Unity Hub のCLIで導入し、初ビルドに成功（エラー0・警告0、約4MB）。Hub をVS Code拡張のシェルから起動すると `ELECTRON_RUN_AS_NODE=1` のせいで Node として動き `Cannot find module '--headless'` で失敗するので、この変数を外して起動する。
 ビルドコマンド：`Unity.exe -batchmode -nographics -quit -projectPath unity/MyAtras -executeMethod MyAtras.WebGlBuild.Build -logFile <log>`。確認は `node tools/check-webgl.cjs --unity`（`dist/` を配信して `/unity/` を開く＝Pagesと同じ配置）。
+Unity版は独自のWebGLテンプレート（`unity/MyAtras/Assets/WebGLTemplates/MyAtras`）でJS版と同じページ・同じ `style.css` の中に描画する。文字はすべてHTML側で、Unity内にフォントは持たない。操作はSendMessage、状態は `MyAtrasBridge.jslib` 経由でページへ渡す。
 Unity版は観測を独自取得せず、`dist/weather/` と `dist/data/` の同じファイルを読む。SHA-256マニフェストを唯一の正とし、両版が同じ観測を表示する状態を保つ。
 
 ## 科学的な限界

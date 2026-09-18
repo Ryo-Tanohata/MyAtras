@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#070c12">
+<title>MyAtras — 雲の流れる地球（Unity版）</title>
+<!-- The JavaScript site's own stylesheet, published beside this page at /MyAtras/.
+     One stylesheet keeps the two versions looking the same. -->
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a class="brand" href="./"><span class="mark">◎</span><span>MYATRAS<small>地球を眺める</small></span></a><span class="edition">INTERACTIVE EARTH EXHIBIT · UNITY</span><button id="fullscreen" aria-label="全画面表示">全画面 ↗</button></header>
+<main>
+<div class="intro"><span class="eyebrow">EARTH / CLOUDS IN MOTION</span><h1>雲の流れを、<br>地球の上で。</h1><p>観測時刻を進めて、雲の変化を見る。</p></div>
+<div class="stage"><canvas id="globe" tabindex="0" aria-label="地球。ドラッグで回転、ピンチまたはホイールで拡大縮小"></canvas><div id="status" role="status">地球を読み込んでいます…</div><div class="caption"><span class="line"></span><span>EARTH<small>赤外線の観測から合成した雲</small></span></div><div class="instructions">ドラッグで回転 <span>·</span> ピンチで拡大</div></div>
+<aside>
+<section class="weather-controls" aria-label="気象データ"><span class="eyebrow">SATELLITE OBSERVATIONS</span><h2>雲の流れ</h2><p>異なる観測時刻の雲を、地球上で連続再生します。</p><button id="weatherPlay" aria-pressed="false" disabled>▶ 雲の流れを再生</button><p id="weatherPlaybackStatus" role="status">観測を準備中…</p><label for="weatherPlaybackSpeed">再生の速さ</label><select id="weatherPlaybackSpeed"><option value="1200">ゆっくり</option><option value="650" selected>標準</option><option value="300">速い</option></select><label class="toggle">観測の切り替わりをなめらかに<input type="checkbox" id="smoothObservations" checked><span></span></label><p class="weather-note">切り替わりの間は、前の観測と次の観測を重ねて溶け込ませます。どちらも実観測で、中間の時刻の観測を作り出してはいません。日時は溶け込み先の観測を指します。溶け込むのは1時間後の観測へ進むときだけで、先頭へ戻るときや時刻を選んだときはすぐに切り替えます。</p><p class="weather-note">通常は、観測の明るさ0.38–0.82を白い雲の濃さに変換し、青い地表参考画像に重ねます。未校正の簡易合成で、検証された雲判定ではありません。冷たい地表を雲として含み、暖かい低層雲を見落とします。参考画像は雲のない地表で、雪氷は固定です。観測範囲外（緯度±85.05°より外）は参考画像のままです。</p><p id="weatherStatus" role="status" aria-live="polite">保存した観測画像を読み込み中…</p><time id="observationTime">観測日時を確認中</time><label for="weatherTime">表示中の観測時刻</label><input type="range" id="weatherTime" min="0" max="0" value="0" disabled><p class="weather-note">観測を時刻順に再生し、末尾で先頭へ戻ります。赤外線は白黒の観測です。未来館と同じカラー合成ではありません。合成時刻を日本時間で表示。画像の透かしとロゴはそのまま表示します。</p><a class="weather-source" href="https://realearth.ssec.wisc.edu/" target="_blank" rel="noreferrer">Source: SSEC RealEarth, UW-Madison</a></section>
+<span class="eyebrow">VIEW SETTINGS</span><h2>地球の見え方</h2>
+<div class="zoomrow"><button id="out" aria-label="縮小">−</button><span>ズーム</span><button id="in" aria-label="拡大">＋</button></div>
+<button class="reset" id="reset">初期の視点に戻す ↺</button>
+<p class="weather-note">Unity版は、同梱した赤外線観測13時刻の再生に対応しています。可視光・元の白黒観測・昼と夜・立体の模型・最新の取得は<a href="../">JavaScript版</a>で見られます。</p>
+</aside>
+</main>
+<footer><span>日本科学未来館の展示「ジオ・コスモス」に着想を得た個人制作です。同館とは関係がありません。</span><details><summary>この展示について</summary><p>SSEC RealEarthの全球衛星合成画像（赤外線）を球面に投影します。予報ではなく観測画像です。画像中の透かし・ロゴは保持します。観測には遅れや欠測があります。地表の参考画像は雲のない地表で、現在の観測ではありません。描画はUnityで行い、観測は同じサイトのJavaScript版と同じファイルを読み込みます。</p><p>地球画像：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_2048.jpg" target="_blank" rel="noreferrer">NASA Visible Earth (Blue Marble)</a> · <a href="https://www.miraikan.jst.go.jp/" target="_blank" rel="noreferrer">日本科学未来館</a></p></details></footer>
+<script src="Build/{{{ LOADER_FILENAME }}}"></script>
+<script>
+(function () {
+  'use strict';
+  // Unity draws the globe; this page draws every word. Unity reports its state through
+  // window.myatrasReport (Assets/Plugins/WebGL/MyAtrasBridge.jslib) and the controls
+  // reach it through SendMessage on the object named "Globe" (GlobeView.ObjectName).
+  var $ = function (id) { return document.getElementById(id); };
+  var instance = null;
+  var state = null;
+  var configured = false;
+  var jst = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  });
+
+  function parseStamp(stamp) {
+    var m = /^(\d{4})(\d{2})(\d{2})\.(\d{2})(\d{2})(\d{2})$/.exec(stamp || '');
+    return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])) : null;
+  }
+
+  function send(method, value) {
+    if (!instance) return;
+    if (value === undefined) instance.SendMessage('Globe', method);
+    else instance.SendMessage('Globe', method, value);
+  }
+
+  window.myatrasReport = function (text) {
+    var s = JSON.parse(text);
+    state = s;
+    if (s.state === 'loading') {
+      $('weatherStatus').textContent = '保存した観測画像を読み込み中… ' +
+        s.loadedCount + ' / ' + (s.expected || '—');
+      return;
+    }
+    if (s.state === 'error') {
+      $('status').hidden = false;
+      $('status').textContent = '観測を読み込めませんでした。ページを再読み込みしてください。';
+      $('weatherStatus').textContent = '保存した観測画像を読み込めませんでした。';
+      $('weatherPlaybackStatus').textContent = '再生できません。';
+      return;
+    }
+
+    var count = s.times.length;
+    if (!configured) {
+      // The globe ignores settings until its observations are loaded, so hand over the
+      // controls as the page shows them once it is ready.
+      configured = true;
+      send('SetIntervalMs', +$('weatherPlaybackSpeed').value);
+      send('SetDissolve', $('smoothObservations').checked ? 1 : 0);
+      $('weatherPlay').disabled = false;
+      $('weatherTime').disabled = false;
+      $('status').hidden = true;
+    }
+
+    var date = parseStamp(s.time);
+    if (date) {
+      $('observationTime').dateTime = date.toISOString();
+      $('observationTime').textContent = jst.format(date) + ' 日本時間';
+    }
+    $('weatherTime').max = String(count - 1);
+    $('weatherTime').value = String(s.index);
+    $('weatherPlay').textContent = s.playing ? '❚❚ 一時停止' : '▶ 雲の流れを再生';
+    $('weatherPlay').setAttribute('aria-pressed', String(s.playing));
+    $('weatherPlaybackStatus').textContent = s.playing
+      ? '実観測を連続再生 · ' + (s.index + 1) + ' / ' + count + ' 時刻' + (s.index === 0 ? ' · 先頭から' : '')
+      : '一時停止 · ' + (s.index + 1) + ' / ' + count + ' 観測';
+
+    // Worded as the JavaScript version words it, plus what a gap in the stored set means.
+    var status;
+    if (s.loadedCount < s.expected) {
+      status = s.expected + '時刻のうち' + s.loadedCount + '時刻だけ読み込めました。欠けた時刻の手前までを再生します。';
+    } else if (s.index !== count - 1) {
+      status = '過去の観測を表示中';
+    } else if (date && Date.now() - date.getTime() > 6 * 60 * 60 * 1000) {
+      status = '観測から6時間以上経過しています';
+    } else {
+      status = '同梱の観測画像を表示中';
+    }
+    $('weatherStatus').textContent = status;
+  };
+
+  $('weatherPlay').onclick = function () { if (state) send('SetPlaying', state.playing ? 0 : 1); };
+  $('weatherPlaybackSpeed').onchange = function (e) { send('SetIntervalMs', +e.target.value); };
+  $('smoothObservations').onchange = function (e) { send('SetDissolve', e.target.checked ? 1 : 0); };
+  $('weatherTime').oninput = function (e) { send('ShowObservation', +e.target.value); };
+  $('in').onclick = function () { send('ZoomBy', 0.12); };
+  $('out').onclick = function () { send('ZoomBy', -0.12); };
+  $('reset').onclick = function () { send('ResetView'); };
+
+  var full = $('fullscreen');
+  if (!document.fullscreenEnabled) full.hidden = true;
+  full.onclick = function () {
+    var request = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    Promise.resolve(request).catch(function () { full.textContent = '全画面は利用できません'; });
+  };
+  document.addEventListener('fullscreenchange', function () {
+    full.textContent = document.fullscreenElement ? '全画面を終了 ↙' : '全画面 ↗';
+  });
+
+  createUnityInstance($('globe'), {
+    dataUrl: 'Build/{{{ DATA_FILENAME }}}',
+    frameworkUrl: 'Build/{{{ FRAMEWORK_FILENAME }}}',
+#if USE_WASM
+    codeUrl: 'Build/{{{ CODE_FILENAME }}}',
+#endif
+#if SYMBOLS_FILENAME
+    symbolsUrl: 'Build/{{{ SYMBOLS_FILENAME }}}',
+#endif
+    streamingAssetsUrl: 'StreamingAssets',
+    companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+    productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+    productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+    // The JavaScript globe caps its resolution the same way.
+    devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.75),
+    // Unity's own banner would sit over the page; problems go to the status line instead.
+    showBanner: function (message, type) { if (type === 'error') console.error(message); }
+  }, function (progress) {
+    $('status').textContent = '地球を読み込んでいます… ' + Math.round(progress * 100) + '%';
+  }).then(function (created) {
+    instance = created;
+    window.myatrasUnity = created;
+  }).catch(function (message) {
+    console.error(message);
+    $('status').hidden = false;
+    $('status').textContent = 'この端末では3D表示を利用できません。WebGL対応のブラウザで開いてください。';
+  });
+})();
+</script>
+</body>
+</html>
