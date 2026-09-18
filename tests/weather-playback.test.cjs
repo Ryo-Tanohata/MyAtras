@@ -9,7 +9,8 @@ const { install, suite } = require('./harness.cjs');
 const env = install([
   'weatherProduct', 'weatherStatus', 'weatherDescription', 'observationTime',
   'weatherTime', 'refreshWeather', 'autoWeather', 'surfaceLabel', 'flatWeather',
-  'rawObservation', 'weatherPlay', 'weatherPlaybackStatus', 'weatherPlaybackSpeed'
+  'rawObservation', 'weatherPlay', 'weatherPlaybackStatus', 'weatherPlaybackSpeed',
+  'weatherFrames'
 ]);
 const W = require('../dist/weather.js');
 const { WeatherPlayback } = require('../dist/weather-playback.js');
@@ -34,6 +35,7 @@ function setup() {
   env.responses.set('api/image', { image: true });
   env.document.getElementById('weatherProduct').value = 'globalir';
   env.document.getElementById('autoWeather').checked = false;
+  env.document.getElementById('weatherFrames').value = '13';
   env.reset();
   const shown = [];
   const continuing = [];
@@ -52,6 +54,44 @@ function stepOnce(playback) {
   clearTimeout(playback.timer);
   return playback.controller.current.time;
 }
+
+// How many observations to play is the viewer's choice: the thirteen that ship with
+// the page, or more of what SSEC still lists, fetched on a refresh. Nothing is
+// invented to fill a larger choice - only times the server listed are played.
+s.test('playback takes the chosen number of listed observations', async () => {
+  const { playback, controller } = setup();
+  const listed = Array.from({ length: 30 },
+    (_, i) => `202609${String(10 + Math.floor(i / 24)).padStart(2, '0')}.${String(i % 24).padStart(2, '0')}0000`)
+    .sort();
+  controller.times.globalir = listed;
+
+  env.document.getElementById('weatherFrames').value = '25';
+  env.document.getElementById('weatherFrames').dispatch('change');
+  await playback.prepare();
+  assert.strictEqual(playback.frames.length, 25, 'twenty-five of the listed times');
+  assert.deepStrictEqual(playback.frames, listed.slice(-25), 'the newest ones, in order');
+  playback.stop();
+});
+
+s.test('a smaller choice plays fewer, and never more than are listed', async () => {
+  const { playback, controller } = setup();
+  controller.times.globalir = ['20260916.190000', '20260916.200000', '20260916.210000'];
+
+  env.document.getElementById('weatherFrames').value = '49';
+  env.document.getElementById('weatherFrames').dispatch('change');
+  await playback.prepare();
+  assert.strictEqual(playback.frames.length, 3, 'asking for more than exist plays what exists');
+  playback.stop();
+});
+
+s.test('changing the number stops playback rather than mixing two lengths', () => {
+  const { playback } = setup();
+  playback.playing = true;
+  env.document.getElementById('weatherFrames').value = '25';
+  env.document.getElementById('weatherFrames').dispatch('change');
+  assert.ok(!playback.playing);
+  assert.strictEqual(playback.frameCount, 25);
+});
 
 s.test('the bundled sequence holds 13 distinct ordered observations', () => {
   assert.strictEqual(TIMES.length, 13, 'thirteen observation times');

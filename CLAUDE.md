@@ -16,6 +16,7 @@ GitHubへの公開コード登録はユーザーが了承済み。GitHub Pages�
 - 2026-09-16 09:00–21:00 UTCの13枚の全球赤外線観測を順に再生。日時は日本時間で表示。データは保存時点の観測であり常時最新ではない。
 - 地表参考画像に観測輝度から白い層を合成。チェックボックス「元の白黒観測を表示」で元の観測に戻せる。地球回転は初期OFF。
 - 最新取得、再生速度、時刻選択、キャッシュ、取得失敗時の保持。
+- 「読み込む観測の数」で再生に使う時刻数を13/25/49から選べる（既定13＝同梱と同じ）。13を超える分は「最新を取得」で端末からSSECに追加取得する。SSECが列挙した時刻しか使わず、足りない分を作り出さない。変更すると再生は止まり、選び直した数で読み込み直す。PCを使わずスマホだけで枚数を増やせる経路。
 - 観測の切り替わりは380ms以下の溶け込み（`dist/observation-fade.js`）。画面上の2枚はどちらも実観測で、閾値は各観測に個別に適用し、描画結果だけを混ぜる。中間時刻の観測は作らない。日時は溶け込み先の観測を指す。溶け込むのは1時間後の観測へ進むときだけで、最新から最古へ戻るとき（12時間の飛び）や、時刻選択・再取得のときは即座に切り替える。「観測の切り替わりをなめらかに」で解除できる。Unity版も同じ規則（`unity/MyAtras/Assets/Scripts/ObservationPlayback.cs`）。
 - 別モード「立体の模型」はSSEC AMV風向・風速を使う簡易移流。雲の形や量は模型で、実際の雲分布・気象予報ではない。
 
@@ -51,7 +52,7 @@ Unity版は観測を独自取得せず、`dist/weather/` と `dist/data/` の同
 4. 単なるテクスチャ平行移動や生成した雲を実観測として見せない。出典とロゴを維持する。
 
 ## 検証済みと未検証
-`node tests/weather.test.cjs`（9件）、`node tests/weather-playback.test.cjs`（10件）、`node tests/cloud-model.test.cjs`（9件）、`node tests/cloud-simulation.test.cjs`（10件）、`node tests/observation-fade.test.cjs`（8件）、`node tests/fetch-observations.test.cjs`（9件・API模擬サーバー）はこの環境で成功。同梱3,333ベクトルすべてが3時間後まで有限であることも確認済み。
+`node tests/weather.test.cjs`（9件）、`node tests/weather-playback.test.cjs`（14件）、`node tests/cloud-model.test.cjs`（9件）、`node tests/cloud-simulation.test.cjs`（10件）、`node tests/observation-fade.test.cjs`（8件）、`node tests/fetch-observations.test.cjs`（9件・API模擬サーバー）はこの環境で成功。同梱3,333ベクトルすべてが3時間後まで有限であることも確認済み。
 Windows上のChrome（`--headless=new` + SwiftShader）で実描画を確認：配信版の合成表示・13時刻の再生、白黒観測モード、立体の模型モード（3,333地点）、および単体HTMLのfile://単体起動。地球・雲模型のGLSLは実ブラウザでコンパイル・リンク成功。
 2026-09-17、Linuxコンテナの同梱Chromium（SwiftShader）とAndroid幅412×915のタッチ操作エミュレーションでも再確認：地球描画、13時刻が一巡してループ、一時停止で時刻が止まること、白黒観測トグル、可視光への切替（追加取得は失敗し、設計どおり表示中の観測を保持）、立体の模型（3,333地点の移流）、昼夜モード。約56fps。
 Android実機でのUI QA、実機のタッチ操作、実ネットワークでの「最新を取得」は未検証。エミュレーションのタッチは実機の代わりにならない。
