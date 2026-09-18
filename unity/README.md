@@ -164,6 +164,17 @@ both sides of the terminator and on open ocean too, which read as a pink stripe 
 the Pacific; the tint now stays within a few degrees on the lit side and mostly on
 cloud.
 
+The night side keeps its towns and its coastlines. Towns are a point of light plus light
+spilling into the air around them - Black Marble a few mip levels down - which passes
+partly through cloud and lights its underside, the way cloud over a city glows in
+photographs from orbit. The spill begins above Black Marble's faint moonlit-land tone
+(the Sahara reads about 0.17): starting lower lit the whole of inland Australia as if
+it were town light. Darkening the night side to 5% also left no way to tell land from
+sea where there were no towns, so `scripts/build-land.py` draws Natural Earth's 1:50m
+land and coastline into `dist/assets/land.png`, and at night the sea stays nearly
+black, land is lifted a little, and a thin pale coastline shows the edges, faintly even
+under cloud. It is an aid, not an observation, and the page says so.
+
 Behind the globe are real stars, not a pattern. `scripts/build-stars.py` draws every
 star of the Bright Star Catalogue down to magnitude 6.0 at its J2000 position, with
 brightness from its magnitude and colour from B-V, into a map of right ascension and
