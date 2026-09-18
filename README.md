@@ -71,8 +71,8 @@ export and publishes `dist/` to GitHub Pages on every push to `main`:
 https://ryo-tanohata.github.io/MyAtras/ . A Unity WebGL build of the same globe is
 published from `dist/unity/` at https://ryo-tanohata.github.io/MyAtras/unity/ . It adds
 what the JavaScript globe does not have: sunlight from where the sun actually was at
-each observation's time, NASA Black Marble city lights on the night side, and an
-atmosphere lit by that sun (for effect; the page says so), the real stars of the Bright
+each observation's time, NASA Black Marble city lights on the night side, an
+atmosphere calculated by single Rayleigh and Mie scattering of that sunlight, the real stars of the Bright
 Star Catalogue behind the Earth as they stood at that time, and cloud relief and
 shadows from a relative height estimated from infrared brightness (for effect), and
 flow lines along the observed wind of the bundled AMV data; see

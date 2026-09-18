@@ -99,13 +99,6 @@ Shader "MyAtras/EarthComposite"
                 return float3(q.x * cy + q.z * sy, q.y, -q.x * sy + q.z * cy);
             }
 
-            // Where the sun is near the horizon, as a bump centred on the terminator. The
-            // width is the sine of the solar elevation, about 7 degrees for 0.12.
-            float Twilight(float sunSine, float width)
-            {
-                return exp(-(sunSine / width) * (sunSine / width));
-            }
-
             // Cloud cover and relative cloud-top height at a point on the globe, from the two
             // observations on screen, mixed the same way as the drawn layer.
             //
@@ -126,6 +119,90 @@ Shader "MyAtras/EarthComposite"
                 float cover = lerp(smoothstep(0.38, 0.82, bWas) * was.a, smoothstep(0.38, 0.82, bNow) * now.a, _Fade);
                 float height = lerp(smoothstep(0.38, 1.0, bWas) * was.a, smoothstep(0.38, 1.0, bNow) * now.a, _Fade);
                 return float2(cover, height);
+            }
+
+            // ---- The air, calculated -----------------------------------------------------
+            //
+            // Single scattering by Rayleigh (molecules) and Mie (haze), marched along each
+            // view ray and towards the sun from each step - the method of Nishita et al.
+            // Blue sky, the white glow of haze towards the sun and the red of sunset all
+            // come out of the wavelength dependence of the coefficients below; no colour is
+            // chosen by hand. Multiple scattering is left out.
+            //
+            // The real atmosphere, about 100 km on a 6,371 km Earth, would be a few pixels
+            // at the limb on a phone. It is drawn six times as thick and one sixth as dense,
+            // which keeps the optical depth straight up - and so the colour of the sky and
+            // of sunlight at the ground - as it is; paths along the limb come out somewhat
+            // thinner than real. Distances here are in Earth radii.
+            static const float AIR_SCALE = 6.0;
+            static const float AIR_TOP = 1.0 + 100.0 / 6371.0 * AIR_SCALE;
+            static const float AIR_HR = 8.0 / 6371.0 * AIR_SCALE;     // Rayleigh scale height
+            static const float AIR_HM = 1.2 / 6371.0 * AIR_SCALE;     // Mie scale height
+            // Sea-level scattering coefficients per metre (red, green, blue for Rayleigh),
+            // turned into per Earth radius and thinned by the same factor.
+            static const float3 AIR_BETA_R = float3(5.8e-6, 13.5e-6, 33.1e-6) * (6371000.0 / AIR_SCALE);
+            static const float AIR_BETA_M = 21e-6 * (6371000.0 / AIR_SCALE);
+            static const float AIR_MIE_G = 0.76;
+            // Exposure: how much sunlight goes in. It scales the brightness of the air, not
+            // its colour - the colour comes from the calculation.
+            static const float SUN_INTENSITY = 15.0;
+
+            // Where a ray from o along unit d enters and leaves a sphere at the centre.
+            float2 SphereHit(float3 o, float3 d, float radius)
+            {
+                float b = dot(o, d);
+                float disc = b * b - (dot(o, o) - radius * radius);
+                if (disc < 0.0) return float2(-1.0, -1.0);
+                float root = sqrt(disc);
+                return float2(-b - root, -b + root);
+            }
+
+            // Rayleigh and Mie optical depth from a point in the air to the sun, or -1 when
+            // the Earth is in the way.
+            float2 SunDepth(float3 at, float3 sun)
+            {
+                if (SphereHit(at, sun, 1.0).x > 0.0) return float2(-1.0, -1.0);
+                float dl = SphereHit(at, sun, AIR_TOP).y / 4.0;
+                float2 depth = 0.0;
+                for (int j = 0; j < 4; j++)
+                {
+                    float h = length(at + sun * (dl * (j + 0.5))) - 1.0;
+                    depth += float2(exp(-h / AIR_HR), exp(-h / AIR_HM)) * dl;
+                }
+                return depth;
+            }
+
+            // Light scattered towards the eye along a ray, up to tMax; transmittance is what
+            // the air lets through from behind.
+            float3 Scatter(float3 o, float3 d, float tMax, float3 sun, out float3 transmittance)
+            {
+                transmittance = 1.0;
+                float2 top = SphereHit(o, d, AIR_TOP);
+                if (top.y <= 0.0) return 0.0;
+                float t0 = max(top.x, 0.0);
+                float ds = (min(top.y, tMax) - t0) / 8.0;
+                float2 viewDepth = 0.0;
+                float3 sumR = 0.0, sumM = 0.0;
+                for (int i = 0; i < 8; i++)
+                {
+                    float3 at = o + d * (t0 + ds * (i + 0.5));
+                    float h = length(at) - 1.0;
+                    float2 density = float2(exp(-h / AIR_HR), exp(-h / AIR_HM)) * ds;
+                    viewDepth += density;
+                    float2 sunDepth = SunDepth(at, sun);
+                    if (sunDepth.x < 0.0) continue;            // in the shadow of the Earth
+                    float3 through = exp(-(AIR_BETA_R * (viewDepth.x + sunDepth.x)
+                                           + AIR_BETA_M * 1.1 * (viewDepth.y + sunDepth.y)));
+                    sumR += density.x * through;
+                    sumM += density.y * through;
+                }
+                transmittance = exp(-(AIR_BETA_R * viewDepth.x + AIR_BETA_M * 1.1 * viewDepth.y));
+                float mu = dot(d, sun);
+                float phaseR = 3.0 / (16.0 * PI) * (1.0 + mu * mu);
+                float g = AIR_MIE_G;
+                float phaseM = 3.0 / (8.0 * PI) * ((1.0 - g * g) * (1.0 + mu * mu))
+                               / ((2.0 + g * g) * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
+                return SUN_INTENSITY * (sumR * AIR_BETA_R * phaseR + sumM * AIR_BETA_M * phaseM);
             }
 
             float Hash(float2 cell)
@@ -195,17 +272,16 @@ Shader "MyAtras/EarthComposite"
                     float4 front;
                     if (_Sunlight > 0.5 && _RawObservation < 0.5)
                     {
-                        // Atmosphere, for effect: the air above the limb glows blue where
-                        // the sun is up there and warm where it is setting, and keeps only a
-                        // faint edge on the night side. The sun's direction is real; the
-                        // colours are not a scattering calculation.
-                        float3 limb = ToGlobe(float3(p / r, 0.0));
-                        float sunSine = dot(limb, _Sun.xyz);
-                        float lit = smoothstep(-0.25, 0.15, sunSine);
-                        float3 air = lerp(float3(0.30, 0.60, 0.95), float3(1.0, 0.55, 0.25),
-                                          Twilight(sunSine, 0.18) * 0.6);
-                        float alpha = exp(-(r - 1.0) * 14.0) * (0.05 + 0.40 * lit);
-                        front = float4(air, saturate(alpha));
+                        // The air above the limb, calculated along the line of sight of this
+                        // pixel (the globe is seen straight on, so every ray runs along -z).
+                        float3 transmittance;
+                        float3 light = 1.0 - exp(-Scatter(ToGlobe(float3(p, 3.0)), ToGlobe(float3(0.0, 0.0, -1.0)),
+                                                          1e9, _Sun.xyz, transmittance));
+                        // One alpha for the page behind: at least what the air adds, and at
+                        // least what it takes away.
+                        float alpha = saturate(max(max(light.r, max(light.g, light.b)),
+                                                   1.0 - dot(transmittance, 1.0 / 3.0)));
+                        front = float4(light / max(alpha, 1e-4), alpha);
                     }
                     else
                     {
@@ -320,6 +396,13 @@ Shader "MyAtras/EarthComposite"
                     // side - the night side takes over: the ground falls to 5%, cloud stays
                     // faintly visible, since infrared observes it by night as by day, and
                     // the towns of NASA's Black Marble come on.
+                    // Sunlight reaches the ground through the air, so it is reddened and
+                    // dimmed on its long path near sunset; divided by what it keeps overhead,
+                    // so the midday side stays as it was.
+                    float2 sunPath = SunDepth(q * 1.0005, _Sun.xyz);
+                    float3 overhead = exp(-(AIR_BETA_R * AIR_HR + AIR_BETA_M * 1.1 * AIR_HM));
+                    color *= sunPath.x < 0.0 ? 0.0
+                             : exp(-(AIR_BETA_R * sunPath.x + AIR_BETA_M * 1.1 * sunPath.y)) / overhead;
                     float day = smoothstep(-0.10, 0.10, dot(q, _Sun.xyz));
                     float3 luma = float3(0.299, 0.587, 0.114);
                     float2 at = float2(uv.x, 1.0 - uv.y);
@@ -369,19 +452,32 @@ Shader "MyAtras/EarthComposite"
                 color *= lum * grid;
                 if (_Sunlight > 0.5 && _RawObservation < 0.5)
                 {
-                    // Atmosphere, for effect, lit by the real sun: looking through more air
-                    // towards the limb hazes the day side blue, and across the terminator,
-                    // where sunlight crosses the most air, ground and cloud tops take a warm
-                    // tint - cloud tops more, as they still catch the setting sun.
-                    float sunSine = dot(q, _Sun.xyz);
-                    float lit = smoothstep(-0.25, 0.15, sunSine);
-                    // The warm light belongs to the side where the sun is still just up: the
-                    // bump sits a degree above the horizon and dies away within a few degrees
-                    // below it. Open ground takes little of it, cloud tops more.
-                    float dusk = Twilight(sunSine - 0.02, 0.09) * smoothstep(-0.08, 0.0, sunSine);
-                    float3 air = lerp(float3(0.35, 0.62, 1.0), float3(1.0, 0.5, 0.2), dusk * 0.7);
-                    color += air * pow(1.0 - z, 2.5) * 0.45 * lit;
-                    color += float3(1.0, 0.5, 0.2) * dusk * (0.03 + 0.18 * cloudCover);
+                    // The ground is seen through the air: dimmed by what the air takes away
+                    // and hazed by what it scatters in, most towards the limb.
+                    float3 o = ToGlobe(float3(p, 3.0));
+                    float3 d = ToGlobe(float3(0.0, 0.0, -1.0));
+                    float3 transmittance;
+                    float3 light = Scatter(o, d, SphereHit(o, d, 1.0).x, _Sun.xyz, transmittance);
+                    // The air reddens what sunlight it lets through. The night side holds no
+                    // sunlight - its faint cloud and coastline are drawn for legibility - so
+                    // there it is only dimmed, evenly, rather than tinted brown.
+                    float lit = smoothstep(-0.10, 0.10, dot(q, _Sun.xyz));
+                    float3 through = lerp(dot(transmittance, 1.0 / 3.0).xxx, transmittance, lit);
+                    float3 seen = color * through + (1.0 - exp(-light));
+                    // At the very limb a line of sight grazes the Earth through so much air
+                    // that eight steps along it miss the bright layer, and the last ring of
+                    // pixels came out darker than the air on both sides of it, as a dotted
+                    // line. Within a few pixels of the edge it takes the brighter of itself
+                    // and the air just beyond the limb, joining the two smoothly.
+                    float pixel = 2.0 / (min(res.x, res.y) * _Zoom * 0.77);
+                    float edge = smoothstep(1.0 - 3.0 * pixel, 1.0, sqrt(rr));
+                    if (edge > 0.0)
+                    {
+                        float3 beyond;
+                        float3 grazing = 1.0 - exp(-Scatter(o, d, 1e9, _Sun.xyz, beyond));
+                        seen = lerp(seen, max(seen, grazing), edge);
+                    }
+                    color = seen;
                 }
                 else
                 {

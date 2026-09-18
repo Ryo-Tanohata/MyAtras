@@ -19,7 +19,7 @@
 <span class="eyebrow">VIEW SETTINGS</span><h2>地球の見え方</h2>
 <label class="toggle">観測時刻の昼と夜<input type="checkbox" id="sunlight" checked><span></span></label>
 <p id="sunPoint" class="weather-note" role="status">太陽の位置を計算中…</p>
-<p class="weather-note">昼夜の境目は、表示中の観測時刻の太陽の位置から計算しています（天文年鑑の簡易式、誤差は約0.01°）。境目は太陽高度±約6°でなだらかにしています。夜側の雲も赤外線の観測で、暗く表示しています。街明かりはNASA Black Marble（2016年）の固定画像で、現在の観測ではありません。夜側の海岸線は、陸と海の境目が分かるように描いた補助線で、Natural Earth（パブリックドメイン）の地図データです。地球の縁の青い光と、境目の夕焼け色は大気を模した演出です。太陽の向きは観測時刻から計算していますが、色は散乱の計算ではありません。</p>
+<p class="weather-note">昼夜の境目は、表示中の観測時刻の太陽の位置から計算しています（天文年鑑の簡易式、誤差は約0.01°）。境目は太陽高度±約6°でなだらかにしています。夜側の雲も赤外線の観測で、暗く表示しています。街明かりはNASA Black Marble（2016年）の固定画像で、現在の観測ではありません。夜側の海岸線は、陸と海の境目が分かるように描いた補助線で、Natural Earth（パブリックドメイン）の地図データです。大気の色は、レイリー散乱（空気の分子）とミー散乱（もや）の一次散乱を計算して描いています。昼側の青い縁、境目の夕焼け色、太陽が地球の裏にあるときの橙と青の輪は計算から出てくるもので、色は指定していません。見やすさのため大気の厚さを6倍、濃さを1/6にしています（真上方向の光学的厚さは実際と同じ）。多重散乱は省略しています。</p>
 <label class="toggle">雲の高さと影<input type="checkbox" id="cloudRelief" checked><span></span></label>
 <p class="weather-note">雲の立体感と影は、赤外線の明るさから推定した相対的な高さ（明るいほど冷たく、高い雲）を約10倍に誇張して描いた演出です。画像に温度の目盛りがないため、実際の高さではありません。影の向きと長さは観測時刻の太陽から計算しています。昼と夜の表示がオンのときに描きます。</p>
 <label class="toggle">観測風の流れ<input type="checkbox" id="flow" checked><span></span></label>
@@ -162,7 +162,7 @@
   });
 
   createUnityInstance($('globe'), {
-    dataUrl: 'Build/0c3dfc8f79bc9f8658fb2ce7eac88044.data.unityweb',
+    dataUrl: 'Build/19afd10da3fabd71e7b6c2f5591a6fb4.data.unityweb',
     frameworkUrl: 'Build/ac8aa2dea188d08683200a2490d8ff8d.framework.js.unityweb',
     codeUrl: 'Build/e4c18d26ec776a4bd552fd38279eec84.wasm.unityweb',
     streamingAssetsUrl: 'StreamingAssets',
