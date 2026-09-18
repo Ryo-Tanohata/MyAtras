@@ -30,6 +30,12 @@ namespace MyAtras
         public Texture2D Stars { get; private set; }
         /// <summary>Natural Earth land and coastline (scripts/build-land.py); null if missing.</summary>
         public Texture2D Land { get; private set; }
+        /// <summary>The observed wind as a texture (WindField.cs); null if amv.json could not be read.</summary>
+        public Texture2D Wind { get; private set; }
+        /// <summary>The wind's observation stamp, e.g. 20260916.190000; one time only.</summary>
+        public string WindStamp { get; private set; } = "";
+        /// <summary>How many one-degree texels hold observed wind.</summary>
+        public int WindTexels { get; private set; }
         /// <summary>The stored observations, oldest first, as the manifest lists them.</summary>
         public IReadOnlyList<Texture2D> Frames => frames;
         /// <summary>Each frame's observation time in UTC and JST, in ASCII, for the editor.</summary>
@@ -89,6 +95,28 @@ namespace MyAtras
             {
                 Land = texture;
             });
+
+            // The observed wind for the flow lines: the same file the JavaScript version's
+            // wind model reads. Optional, like the other layers.
+            string windJson = null;
+            yield return Text(root + "data/amv.json", text => windJson = text);
+            if (windJson != null)
+            {
+                try
+                {
+                    WindField.Bundle bundle = JsonUtility.FromJson<WindField.Bundle>(windJson);
+                    if (bundle?.points != null && bundle.points.Length > 0)
+                    {
+                        Wind = WindField.Build(bundle.points, out int texels);
+                        WindTexels = texels;
+                        WindStamp = bundle.time ?? "";
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("MyAtras: the observed wind could not be read: " + e.Message);
+                }
+            }
 
             // Only the background uses it, so this too is optional.
             yield return Texture(root + "assets/stars.png", TextureWrapMode.Repeat, texture =>

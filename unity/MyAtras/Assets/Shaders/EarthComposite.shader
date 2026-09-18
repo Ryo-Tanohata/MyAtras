@@ -19,6 +19,7 @@ Shader "MyAtras/EarthComposite"
         _Night ("City lights", 2D) = "black" {}
         _StarMap ("Stars", 2D) = "black" {}
         _Land ("Land and coastline", 2D) = "black" {}
+        _Wind ("Observed wind", 2D) = "black" {}
     }
 
     SubShader
@@ -64,6 +65,11 @@ Shader "MyAtras/EarthComposite"
             // on the night side, where land and sea would otherwise be the same black.
             sampler2D _Land;
             float _LandOn;
+            // The observed wind, one texel per degree (WindField.cs): east and north in m/s,
+            // how well observed. _FlowScale is degrees travelled per m/s per second on
+            // screen, set from the playback speed so the flow and the clouds share a clock.
+            sampler2D _Wind;
+            float _FlowOn, _FlowScale;
 
             // Cloud-top height is exaggerated tenfold so it can be seen at all: 15 km at the
             // top of the troposphere, as an angle on the unit sphere, times ten.
@@ -120,6 +126,57 @@ Shader "MyAtras/EarthComposite"
                 float cover = lerp(smoothstep(0.38, 0.82, bWas) * was.a, smoothstep(0.38, 0.82, bNow) * now.a, _Fade);
                 float height = lerp(smoothstep(0.38, 1.0, bWas) * was.a, smoothstep(0.38, 1.0, bNow) * now.a, _Fade);
                 return float2(cover, height);
+            }
+
+            float Hash(float2 cell)
+            {
+                return frac(sin(dot(cell, float2(127.1, 311.7))) * 43758.5453);
+            }
+
+            // Flow lines along the observed wind. A grid of 3-degree cells carries one short
+            // dash each, anchored at a jittered point and moving along the wind observed
+            // there, fading in and out over its cycle; a pixel looks at the dashes of its own
+            // cell and the eight around it. The dashes are a way of drawing the wind, not
+            // particles of cloud. Where the wind texture says nothing was observed, no dash
+            // is drawn at all.
+            float Flow(float3 at)
+            {
+                const float CELL = 3.0;
+                const float PERIOD = 2.5;
+                float latP = degrees(asin(clamp(at.y, -1.0, 1.0)));
+                float lonP = degrees(atan2(at.x, at.z));
+                float shrink = max(cos(radians(latP)), 0.2);
+                float2 home = floor(float2(lonP, latP) / CELL);
+                float strongest = 0.0;
+                for (int j = -1; j <= 1; j++)
+                {
+                    for (int k = -1; k <= 1; k++)
+                    {
+                        float2 cell = home + float2(k, j);
+                        float2 anchor = (cell + 0.2 + 0.6 * float2(Hash(cell), Hash(cell + 17.0))) * CELL;
+                        float4 wind = tex2Dlod(_Wind, float4((anchor.x + 180.0) / 360.0, (anchor.y + 90.0) / 180.0, 0.0, 0.0));
+                        if (wind.a < 0.05) continue;
+                        float2 uv = (wind.rg - 0.5) * 80.0;              // m/s, east and north
+                        float speed = length(uv);
+                        if (speed < 0.5) continue;
+                        float2 dir = uv / speed;
+                        float phase = frac(_Time.y / PERIOD + Hash(cell + 41.0));
+                        float travel = speed * PERIOD * _FlowScale;       // degrees per cycle
+                        // Local offsets in degrees of arc: longitude shrinks with latitude.
+                        float2 offset = float2(lonP - anchor.x, latP - anchor.y);
+                        offset.x = (frac(offset.x / 360.0 + 0.5) - 0.5) * 360.0 * shrink;
+                        float2 head = dir * (phase - 0.5) * travel;
+                        // Long and wide enough to read a direction on a phone: about 2 to 3
+                        // degrees long and half a degree wide, brightest at the head.
+                        float2 tail = head - dir * (0.8 * travel + 1.2);
+                        float2 seg = head - tail;
+                        float t = saturate(dot(offset - tail, seg) / max(dot(seg, seg), 1e-4));
+                        float d = length(offset - (tail + seg * t));
+                        float stroke = smoothstep(0.30 + 0.12 * t, 0.05, d) * (0.25 + 0.75 * t);
+                        strongest = max(strongest, stroke * sin(3.14159 * phase) * wind.a);
+                    }
+                }
+                return strongest;
             }
 
             fixed4 frag(v2f i) : SV_Target
@@ -329,6 +386,10 @@ Shader "MyAtras/EarthComposite"
                 else
                 {
                     color += float3(0.12, 0.35, 0.5) * pow(1.0 - z, 3.0) * 0.20;
+                }
+                if (_FlowOn > 0.5)
+                {
+                    color = lerp(color, float3(0.72, 0.90, 1.0), Flow(q) * 0.7);
                 }
                 return float4(color, 1.0);
             }

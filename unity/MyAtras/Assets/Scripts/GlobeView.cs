@@ -47,6 +47,7 @@ namespace MyAtras
         bool sunlight = true;
         bool stars = true;
         bool cloudRelief = true;
+        bool flow = true;
         Vector2 lastPointer;
         float lastPinchDistance;
         string lastReport;
@@ -73,6 +74,9 @@ namespace MyAtras
             public bool starMap;     // the star map loaded
             public bool cloudRelief; // cloud relief and shadows drawn
             public bool landMap;     // the night-side land and coastline map loaded
+            public bool flow;        // the flow lines drawn
+            public string windTime;  // the wind's observation stamp; empty if it could not be read
+            public int windTexels;   // one-degree texels with observed wind
             public float sunLat;     // subsolar point at the observation time, degrees
             public float sunLon;     // east positive
             public string error;
@@ -117,6 +121,7 @@ namespace MyAtras
             if (loader.Stars != null) material.SetTexture("_StarMap", loader.Stars);
             if (loader.Land != null) material.SetTexture("_Land", loader.Land);
             material.SetFloat("_LandOn", loader.Land != null ? 1f : 0f);
+            if (loader.Wind != null) material.SetTexture("_Wind", loader.Wind);
             material.SetVector("_Watermark", loader.Watermark);
             material.SetFloat("_WeatherActive", 1f);
             playback = new ObservationPlayback(loader.Frames.Count, Time.unscaledTime);
@@ -231,6 +236,11 @@ namespace MyAtras
             cloudRelief = on != 0;
         }
 
+        public void SetFlow(int on)
+        {
+            flow = on != 0;
+        }
+
         /// <summary>
         /// The moment whose sun is drawn. During a dissolve between an observation and the
         /// next hour's, the sun moves with it: the sunlight at each instant in between is
@@ -268,6 +278,9 @@ namespace MyAtras
                 starMap = loader.Stars != null,
                 cloudRelief = cloudRelief,
                 landMap = loader.Land != null,
+                flow = flow,
+                windTime = loader.WindStamp,
+                windTexels = loader.WindTexels,
                 error = loader.Error ?? "",
             };
             if (loaded)
@@ -316,6 +329,11 @@ namespace MyAtras
             material.SetFloat("_StarsOn", stars && loader.Stars != null ? 1f : 0f);
             material.SetFloat("_Sidereal", (float)(SolarPosition.GreenwichSiderealDegrees(shown) * Math.PI / 180.0));
             material.SetFloat("_CloudRelief", cloudRelief ? 1f : 0f);
+            material.SetFloat("_FlowOn", flow && loader.Wind != null ? 1f : 0f);
+            // The flow keeps the playback's clock: at 0.65 s an hour, one screen second is
+            // about 1.5 hours of wind, so a line moves as far as the clouds do between
+            // two observations. 111,195 m to a degree of arc.
+            material.SetFloat("_FlowScale", 3600f / Mathf.Max(playback.Interval, 0.05f) / 111195f);
             Graphics.Blit(source, destination, material);
         }
 
