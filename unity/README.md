@@ -152,6 +152,18 @@ terminator sweeps about 180 degrees while the clouds move.
   city lights are a fixed 2016 image, not a current observation. "観測時刻の昼と夜" turns
   it off.
 
+The same sun lights an atmosphere drawn for effect - the direction is real, the colours
+are not a scattering calculation, and the page says so. Above the limb the air glows
+blue where the sun is up there, warm where it is setting and only faintly on the night
+side; on the globe, looking through more air towards the limb hazes the day side blue,
+and just on the sunlit side of the terminator cloud tops take the colour of the setting
+sun while open ground takes very little of it. With the sun directly behind the Earth,
+as at midnight in Japan, the whole limb lies on the terminator and glows as a thin
+ring, as photographs of the night side show. The first version put the warm tint on
+both sides of the terminator and on open ocean too, which read as a pink stripe down
+the Pacific; the tint now stays within a few degrees on the lit side and mostly on
+cloud.
+
 The first observation, 09:00 UTC, is 18:00 in Japan, just after sunset there: the
 terminator falls just east of Japan, 90 degrees from the subsolar point at 43.7°E. At
 15:00 UTC, midnight in Japan, the whole visible hemisphere is dark and the lights of
