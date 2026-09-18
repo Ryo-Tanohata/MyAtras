@@ -40,6 +40,15 @@ const UNITY = flag('--unity');
 const SHOTS = flag('--shots');
 const MOBILE = !flag('--desktop');
 const DIR = path.resolve(ROOT, opt('--dir') || (UNITY ? 'dist/unity' : 'dist'));
+// The Unity build reads the observations and the ground texture from beside it, at
+// ../weather/ and ../assets/, exactly as it will on Pages under /MyAtras/unity/. So it
+// is served the way Pages serves it: the whole site, opened at /unity/.
+const SERVE_ROOT = UNITY && !opt('--dir') ? path.resolve(ROOT, 'dist') : DIR;
+const PAGE_PATH = UNITY && !opt('--dir') ? '/unity/' : '/';
+// Pages built by Unity's default template choose their phone layout from the user
+// agent, not the viewport, so the emulated phone has to say it is one.
+const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36';
 const SHOT_DIR = path.resolve(ROOT, '.check-shots');
 const PORT = Number(opt('--port') || 8123);
 
@@ -93,6 +102,18 @@ function chromiumPath() {
       const candidate = path.join(root, entry, 'chrome-linux', 'chrome');
       if (fs.existsSync(candidate)) return candidate;
     }
+  }
+  // Windows and macOS keep the browser in fixed places rather than on the PATH.
+  const installed = [
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Google\\Chrome\\Application\\chrome.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Google\\Chrome\\Application\\chrome.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Google\\Chrome\\Application\\chrome.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Microsoft\\Edge\\Application\\msedge.exe'),
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  ];
+  for (const candidate of installed) {
+    if (fs.existsSync(candidate)) return candidate;
   }
   for (const name of ['chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable']) {
     try { return execFileSync('which', [name], { encoding: 'utf8' }).trim(); } catch { /* keep looking */ }
@@ -168,7 +189,10 @@ async function connect(port) {
     send, js, events, close: () => ws.close(),
     async viewport(width, height, mobile) {
       await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 2, mobile });
-      if (mobile) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+      if (mobile) {
+        await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+        await send('Emulation.setUserAgentOverride', { userAgent: ANDROID_UA, platform: 'Linux armv8l' });
+      }
     },
     async waitFor(expr, timeout, label) {
       const deadline = Date.now() + timeout;
@@ -344,9 +368,9 @@ async function main() {
     process.exit(2);
   }
 
-  console.log(`serving   ${path.relative(ROOT, DIR)} on http://127.0.0.1:${PORT}/`);
+  console.log(`serving   ${path.relative(ROOT, SERVE_ROOT)}, opening http://127.0.0.1:${PORT}${PAGE_PATH}`);
   console.log(`chromium  ${exe}`);
-  const { server, missing } = await serve(DIR, PORT);
+  const { server, missing } = await serve(SERVE_ROOT, PORT);
   const { child, profile } = launch(exe, PORT + 1);
   let page;
   try {
@@ -354,7 +378,7 @@ async function main() {
     await page.viewport(MOBILE ? 412 : 1280, MOBILE ? 915 : 900, MOBILE);
     console.log(`viewport  ${MOBILE ? '412x915 (Android, touch)' : '1280x900 (desktop)'}\n`);
 
-    const version = await loadWithWebGL(page, `http://127.0.0.1:${PORT}/`);
+    const version = await loadWithWebGL(page, `http://127.0.0.1:${PORT}${PAGE_PATH}`);
     check(!!version, 'WebGL context granted', version);
     if (version) {
       if (UNITY) await checkUnityBuild(page);
