@@ -20,13 +20,17 @@
 <label class="toggle">観測時刻の昼と夜<input type="checkbox" id="sunlight" checked><span></span></label>
 <p id="sunPoint" class="weather-note" role="status">太陽の位置を計算中…</p>
 <p class="weather-note">昼夜の境目は、表示中の観測時刻の太陽の位置から計算しています（天文年鑑の簡易式、誤差は約0.01°）。境目は太陽高度±約6°でなだらかにしています。夜側の雲も赤外線の観測で、暗く表示しています。街明かりはNASA Black Marble（2016年）の固定画像で、現在の観測ではありません。地球の縁の青い光と、境目の夕焼け色は大気を模した演出です。太陽の向きは観測時刻から計算していますが、色は散乱の計算ではありません。</p>
+<label class="toggle">雲の高さと影<input type="checkbox" id="cloudRelief" checked><span></span></label>
+<p class="weather-note">雲の立体感と影は、赤外線の明るさから推定した相対的な高さ（明るいほど冷たく、高い雲）を約10倍に誇張して描いた演出です。画像に温度の目盛りがないため、実際の高さではありません。影の向きと長さは観測時刻の太陽から計算しています。昼と夜の表示がオンのときに描きます。</p>
+<label class="toggle">星空<input type="checkbox" id="stars" checked><span></span></label>
+<p id="starNote" class="weather-note">背景の星は、エール輝星星表の6等星までの実在の星（2000年の位置）です。観測時刻の恒星時に合わせて並べ、明るさは見やすく調整しています。</p>
 <div class="zoomrow"><button id="out" aria-label="縮小">−</button><span>ズーム</span><button id="in" aria-label="拡大">＋</button></div>
 <button class="reset" id="reset">初期の視点に戻す ↺</button>
 <p class="weather-note">Unity版は、同梱した赤外線観測13時刻の再生と、観測時刻の昼と夜の表示に対応しています。可視光・元の白黒観測・昼と夜・立体の模型・最新の取得は<a href="../">JavaScript版</a>で見られます。</p>
 </aside>
 </main>
-<footer><span>日本科学未来館の展示「ジオ・コスモス」に着想を得た個人制作です。同館とは関係がありません。</span><details><summary>この展示について</summary><p>SSEC RealEarthの全球衛星合成画像（赤外線）を球面に投影します。予報ではなく観測画像です。画像中の透かし・ロゴは保持します。観測には遅れや欠測があります。地表の参考画像は雲のない地表で、現在の観測ではありません。描画はUnityで行い、観測は同じサイトのJavaScript版と同じファイルを読み込みます。</p><p>地球画像：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_2048.jpg" target="_blank" rel="noreferrer">NASA Visible Earth (Blue Marble)</a> · 夜の街明かり：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg" target="_blank" rel="noreferrer">NASA Earth Observatory (Black Marble 2016)</a> · <a href="https://www.miraikan.jst.go.jp/" target="_blank" rel="noreferrer">日本科学未来館</a></p></details></footer>
-<script src="Build/5ac3e90e3d3b62e896023755af402bb4.loader.js"></script>
+<footer><span>日本科学未来館の展示「ジオ・コスモス」に着想を得た個人制作です。同館とは関係がありません。</span><details><summary>この展示について</summary><p>SSEC RealEarthの全球衛星合成画像（赤外線）を球面に投影します。予報ではなく観測画像です。画像中の透かし・ロゴは保持します。観測には遅れや欠測があります。地表の参考画像は雲のない地表で、現在の観測ではありません。描画はUnityで行い、観測は同じサイトのJavaScript版と同じファイルを読み込みます。</p><p>地球画像：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_2048.jpg" target="_blank" rel="noreferrer">NASA Visible Earth (Blue Marble)</a> · 夜の街明かり：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg" target="_blank" rel="noreferrer">NASA Earth Observatory (Black Marble 2016)</a> · 星：<a href="https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50" target="_blank" rel="noreferrer">Bright Star Catalogue, 5th Revised Ed. (Hoffleit &amp; Warren 1991, CDS V/50)</a> · <a href="https://www.miraikan.jst.go.jp/" target="_blank" rel="noreferrer">日本科学未来館</a></p></details></footer>
+<script src="Build/8bb085a3280b0aea2af58cb6f51c9c12.loader.js"></script>
 <script>
 (function () {
   'use strict';
@@ -81,6 +85,9 @@
       send('SetIntervalMs', +$('weatherPlaybackSpeed').value);
       send('SetDissolve', $('smoothObservations').checked ? 1 : 0);
       send('SetSunlight', $('sunlight').checked ? 1 : 0);
+      send('SetStars', $('stars').checked ? 1 : 0);
+      send('SetCloudRelief', $('cloudRelief').checked ? 1 : 0);
+      if (!s.starMap) $('starNote').textContent = '星の画像を読み込めませんでした。';
       $('weatherPlay').disabled = false;
       $('weatherTime').disabled = false;
       $('status').hidden = true;
@@ -125,6 +132,8 @@
   $('weatherPlaybackSpeed').onchange = function (e) { send('SetIntervalMs', +e.target.value); };
   $('smoothObservations').onchange = function (e) { send('SetDissolve', e.target.checked ? 1 : 0); };
   $('sunlight').onchange = function (e) { send('SetSunlight', e.target.checked ? 1 : 0); };
+  $('stars').onchange = function (e) { send('SetStars', e.target.checked ? 1 : 0); };
+  $('cloudRelief').onchange = function (e) { send('SetCloudRelief', e.target.checked ? 1 : 0); };
   $('weatherTime').oninput = function (e) { send('ShowObservation', +e.target.value); };
   $('in').onclick = function () { send('ZoomBy', 0.12); };
   $('out').onclick = function () { send('ZoomBy', -0.12); };
@@ -141,9 +150,9 @@
   });
 
   createUnityInstance($('globe'), {
-    dataUrl: 'Build/8fe33a19ceee1d2519eaef58eddbcd9d.data.unityweb',
-    frameworkUrl: 'Build/aa596c997394647cbee0276b5a4d4005.framework.js.unityweb',
-    codeUrl: 'Build/9b7c62fea6d006d0dbaa41d643ec7fdf.wasm.unityweb',
+    dataUrl: 'Build/d94b8febf372cd50a9c10ec600c621e8.data.unityweb',
+    frameworkUrl: 'Build/c07302b21dc4622cb25fd53fb0deea29.framework.js.unityweb',
+    codeUrl: 'Build/8f63771a2d25bcd428b518535157ad63.wasm.unityweb',
     streamingAssetsUrl: 'StreamingAssets',
     companyName: "MyAtras",
     productName: "MyAtras",

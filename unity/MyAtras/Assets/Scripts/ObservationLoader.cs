@@ -26,6 +26,8 @@ namespace MyAtras
         public Texture2D Earth { get; private set; }
         /// <summary>NASA Black Marble 2016 city lights; null if it could not be loaded.</summary>
         public Texture2D Night { get; private set; }
+        /// <summary>Bright Star Catalogue stars to magnitude 6 (scripts/build-stars.py); null if missing.</summary>
+        public Texture2D Stars { get; private set; }
         /// <summary>The stored observations, oldest first, as the manifest lists them.</summary>
         public IReadOnlyList<Texture2D> Frames => frames;
         /// <summary>Each frame's observation time in UTC and JST, in ASCII, for the editor.</summary>
@@ -78,6 +80,12 @@ namespace MyAtras
             yield return Texture(root + "assets/night.jpg", TextureWrapMode.Repeat, texture =>
             {
                 Night = texture;
+            });
+
+            // Only the background uses it, so this too is optional.
+            yield return Texture(root + "assets/stars.png", TextureWrapMode.Repeat, texture =>
+            {
+                Stars = texture;
             });
 
             string manifestJson = null;
