@@ -15,6 +15,7 @@ Shader "MyAtras/EarthComposite"
         _MainTex ("Background", 2D) = "black" {}
         _Earth ("Ground reference", 2D) = "white" {}
         _Weather ("Observation", 2D) = "black" {}
+        _WeatherPrev ("Previous observation", 2D) = "black" {}
     }
 
     SubShader
@@ -39,7 +40,10 @@ Shader "MyAtras/EarthComposite"
             sampler2D _MainTex;
             sampler2D _Earth;
             sampler2D _Weather;
+            sampler2D _WeatherPrev;
             float _Yaw, _Pitch, _Zoom, _Mode, _Panels, _WeatherActive, _RawObservation;
+            // 0 shows the previous observation, 1 the current one; see ObservationPlayback.
+            float _Fade;
             float2 _Watermark;
 
             struct v2f
@@ -93,15 +97,23 @@ Shader "MyAtras/EarthComposite"
                     {
                         float my = 0.5 - log(tan(PI * 0.25 + lat * 0.5)) / (2.0 * PI);
                         float4 observed = tex2Dlod(_Weather, float4(uv.x, 1.0 - my, 0.0, 0.0));
+                        float4 earlier = tex2Dlod(_WeatherPrev, float4(uv.x, 1.0 - my, 0.0, 0.0));
                         if (_RawObservation > 0.5)
                         {
-                            color = lerp(float3(0.075, 0.10, 0.13), observed.rgb, observed.a);
+                            float3 now = lerp(float3(0.075, 0.10, 0.13), observed.rgb, observed.a);
+                            float3 was = lerp(float3(0.075, 0.10, 0.13), earlier.rgb, earlier.a);
+                            color = lerp(was, now, _Fade);
                         }
                         else
                         {
                             // Uncalibrated: cold land is included, warm low cloud is missed.
-                            float brightness = dot(observed.rgb, float3(0.299, 0.587, 0.114));
-                            float cloud = smoothstep(0.38, 0.82, brightness) * observed.a;
+                            // Each observation goes through the threshold on its own and only
+                            // the drawn layers are mixed, so no in-between brightness is ever
+                            // turned into cloud as if it had been observed.
+                            float3 luma = float3(0.299, 0.587, 0.114);
+                            float cloudNow = smoothstep(0.38, 0.82, dot(observed.rgb, luma)) * observed.a;
+                            float cloudWas = smoothstep(0.38, 0.82, dot(earlier.rgb, luma)) * earlier.a;
+                            float cloud = lerp(cloudWas, cloudNow, _Fade);
                             float3 composite = lerp(color, float3(0.95, 0.97, 1.0), cloud);
                             // The SSEC logo corner is drawn from the observation itself.
                             float mark = step(uv.x, _Watermark.x) * step(1.0 - _Watermark.y, my);

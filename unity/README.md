@@ -108,8 +108,19 @@ the same colour there. North of 85.05° there is no observation, so the cloud-fr
 reference shows dark Arctic ocean, while cold surface just inside the limit comes
 through the brightness threshold as white.
 
-Not yet ported: playback of all 13 observations, the grayscale observation toggle, the
-day/night mode, the wind model, and a Japanese UI. The on-screen text is ASCII because
+Playback of all thirteen stored observations follows the JavaScript version's timing
+(`ObservationPlayback.cs`): one observation every 0.65 s, the newest held twice as long,
+and a dissolve of 0.12-0.38 s between an observation and the one an hour after it. Each
+observation goes through the brightness threshold on its own and only the drawn layers
+are mixed, so nothing in between two observed times is ever shown as observed. Starting
+over from the newest to the oldest is a twelve-hour jump and is not dissolved. If an
+observation fails to load, playback stops at the gap rather than skipping it, and the
+screen says how many of the thirteen could be loaded. Pause/Play and Dissolve on/off sit
+at the top of the screen, and the caption names the observation and its place in the
+sequence.
+
+Not yet ported: the grayscale observation toggle, the day/night mode, the wind model,
+and a Japanese UI. The on-screen text is ASCII because
 the built-in font has no CJK glyphs; Japanese labels need a font asset (Noto Sans JP
 subset) added first.
 

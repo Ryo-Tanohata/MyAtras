@@ -25,6 +25,7 @@ namespace MyAtras
 
         Material material;
         ObservationLoader loader;
+        ObservationPlayback playback;
         bool loaded;
         Vector2 lastPointer;
         float lastPinchDistance;
@@ -51,20 +52,31 @@ namespace MyAtras
         System.Collections.IEnumerator LoadRoutine()
         {
             yield return loader.Load();
-            if (loader.Error != null)
+            if (loader.Earth == null)
             {
                 Debug.LogError("MyAtras: " + loader.Error);
                 yield break;
             }
+            if (loader.Frames.Count == 0)
+            {
+                Debug.LogError("MyAtras: " + loader.Error);
+                yield break;
+            }
+            // A gap part way through is reported on screen but does not stop what did load
+            // from being shown; the loader already stopped at the gap.
+            if (loader.Error != null) Debug.LogWarning("MyAtras: " + loader.Error);
+
             material.SetTexture("_Earth", loader.Earth);
-            material.SetTexture("_Weather", loader.Observation);
             material.SetVector("_Watermark", loader.Watermark);
             material.SetFloat("_WeatherActive", 1f);
+            playback = new ObservationPlayback(loader.Frames.Count, Time.unscaledTime);
             loaded = true;
         }
 
         void Update()
         {
+            if (loaded) playback.Tick(Time.unscaledTime);
+
             if (Input.touchCount >= 2)
             {
                 Pinch(Input.GetTouch(0).position, Input.GetTouch(1).position,
@@ -137,31 +149,76 @@ namespace MyAtras
             material.SetFloat("_Mode", 0f);
             material.SetFloat("_Panels", 0f);
             material.SetFloat("_RawObservation", 0f);
+            if (loaded)
+            {
+                material.SetTexture("_Weather", loader.Frames[playback.Current]);
+                material.SetTexture("_WeatherPrev", loader.Frames[playback.Previous]);
+                material.SetFloat("_Fade", playback.Fade(Time.unscaledTime));
+            }
             Graphics.Blit(source, destination, material);
         }
 
-        // Credits and the observation time stay on screen. The built-in font has no CJK
-        // glyphs, so this overlay is ASCII until a Japanese font asset is added.
+        // Credits, the observation time and the two controls stay on screen. The built-in
+        // font has no CJK glyphs, so this overlay is ASCII until a Japanese font is added.
         void OnGUI()
         {
+            float unit = Mathf.Max(12f, Mathf.Min(Screen.width, Screen.height) * 0.03f);
             GUIStyle style = new GUIStyle(GUI.skin.label)
             {
-                fontSize = Mathf.RoundToInt(Mathf.Max(12f, Mathf.Min(Screen.width, Screen.height) * 0.03f)),
+                fontSize = Mathf.RoundToInt(unit),
                 wordWrap = true,
                 normal = { textColor = new Color(0.82f, 0.88f, 0.92f) },
             };
-            string line = loaded ? loader.ObservationLabel
-                : loader?.Error ?? "Loading the stored observation...";
-            GUIContent text = new GUIContent(line +
+            float margin = unit;
+            float width = Screen.width - margin * 2f;
+
+            if (loaded) Controls(unit, margin, width);
+
+            GUIContent text = new GUIContent(Caption() +
                 "\nInfrared brightness composited as a white layer - uncalibrated, not a cloud mask." +
+                (loaded && playback.Dissolve
+                    ? "\nBetween hours two real observations dissolve; no in-between observation is made."
+                    : "") +
                 "\nSource: SSEC RealEarth, UW-Madison. Ground reference: NASA Blue Marble.");
 
             // The credits have to stay on screen however narrow it is, so the block is
             // measured after wrapping and placed from the bottom edge up.
-            float margin = style.fontSize;
-            float width = Screen.width - margin * 2f;
             float height = style.CalcHeight(text, width);
             GUI.Label(new Rect(margin, Screen.height - margin - height, width, height), text, style);
+        }
+
+        string Caption()
+        {
+            if (!loaded) return loader?.Error ?? "Loading the stored observations...";
+            string caption = $"Observed {loader.Labels[playback.Current]}  " +
+                             $"({playback.Current + 1} / {loader.Frames.Count})";
+            // A gap stops the sequence early; say so rather than let it pass as the full set.
+            if (loader.Frames.Count < loader.Expected)
+                caption += $"\n{loader.Frames.Count} of {loader.Expected} observations could be loaded.";
+            return caption;
+        }
+
+        void Controls(float unit, float margin, float width)
+        {
+            GUIStyle button = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = Mathf.RoundToInt(unit),
+                fixedHeight = unit * 2.4f,
+            };
+            float half = (width - margin) * 0.5f;
+            float top = margin;
+            float now = Time.unscaledTime;
+
+            if (GUI.Button(new Rect(margin, top, half, button.fixedHeight),
+                    playback.Playing ? "Pause" : "Play", button))
+            {
+                playback.SetPlaying(!playback.Playing, now);
+            }
+            if (GUI.Button(new Rect(margin * 2f + half, top, half, button.fixedHeight),
+                    playback.Dissolve ? "Dissolve: on" : "Dissolve: off", button))
+            {
+                playback.Dissolve = !playback.Dissolve;
+            }
         }
     }
 }
