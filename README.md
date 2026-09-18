@@ -69,7 +69,8 @@ Altitude is estimated from pressure under a standard-atmosphere approximation. D
 `.github/workflows/pages.yml` runs the three test suites, rebuilds the standalone
 export and publishes `dist/` to GitHub Pages on every push to `main`:
 https://ryo-tanohata.github.io/MyAtras/ . A Unity WebGL build of the same globe is
-planned under `dist/unity/`; see `unity/README.md` for how it is built and checked.
+published from `dist/unity/` at https://ryo-tanohata.github.io/MyAtras/unity/ ; see
+`unity/README.md` for how it is built and checked.
 
 ## Local browser preview
 

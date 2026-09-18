@@ -25,8 +25,9 @@ generates `Assets/Scenes/Main.unity` on every build, so nothing hand-written has
 kept in step with the editor version. Commit the generated `.meta` files and
 `ProjectSettings/` after the first open; the generated scene is ignored by git.
 
-`ProjectSettings/ProjectVersion.txt` is the exception: it is committed, pinned to
-**6000.4.8f1**, the version the author's other Unity WebGL project ships from. It has
+`ProjectSettings/` is committed as Unity wrote it on the first open with
+**6000.4.8f1**, the version the author's other Unity WebGL project ships from; the build
+script sets the values that matter on every build anyway. It has
 to exist before CI can build, because game-ci reads the editor version from that file
 in the checked-out project and ignores the workflow's `unityVersion` input
 (`src/build-args.ts` and `src/resolve-project-path.ts` in game-ci/unity-builder).
@@ -86,7 +87,26 @@ from `dist/` directly when playing in the editor. Nothing is copied into
   Mercator lookup and the same ±85.05° limit.
 - Drag to rotate, pinch to zoom, wheel to zoom, with the step sizes and limits from
   `dist/app.js`.
-- Shows the observation time (UTC and JST) and the sources on screen.
+- Shows the observation time (UTC and JST) and the sources on screen, measured after
+  wrapping and placed from the bottom edge so the credits never run off a narrow screen.
+
+Built with 6000.4.8f1 on Windows on 2026-09-18 — 0 errors, 0 warnings, about 4 MB —
+and checked with `node tools/check-webgl.cjs --unity` at an Android viewport: the globe
+is drawn (2163 distinct colours in the globe region), a touch drag rotates it (18.7% of
+pixels change), the console is clean and every file is served. The frame matches the
+JavaScript globe: same orientation, same 21:00 UTC observation, same cloud placement.
+
+Two differences from the WebGL version surfaced in that first render and are fixed.
+Unity gives downloaded textures mipmaps, and at the antimeridian `atan2` jumps from +π to
+−π, so the sampler chose the smallest mip there and drew a thin line down the globe;
+both textures are now sampled at full resolution with `tex2Dlod`, as the WebGL version
+samples textures that have no mipmaps. And the credits ran off the bottom of a phone
+screen until the overlay measured its wrapped height.
+
+The small dark cap at the north pole is not a port artefact: the JavaScript globe shows
+the same colour there. North of 85.05° there is no observation, so the cloud-free
+reference shows dark Arctic ocean, while cold surface just inside the limit comes
+through the brightness threshold as white.
 
 Not yet ported: playback of all 13 observations, the grayscale observation toggle, the
 day/night mode, the wind model, and a Japanese UI. The on-screen text is ASCII because

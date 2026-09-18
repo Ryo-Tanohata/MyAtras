@@ -34,6 +34,8 @@ GitHubへの公開コード登録はユーザーが了承済み。GitHub Pages�
 ## Unity版の方針
 ユーザーの決定により、Unity版はWebGL（Unity 6の表示名は「Web」、実体は `BuildTarget.WebGL`）で作り、ビルド成果物を `dist/unity/` にcommitして同じPagesサイトの `/unity/` で公開する。JS版はルートのまま残す（併存）。
 エージェントのコンテナにはUnity Editorもライセンスも無いためビルドはできない。ビルドはユーザーのローカルで行い、成果物をcommitする。詳細と必要なPlayer設定は `unity/README.md`。
+2026-09-18、Windows（SHINYLABRY0）に Unity 6000.4.8f1 と Web Build Support を Unity Hub のCLIで導入し、初ビルドに成功（エラー0・警告0、約4MB）。Hub をVS Code拡張のシェルから起動すると `ELECTRON_RUN_AS_NODE=1` のせいで Node として動き `Cannot find module '--headless'` で失敗するので、この変数を外して起動する。
+ビルドコマンド：`Unity.exe -batchmode -nographics -quit -projectPath unity/MyAtras -executeMethod MyAtras.WebGlBuild.Build -logFile <log>`。確認は `node tools/check-webgl.cjs --unity`（`dist/` を配信して `/unity/` を開く＝Pagesと同じ配置）。
 Unity版は観測を独自取得せず、`dist/weather/` と `dist/data/` の同じファイルを読む。SHA-256マニフェストを唯一の正とし、両版が同じ観測を表示する状態を保つ。
 
 ## 科学的な限界

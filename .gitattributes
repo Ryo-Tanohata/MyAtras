@@ -1,0 +1,3 @@
+# Unity WebGL build output is gzip data behind a .unityweb extension. Mark it
+# binary so no line-ending conversion can ever touch it.
+*.unityweb binary
