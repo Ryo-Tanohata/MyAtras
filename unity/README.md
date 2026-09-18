@@ -152,17 +152,32 @@ terminator sweeps about 180 degrees while the clouds move.
   city lights are a fixed 2016 image, not a current observation. "観測時刻の昼と夜" turns
   it off.
 
-The same sun lights an atmosphere drawn for effect - the direction is real, the colours
-are not a scattering calculation, and the page says so. Above the limb the air glows
-blue where the sun is up there, warm where it is setting and only faintly on the night
-side; on the globe, looking through more air towards the limb hazes the day side blue,
-and just on the sunlit side of the terminator cloud tops take the colour of the setting
-sun while open ground takes very little of it. With the sun directly behind the Earth,
-as at midnight in Japan, the whole limb lies on the terminator and glows as a thin
-ring, as photographs of the night side show. The first version put the warm tint on
-both sides of the terminator and on open ocean too, which read as a pink stripe down
-the Pacific; the tint now stays within a few degrees on the lit side and mostly on
-cloud.
+The same sunlight is scattered by a calculated atmosphere: single scattering by
+Rayleigh (molecules) and Mie (haze), marched along each line of sight and towards the
+sun from each step, after Nishita et al., with the standard sea-level coefficients
+(Rayleigh 5.8, 13.5 and 33.1 per million metres for red, green and blue; Mie 21, g
+0.76) and scale heights of 8 and 1.2 km. No colour is chosen by hand. The real
+atmosphere would be a few pixels at the limb on a phone, so it is drawn six times as
+thick and one sixth as dense, which keeps the optical depth straight up - the colour
+of the sky and of sunlight at the ground - as it is; paths along the limb come out
+somewhat thinner than real. Multiple scattering is left out. The page says all of
+this.
+
+What comes out: measured around the limb at 09:00 UTC, the sunlit side glows blue and
+the night side not at all, since the Earth's shadow is part of the calculation; up the
+limb the layers run from white haze at the bottom to blue above, warmer at the bottom
+where the terminator meets the limb. Sunlight reaching the ground is reddened on its
+long path near the terminator, so clouds there take the colour of sunset. With the sun
+directly behind the Earth, as at midnight in Japan, the limb is an orange ring with blue
+outside it, as photographs of the night side from orbit show. This replaced an earlier
+atmosphere painted for effect.
+
+Two things were corrected on the way. A line of sight grazing the limb passes through
+so much air that eight steps along it missed the bright layer, and the last ring of
+pixels came out darker than the air on both sides, as a dotted line; within a few
+pixels of the edge it now takes the brighter of itself and the air just beyond. And the
+air's reddening was applied to the night side too, turning its faint display-only cloud
+brown; there it now only dims, evenly.
 
 The night side keeps its towns and its coastlines. Towns are a point of light plus light
 spilling into the air around them - Black Marble a few mip levels down - which passes
