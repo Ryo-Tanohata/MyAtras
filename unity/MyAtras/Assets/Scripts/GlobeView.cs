@@ -146,16 +146,22 @@ namespace MyAtras
         {
             GUIStyle style = new GUIStyle(GUI.skin.label)
             {
-                fontSize = Mathf.RoundToInt(Mathf.Max(12f, Screen.height * 0.018f)),
+                fontSize = Mathf.RoundToInt(Mathf.Max(12f, Mathf.Min(Screen.width, Screen.height) * 0.03f)),
+                wordWrap = true,
                 normal = { textColor = new Color(0.82f, 0.88f, 0.92f) },
             };
-            float margin = style.fontSize;
-            Rect rect = new Rect(margin, Screen.height - margin * 4.2f, Screen.width - margin * 2f, margin * 4f);
             string line = loaded ? loader.ObservationLabel
                 : loader?.Error ?? "Loading the stored observation...";
-            GUI.Label(rect, line +
+            GUIContent text = new GUIContent(line +
                 "\nInfrared brightness composited as a white layer - uncalibrated, not a cloud mask." +
-                "\nSource: SSEC RealEarth, UW-Madison. Ground reference: NASA Blue Marble.", style);
+                "\nSource: SSEC RealEarth, UW-Madison. Ground reference: NASA Blue Marble.");
+
+            // The credits have to stay on screen however narrow it is, so the block is
+            // measured after wrapping and placed from the bottom edge up.
+            float margin = style.fontSize;
+            float width = Screen.width - margin * 2f;
+            float height = style.CalcHeight(text, width);
+            GUI.Label(new Rect(margin, Screen.height - margin - height, width, height), text, style);
         }
     }
 }

@@ -28,6 +28,8 @@ Shader "MyAtras/EarthComposite"
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            // tex2Dlod needs shader model 3.0; WebGL 2.0 has it.
+            #pragma target 3.0
             #include "UnityCG.cginc"
 
             static const float PI = 3.14159265359;
@@ -77,7 +79,11 @@ Shader "MyAtras/EarthComposite"
                 // uv is in the JavaScript version's convention: v = 0 at the north pole.
                 float2 uv = float2(atan2(q.x, q.z) / (2.0 * PI) + 0.5,
                                    0.5 - asin(clamp(q.y, -1.0, 1.0)) / PI);
-                float3 color = tex2D(_Earth, float2(uv.x, 1.0 - uv.y)).rgb;
+                // Always the full-resolution level, as the WebGL version samples a texture
+                // with no mipmaps. atan2 jumps from +pi to -pi at the antimeridian, so the
+                // screen-space derivatives there are huge; letting the sampler pick a mip
+                // from them draws a thin line down the globe along longitude 180.
+                float3 color = tex2Dlod(_Earth, float4(uv.x, 1.0 - uv.y, 0.0, 0.0)).rgb;
                 color = pow(color, 0.85);
 
                 if (_WeatherActive > 0.5)
@@ -86,7 +92,7 @@ Shader "MyAtras/EarthComposite"
                     if (abs(lat) < MERCATOR_LIMIT)
                     {
                         float my = 0.5 - log(tan(PI * 0.25 + lat * 0.5)) / (2.0 * PI);
-                        float4 observed = tex2D(_Weather, float2(uv.x, 1.0 - my));
+                        float4 observed = tex2Dlod(_Weather, float4(uv.x, 1.0 - my, 0.0, 0.0));
                         if (_RawObservation > 0.5)
                         {
                             color = lerp(float3(0.075, 0.10, 0.13), observed.rgb, observed.a);
