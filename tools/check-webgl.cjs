@@ -9,6 +9,8 @@
 //   node tools/check-webgl.cjs --dir some/path # any other built directory
 //   node tools/check-webgl.cjs --shots         # also write PNGs to .check-shots/
 //   node tools/check-webgl.cjs --desktop       # 1280x900 instead of an Android viewport
+//   node tools/check-webgl.cjs --unity --url https://ryo-tanohata.github.io/MyAtras/unity/
+//                                              # the published site itself, as a phone gets it
 //
 // No npm dependencies: Chromium is driven over the DevTools protocol with node's
 // own WebSocket. Any Chromium will do — playwright's bundled one is used when it
@@ -51,6 +53,9 @@ const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 
   '(KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36';
 const SHOT_DIR = path.resolve(ROOT, '.check-shots');
 const PORT = Number(opt('--port') || 8123);
+// A published page is opened where it lives, with nothing served locally, so what is
+// checked is exactly what the host sends - its headers included.
+const LIVE_URL = opt('--url');
 
 const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
@@ -357,7 +362,7 @@ async function checkUnityBuild(page) {
 // ---------------------------------------------------------------- main
 
 async function main() {
-  if (!fs.existsSync(DIR)) {
+  if (!LIVE_URL && !fs.existsSync(DIR)) {
     console.error(`${path.relative(ROOT, DIR)} does not exist.` +
       (UNITY ? ' Build the Unity WebGL target into it first — see unity/README.md.' : ''));
     process.exit(2);
@@ -368,9 +373,11 @@ async function main() {
     process.exit(2);
   }
 
-  console.log(`serving   ${path.relative(ROOT, SERVE_ROOT)}, opening http://127.0.0.1:${PORT}${PAGE_PATH}`);
+  const target = LIVE_URL || `http://127.0.0.1:${PORT}${PAGE_PATH}`;
+  console.log(LIVE_URL ? `opening   ${LIVE_URL} (live, nothing served locally)`
+    : `serving   ${path.relative(ROOT, SERVE_ROOT)}, opening ${target}`);
   console.log(`chromium  ${exe}`);
-  const { server, missing } = await serve(SERVE_ROOT, PORT);
+  const { server, missing } = LIVE_URL ? { server: null, missing: [] } : await serve(SERVE_ROOT, PORT);
   const { child, profile } = launch(exe, PORT + 1);
   let page;
   try {
@@ -378,7 +385,7 @@ async function main() {
     await page.viewport(MOBILE ? 412 : 1280, MOBILE ? 915 : 900, MOBILE);
     console.log(`viewport  ${MOBILE ? '412x915 (Android, touch)' : '1280x900 (desktop)'}\n`);
 
-    const version = await loadWithWebGL(page, `http://127.0.0.1:${PORT}${PAGE_PATH}`);
+    const version = await loadWithWebGL(page, target);
     check(!!version, 'WebGL context granted', version);
     if (version) {
       if (UNITY) await checkUnityBuild(page);
@@ -389,11 +396,13 @@ async function main() {
     check(problems.length === 0, 'no console errors from the site',
       problems.length ? problems[0] : '');
     for (const p of problems.slice(1)) console.log(`       ${p}`);
-    check(missing.length === 0, 'every requested file was served',
-      missing.length ? missing.slice(0, 3).join(' ') : '');
+    if (!LIVE_URL) {
+      check(missing.length === 0, 'every requested file was served',
+        missing.length ? missing.slice(0, 3).join(' ') : '');
+    }
   } finally {
     if (page) page.close();
-    server.close();
+    if (server) server.close();
     // Chromium keeps writing to its profile until it is gone, so wait for the exit
     // before removing the directory, and never let the cleanup mask the result.
     const exited = new Promise(resolve => child.once('exit', resolve));
