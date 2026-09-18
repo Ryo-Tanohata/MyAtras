@@ -72,6 +72,7 @@ namespace MyAtras
             public bool stars;       // the star background drawn
             public bool starMap;     // the star map loaded
             public bool cloudRelief; // cloud relief and shadows drawn
+            public bool landMap;     // the night-side land and coastline map loaded
             public float sunLat;     // subsolar point at the observation time, degrees
             public float sunLon;     // east positive
             public string error;
@@ -114,6 +115,8 @@ namespace MyAtras
             if (loader.Night != null) material.SetTexture("_Night", loader.Night);
             material.SetFloat("_NightLights", loader.Night != null ? 1f : 0f);
             if (loader.Stars != null) material.SetTexture("_StarMap", loader.Stars);
+            if (loader.Land != null) material.SetTexture("_Land", loader.Land);
+            material.SetFloat("_LandOn", loader.Land != null ? 1f : 0f);
             material.SetVector("_Watermark", loader.Watermark);
             material.SetFloat("_WeatherActive", 1f);
             playback = new ObservationPlayback(loader.Frames.Count, Time.unscaledTime);
@@ -264,6 +267,7 @@ namespace MyAtras
                 stars = stars,
                 starMap = loader.Stars != null,
                 cloudRelief = cloudRelief,
+                landMap = loader.Land != null,
                 error = loader.Error ?? "",
             };
             if (loaded)

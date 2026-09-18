@@ -78,6 +78,24 @@ catalogue is included.
 No licence file accompanies the CDS distribution. It is cited here and on the Unity
 page as CDS asks: the authors, the edition and the VizieR catalogue number.
 
+## Natural Earth — night-side land and coastline (Unity version only)
+
+`dist/assets/land.png` is drawn by `scripts/build-land.py` from Natural Earth's 1:50m
+land polygons: land in the red channel, the coastline in the green. The Unity globe
+uses it only on the night side, so that land and sea can be told apart where the
+ground is darkened; it is an aid, not an observation, and the page says so.
+
+- Source: https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson
+- 1,636,166 bytes, SHA-256 `e874b27a51d146452be360cafb3cc50c86001074a67d534113e6534682f9826b`;
+  the script refuses any other file
+- Drawn: 2048 x 1024, 151,677 bytes,
+  SHA-256 `b3d1c76a49f4e543620258825b469253feb9a4fce847b003e988e13f4b591b75`;
+  the drawing is deterministic and reproduces this hash
+
+Natural Earth is in the public domain; it is credited on the Unity page.
+
+- https://www.naturalearthdata.com/about/terms-of-use/
+
 NASA still images are not subject to copyright in the United States and may be
 reused with NASA credited as the source. NASA's insignia and logotype are not
 used here, and nothing in this project implies NASA endorsement.

@@ -18,6 +18,7 @@ Shader "MyAtras/EarthComposite"
         _WeatherPrev ("Previous observation", 2D) = "black" {}
         _Night ("City lights", 2D) = "black" {}
         _StarMap ("Stars", 2D) = "black" {}
+        _Land ("Land and coastline", 2D) = "black" {}
     }
 
     SubShader
@@ -59,6 +60,10 @@ Shader "MyAtras/EarthComposite"
             float _StarsOn, _Sidereal;
             // Relief and shadows from each cloud's relative height; see CloudAt.
             float _CloudRelief;
+            // Natural Earth's land (red) and coastline (green), scripts/build-land.py: an aid
+            // on the night side, where land and sea would otherwise be the same black.
+            sampler2D _Land;
+            float _LandOn;
 
             // Cloud-top height is exaggerated tenfold so it can be seen at all: 15 km at the
             // top of the troposphere, as an angle on the unit sphere, times ten.
@@ -255,14 +260,38 @@ Shader "MyAtras/EarthComposite"
                 {
                     // The day side is left exactly as it was drawn above. Across the
                     // terminator - a soft band of about 6 degrees of solar elevation either
-                    // side - the night side takes over: the ground falls to 5%, towns from
-                    // NASA's Black Marble glow where no cloud covers them, and cloud stays
-                    // faintly visible, since infrared observes it by night as by day.
+                    // side - the night side takes over: the ground falls to 5%, cloud stays
+                    // faintly visible, since infrared observes it by night as by day, and
+                    // the towns of NASA's Black Marble come on.
                     float day = smoothstep(-0.10, 0.10, dot(q, _Sun.xyz));
-                    float3 lights = tex2Dlod(_Night, float4(uv.x, 1.0 - uv.y, 0.0, 0.0)).rgb;
-                    float glow = smoothstep(0.12, 0.9, dot(lights, float3(0.299, 0.587, 0.114))) * _NightLights;
-                    float3 nightGround = ground * 0.05 + float3(1.0, 0.78, 0.5) * glow * (1.0 - cloudCover) * 0.95;
-                    float3 night = lerp(nightGround, float3(0.95, 0.97, 1.0) * 0.16, cloudCover);
+                    float3 luma = float3(0.299, 0.587, 0.114);
+                    float2 at = float2(uv.x, 1.0 - uv.y);
+                    // A town is a point of light and, around it, light spilling into the air -
+                    // what makes cities read from orbit at all. The spill is the same image a
+                    // few mip levels down (8 texels across, about 1.4 degrees), and it passes
+                    // partly through cloud, lighting its underside the way cloud over a city
+                    // glows orange in photographs from space; the point itself only shows
+                    // where the sky is clear. The spill starts above 0.22 because Black Marble
+                    // also shows moonlit land faintly - the Sahara at about 0.17 - and that is
+                    // not town light: a lower threshold lit all of inland Australia.
+                    float core = smoothstep(0.06, 0.7, dot(tex2Dlod(_Night, float4(at, 0.0, 0.0)).rgb, luma));
+                    float spill = smoothstep(0.22, 0.6, dot(tex2Dlod(_Night, float4(at, 0.0, 3.0)).rgb, luma));
+                    float3 towns = float3(1.0, 0.78, 0.48)
+                                   * (core * 1.35 * (1.0 - cloudCover) + spill * 0.45 * (1.0 - cloudCover * 0.6))
+                                   * _NightLights;
+                    // Land and sea stay apart at night: the sea nearly black, land lifted a
+                    // little, and a thin coastline, faint even under cloud, so the edges of
+                    // the land can always be found. Natural Earth's coastline, not observed.
+                    float3 darkGround = ground * 0.05;
+                    float coastline = 0.0;
+                    if (_LandOn > 0.5)
+                    {
+                        float2 land = tex2Dlod(_Land, float4(at, 0.0, 0.0)).rg;
+                        darkGround = lerp(float3(0.006, 0.012, 0.030), ground * 0.08 + 0.015, land.r);
+                        coastline = land.g;
+                    }
+                    float3 night = lerp(darkGround, float3(0.95, 0.97, 1.0) * 0.16, cloudCover) + towns
+                                   + float3(0.45, 0.62, 0.78) * coastline * 0.30 * (1.0 - cloudCover * 0.75);
                     color = lerp(night, color, day);
                     // The SSEC logo stays readable on either side.
                     color = lerp(color, markColor, markAmount);
