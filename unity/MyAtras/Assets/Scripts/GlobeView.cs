@@ -50,7 +50,12 @@ namespace MyAtras
         bool flow = true;
         Vector2 lastPointer;
         float lastPinchDistance;
-        string lastReport;
+        long lastReportKey = -1;
+        // Automatic quality: the share of the screen's pixels the globe is drawn at.
+        float renderScale = 1f;
+        float frameTime = 1f / 60f;
+        float nextQualityCheck;
+        string[] stampArray;
 
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")]
@@ -79,6 +84,7 @@ namespace MyAtras
             public int windTexels;   // one-degree texels with observed wind
             public float sunLat;     // subsolar point at the observation time, degrees
             public float sunLon;     // east positive
+            public int renderPercent; // the resolution the globe is drawn at, % of the screen
             public string error;
         }
 
@@ -96,6 +102,9 @@ namespace MyAtras
                 return;
             }
             material = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+
+            // The air's optical depth towards the sun, built once; see AirDepthTable.
+            material.SetTexture("_AirDepth", AirDepthTable.Build());
 
             loader = new ObservationLoader();
             StartCoroutine(LoadRoutine());
@@ -131,6 +140,7 @@ namespace MyAtras
         void Update()
         {
             if (loaded) playback.Tick(Time.unscaledTime);
+            AdjustQuality();
             Report();
 
             if (Input.touchCount >= 2)
@@ -158,6 +168,23 @@ namespace MyAtras
 
             float wheel = Input.mouseScrollDelta.y;
             if (!Mathf.Approximately(wheel, 0f)) SetZoom(zoom * Mathf.Exp(wheel * 0.1f));
+        }
+
+        /// <summary>
+        /// Keeps the globe smooth on slower phones. Once a second the recent frame time is
+        /// looked at: below about 45 frames a second the globe is drawn at fewer pixels, in
+        /// steps down to half the screen's resolution, and scaled up; with room to spare it
+        /// climbs back. Smoothness is worth more on a moving globe than the last detail.
+        /// </summary>
+        void AdjustQuality()
+        {
+            float now = Time.unscaledTime;
+            // One long frame - a tab coming back, a load finishing - must not count much.
+            frameTime = Mathf.Lerp(frameTime, Mathf.Min(Time.unscaledDeltaTime, 0.1f), 0.1f);
+            if (!loaded || now < nextQualityCheck) return;
+            nextQualityCheck = now + 1f;
+            if (frameTime > 1f / 45f) renderScale = Mathf.Max(0.5f, renderScale * 0.85f);
+            else if (frameTime < 1f / 58f && renderScale < 1f) renderScale = Mathf.Min(1f, renderScale * 1.08f);
         }
 
         // Screen y grows upwards in Unity and downwards in the browser, so the caller
@@ -258,10 +285,31 @@ namespace MyAtras
 
         // ------------------------------------------------ told to the page
 
-        /// <summary>Sends the state to the page whenever it changes.</summary>
+        /// <summary>
+        /// Sends the state to the page whenever it changes. Called every frame, so it first
+        /// compares a key made of the few numbers that can change, and only builds the JSON
+        /// when one has. It used to build and serialise the whole state every frame and
+        /// throw it away; on a phone that garbage made the collector stop the page now and
+        /// then, which showed as a hitch.
+        /// </summary>
         void Report()
         {
             if (loader == null) return;
+            long key = (loaded ? 1L : loadFinished ? 2L : 0L)
+                       | (long)loader.Frames.Count << 2
+                       | (long)(loaded ? playback.Current : 0) << 10
+                       | (loaded && playback.Playing ? 1L : 0L) << 18
+                       | (!loaded || playback.Dissolve ? 1L : 0L) << 19
+                       | (sunlight ? 1L : 0L) << 20
+                       | (stars ? 1L : 0L) << 21
+                       | (cloudRelief ? 1L : 0L) << 22
+                       | (flow ? 1L : 0L) << 23
+                       | (loader.Error != null ? 1L : 0L) << 24
+                       | (long)Mathf.RoundToInt(renderScale * 20f) << 25;
+            if (key == lastReportKey) return;
+            lastReportKey = key;
+            if (loaded && stampArray == null) stampArray = ToArray(loader.Stamps);
+
             State state = new State
             {
                 state = loaded ? "ready" : loadFinished ? "error" : "loading",
@@ -269,7 +317,7 @@ namespace MyAtras
                 expected = loader.Expected,
                 index = loaded ? playback.Current : 0,
                 time = loaded ? loader.Stamps[playback.Current] : "",
-                times = loaded ? ToArray(loader.Stamps) : new string[0],
+                times = loaded ? stampArray : new string[0],
                 playing = loaded && playback.Playing,
                 dissolve = !loaded || playback.Dissolve,
                 sunlight = sunlight,
@@ -281,6 +329,7 @@ namespace MyAtras
                 flow = flow,
                 windTime = loader.WindStamp,
                 windTexels = loader.WindTexels,
+                renderPercent = Mathf.RoundToInt(renderScale * 100f),
                 error = loader.Error ?? "",
             };
             if (loaded)
@@ -289,11 +338,8 @@ namespace MyAtras
                 state.sunLat = Mathf.Round(subsolar.x * 10f) / 10f;
                 state.sunLon = Mathf.Round(subsolar.y * 10f) / 10f;
             }
-            string json = JsonUtility.ToJson(state);
-            if (json == lastReport) return;
-            lastReport = json;
 #if UNITY_WEBGL && !UNITY_EDITOR
-            MyAtrasReport(json);
+            MyAtrasReport(JsonUtility.ToJson(state));
 #endif
         }
 
@@ -334,7 +380,20 @@ namespace MyAtras
             // about 1.5 hours of wind, so a line moves as far as the clouds do between
             // two observations. 111,195 m to a degree of arc.
             material.SetFloat("_FlowScale", 3600f / Mathf.Max(playback.Interval, 0.05f) / 111195f);
-            Graphics.Blit(source, destination, material);
+            if (renderScale > 0.99f)
+            {
+                Graphics.Blit(source, destination, material);
+                return;
+            }
+            // Drawn smaller and scaled up with bilinear filtering. The shader works in
+            // proportions of the screen, so the globe is the same size either way.
+            RenderTexture reduced = RenderTexture.GetTemporary(
+                Mathf.Max(1, Mathf.RoundToInt(source.width * renderScale)),
+                Mathf.Max(1, Mathf.RoundToInt(source.height * renderScale)), 0, source.format);
+            reduced.filterMode = FilterMode.Bilinear;
+            Graphics.Blit(source, reduced, material);
+            Graphics.Blit(reduced, destination);
+            RenderTexture.ReleaseTemporary(reduced);
         }
 
 #if UNITY_EDITOR

@@ -237,6 +237,32 @@ terminator falls just east of Japan, 90 degrees from the subsolar point at 43.7Â
 15:00 UTC, midnight in Japan, the whole visible hemisphere is dark and the lights of
 Japan, Korea, eastern China and eastern Australia show between the clouds.
 
+## Keeping it smooth on phones
+
+Every layer added cost. On this PC's Intel Iris Xe, with a phone-sized canvas, the
+Unity page drew 363 frames a second against the JavaScript page's 1,045 - plenty
+here, but a phone GPU is several times slower, and the page stuttered on one. Three
+changes, measured with Chrome's software renderer standing in for a slow GPU:
+
+- The air's optical depth towards the sun is looked up in a table built once at
+  start-up (`AirDepthTable.cs`, laid out as Bruneton and Neyret do) instead of marched
+  in four steps inside each of the eight steps along every line of sight. The table is
+  also closer to the exact integral: `Assets/Editor/AirDepthCheck.cs` compares it with a
+  4,000-step integration at 400 points, and it is within 0.012 in transmittance where
+  the old march was out by up to 0.09 (Mie 0.014 against 0.18). A closed-form Chapman
+  approximation was tried first and rejected: 12 to 24% out in optical depth at this
+  thickened atmosphere.
+- The state the page reads was built and serialised to JSON every frame and thrown
+  away. It is now only built when one of a few numbers changes, so a frame allocates
+  nothing; garbage is what makes the collector stop a page on a phone.
+- The globe measures its own frame time and, below about 45 frames a second, draws at
+  fewer pixels - in steps down to half the screen's resolution - and scales up; with
+  room to spare it climbs back. The page shows the resolution in use.
+
+On the software renderer the median frame went from 118.6 ms to 40.1 ms, and frames
+over 50 ms from 82 of 84 to 34 of 237; it settled at 50%. On the real GPU it stays at
+100% and the picture is unchanged.
+
 ## The page around the canvas
 
 The Unity build uses its own WebGL template, `Assets/WebGLTemplates/MyAtras`, which is
