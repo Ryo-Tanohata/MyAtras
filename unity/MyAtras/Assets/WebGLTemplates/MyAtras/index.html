@@ -28,6 +28,7 @@
 <p id="starNote" class="weather-note">背景の星は、エール輝星星表の6等星までの実在の星（2000年の位置）です。観測時刻の恒星時に合わせて並べ、明るさは見やすく調整しています。</p>
 <div class="zoomrow"><button id="out" aria-label="縮小">−</button><span>ズーム</span><button id="in" aria-label="拡大">＋</button></div>
 <button class="reset" id="reset">初期の視点に戻す ↺</button>
+<p id="quality" class="weather-note"></p>
 <p class="weather-note">Unity版は、同梱した赤外線観測13時刻の再生と、観測時刻の昼と夜の表示に対応しています。可視光・元の白黒観測・昼と夜・立体の模型・最新の取得は<a href="../">JavaScript版</a>で見られます。</p>
 </aside>
 </main>
@@ -124,6 +125,9 @@
         (s.nightLights ? '' : ' · 街明かりの画像を読み込めませんでした') +
         (s.landMap ? '' : ' · 夜の海岸線を読み込めませんでした');
     }
+
+    $('quality').textContent = '描画の細かさ：' + s.renderPercent + '%' +
+      (s.renderPercent < 100 ? '（なめらかさを優先して自動で下げています）' : '（なめらかさに合わせて自動で調整します）');
 
     // Worded as the JavaScript version words it, plus what a gap in the stored set means.
     var status;

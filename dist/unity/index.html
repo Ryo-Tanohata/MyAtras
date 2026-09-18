@@ -28,11 +28,12 @@
 <p id="starNote" class="weather-note">背景の星は、エール輝星星表の6等星までの実在の星（2000年の位置）です。観測時刻の恒星時に合わせて並べ、明るさは見やすく調整しています。</p>
 <div class="zoomrow"><button id="out" aria-label="縮小">−</button><span>ズーム</span><button id="in" aria-label="拡大">＋</button></div>
 <button class="reset" id="reset">初期の視点に戻す ↺</button>
+<p id="quality" class="weather-note"></p>
 <p class="weather-note">Unity版は、同梱した赤外線観測13時刻の再生と、観測時刻の昼と夜の表示に対応しています。可視光・元の白黒観測・昼と夜・立体の模型・最新の取得は<a href="../">JavaScript版</a>で見られます。</p>
 </aside>
 </main>
 <footer><span>日本科学未来館の展示「ジオ・コスモス」に着想を得た個人制作です。同館とは関係がありません。</span><details><summary>この展示について</summary><p>SSEC RealEarthの全球衛星合成画像（赤外線）を球面に投影します。予報ではなく観測画像です。画像中の透かし・ロゴは保持します。観測には遅れや欠測があります。地表の参考画像は雲のない地表で、現在の観測ではありません。描画はUnityで行い、観測は同じサイトのJavaScript版と同じファイルを読み込みます。</p><p>地球画像：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_2048.jpg" target="_blank" rel="noreferrer">NASA Visible Earth (Blue Marble)</a> · 夜の街明かり：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg" target="_blank" rel="noreferrer">NASA Earth Observatory (Black Marble 2016)</a> · 星：<a href="https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50" target="_blank" rel="noreferrer">Bright Star Catalogue, 5th Revised Ed. (Hoffleit &amp; Warren 1991, CDS V/50)</a> · 夜の海岸線：<a href="https://www.naturalearthdata.com/" target="_blank" rel="noreferrer">Natural Earth</a> · 観測風：<a href="https://www.ssec.wisc.edu/realearth/terms-of-use/" target="_blank" rel="noreferrer">SSEC RealEarth（AMV）</a> · <a href="https://www.miraikan.jst.go.jp/" target="_blank" rel="noreferrer">日本科学未来館</a></p></details></footer>
-<script src="Build/0e6faa80be57196396cb51ef73854edd.loader.js"></script>
+<script src="Build/7c466cdb3793163fafd7a88c247725fe.loader.js"></script>
 <script>
 (function () {
   'use strict';
@@ -125,6 +126,9 @@
         (s.landMap ? '' : ' · 夜の海岸線を読み込めませんでした');
     }
 
+    $('quality').textContent = '描画の細かさ：' + s.renderPercent + '%' +
+      (s.renderPercent < 100 ? '（なめらかさを優先して自動で下げています）' : '（なめらかさに合わせて自動で調整します）');
+
     // Worded as the JavaScript version words it, plus what a gap in the stored set means.
     var status;
     if (s.loadedCount < s.expected) {
@@ -162,9 +166,9 @@
   });
 
   createUnityInstance($('globe'), {
-    dataUrl: 'Build/19afd10da3fabd71e7b6c2f5591a6fb4.data.unityweb',
-    frameworkUrl: 'Build/ac8aa2dea188d08683200a2490d8ff8d.framework.js.unityweb',
-    codeUrl: 'Build/e4c18d26ec776a4bd552fd38279eec84.wasm.unityweb',
+    dataUrl: 'Build/2813c5328ac5310792686b29d2818804.data.unityweb',
+    frameworkUrl: 'Build/cba65830e1c4ef5b4cc799d286443af2.framework.js.unityweb',
+    codeUrl: 'Build/ae6abbe7b97c226c151e6f77133b01f7.wasm.unityweb',
     streamingAssetsUrl: 'StreamingAssets',
     companyName: "MyAtras",
     productName: "MyAtras",
