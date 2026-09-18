@@ -17,6 +17,7 @@ Shader "MyAtras/EarthComposite"
         _Weather ("Observation", 2D) = "black" {}
         _WeatherPrev ("Previous observation", 2D) = "black" {}
         _Night ("City lights", 2D) = "black" {}
+        _StarMap ("Stars", 2D) = "black" {}
     }
 
     SubShader
@@ -52,6 +53,16 @@ Shader "MyAtras/EarthComposite"
             sampler2D _Night;
             float4 _Sun;
             float _Sunlight, _NightLights;
+            // The Bright Star Catalogue's stars, as a map of right ascension and declination
+            // (scripts/build-stars.py), turned by Greenwich sidereal time in radians.
+            sampler2D _StarMap;
+            float _StarsOn, _Sidereal;
+            // Relief and shadows from each cloud's relative height; see CloudAt.
+            float _CloudRelief;
+
+            // Cloud-top height is exaggerated tenfold so it can be seen at all: 15 km at the
+            // top of the troposphere, as an angle on the unit sphere, times ten.
+            static const float CLOUD_TOP = 15.0 / 6371.0 * 10.0;
 
             struct v2f
             {
@@ -84,6 +95,28 @@ Shader "MyAtras/EarthComposite"
                 return exp(-(sunSine / width) * (sunSine / width));
             }
 
+            // Cloud cover and relative cloud-top height at a point on the globe, from the two
+            // observations on screen, mixed the same way as the drawn layer.
+            //
+            // The height is an estimate, and only a relative one. In infrared, colder shows
+            // brighter, and a colder cloud top is a higher one; but these are processed
+            // greyscale images with no temperature scale, so brightness can only rank cloud
+            // tops against each other. It is drawn as an effect and the page says so.
+            float2 CloudAt(float3 at)
+            {
+                float lat = asin(clamp(at.y, -1.0, 1.0));
+                if (abs(lat) >= MERCATOR_LIMIT) return float2(0.0, 0.0);
+                float u = atan2(at.x, at.z) / (2.0 * PI) + 0.5;
+                float my = 0.5 - log(tan(PI * 0.25 + lat * 0.5)) / (2.0 * PI);
+                float4 now = tex2Dlod(_Weather, float4(u, 1.0 - my, 0.0, 0.0));
+                float4 was = tex2Dlod(_WeatherPrev, float4(u, 1.0 - my, 0.0, 0.0));
+                float3 luma = float3(0.299, 0.587, 0.114);
+                float bNow = dot(now.rgb, luma), bWas = dot(was.rgb, luma);
+                float cover = lerp(smoothstep(0.38, 0.82, bWas) * was.a, smoothstep(0.38, 0.82, bNow) * now.a, _Fade);
+                float height = lerp(smoothstep(0.38, 1.0, bWas) * was.a, smoothstep(0.38, 1.0, bNow) * now.a, _Fade);
+                return float2(cover, height);
+            }
+
             fixed4 frag(v2f i) : SV_Target
             {
                 float2 res = _ScreenParams.xy;
@@ -97,6 +130,7 @@ Shader "MyAtras/EarthComposite"
                     // through. Unity asks for the same context the JavaScript globe does -
                     // alpha on, premultipliedAlpha off - so the browser composites this alpha.
                     float r = sqrt(rr);
+                    float4 front;
                     if (_Sunlight > 0.5 && _RawObservation < 0.5)
                     {
                         // Atmosphere, for effect: the air above the limb glows blue where
@@ -109,10 +143,29 @@ Shader "MyAtras/EarthComposite"
                         float3 air = lerp(float3(0.30, 0.60, 0.95), float3(1.0, 0.55, 0.25),
                                           Twilight(sunSine, 0.18) * 0.6);
                         float alpha = exp(-(r - 1.0) * 14.0) * (0.05 + 0.40 * lit);
-                        return float4(air, saturate(alpha));
+                        front = float4(air, saturate(alpha));
                     }
-                    float halo = exp(-(r - 1.0) * 25.0) * 0.11;
-                    return float4(0.25, 0.55, 0.75, halo);
+                    else
+                    {
+                        front = float4(0.25, 0.55, 0.75, exp(-(r - 1.0) * 25.0) * 0.11);
+                    }
+                    if (_StarsOn < 0.5) return front;
+
+                    // The sky behind the Earth. Each background pixel looks out along a ray;
+                    // the same rotation as the globe's turns it into the Earth's frame, and
+                    // sidereal time turns longitude into right ascension, so the stars stand
+                    // where they stood at the observation's time and move with a drag.
+                    float3 ray = ToGlobe(normalize(float3(p * 0.55, -1.0)));
+                    float ra = frac((atan2(ray.x, ray.z) + _Sidereal) / (2.0 * PI));
+                    float dec = asin(clamp(ray.y, -1.0, 1.0));
+                    float3 star = tex2Dlod(_StarMap, float4(ra, 0.5 + dec / PI, 0.0, 0.0)).rgb;
+                    float starAlpha = saturate(max(star.r, max(star.g, star.b)));
+                    float3 starColour = star / max(starAlpha, 1e-4);
+                    // The air lies in front of the stars.
+                    float outAlpha = front.a + starAlpha * (1.0 - front.a);
+                    float3 outColour = (front.rgb * front.a + starColour * starAlpha * (1.0 - front.a))
+                                       / max(outAlpha, 1e-4);
+                    return float4(outColour, outAlpha);
                 }
 
                 float z = sqrt(1.0 - rr);
@@ -157,7 +210,33 @@ Shader "MyAtras/EarthComposite"
                             float cloudNow = smoothstep(0.38, 0.82, dot(observed.rgb, luma)) * observed.a;
                             float cloudWas = smoothstep(0.38, 0.82, dot(earlier.rgb, luma)) * earlier.a;
                             float cloud = lerp(cloudWas, cloudNow, _Fade);
-                            float3 composite = lerp(color, float3(0.95, 0.97, 1.0), cloud);
+                            float3 cloudColour = float3(0.95, 0.97, 1.0);
+                            float3 groundLit = color;
+                            float sunSine = dot(q, _Sun.xyz);
+                            float3 toSun = _Sun.xyz - q * sunSine;
+                            float along = length(toSun);
+                            if (_CloudRelief > 0.5 && _Sunlight > 0.5 && sunSine > 0.0 && along > 1e-4)
+                            {
+                                toSun /= along;
+                                // Relief: where the cloud top falls away towards the sun it faces
+                                // the sun and is lit; where it rises towards the sun it is turned
+                                // away. Strongest with the sun low, as on the real thing.
+                                // The slope is taken a whole observation pixel either side
+                                // (512 across 360 degrees, about 0.012 radians); a finer step
+                                // only traced the pixel grid and creased the clouds like paper.
+                                float ahead = CloudAt(normalize(q + toSun * 0.012)).y;
+                                float behind = CloudAt(normalize(q - toSun * 0.012)).y;
+                                cloudColour *= clamp(1.0 - (ahead - behind) * 3.5 * (1.2 - sunSine), 0.72, 1.18);
+                                // Shadow: the cloud that shades this point lies towards the sun,
+                                // as far as a cloud top at about two thirds of the exaggerated
+                                // height casts at this elevation. Long near the terminator,
+                                // short around noon.
+                                float tanElevation = sunSine / max(along, 1e-3);
+                                float reach = min(CLOUD_TOP * 0.6 / max(tanElevation, 0.12), 0.12);
+                                float2 caster = CloudAt(normalize(q + toSun * reach));
+                                groundLit *= 1.0 - caster.x * smoothstep(0.15, 0.7, caster.y) * 0.35;
+                            }
+                            float3 composite = lerp(groundLit, cloudColour, cloud);
                             // The SSEC logo corner is drawn from the observation itself.
                             float mark = step(uv.x, _Watermark.x) * step(1.0 - _Watermark.y, my);
                             color = lerp(composite, lerp(color, observed.rgb, observed.a), mark);

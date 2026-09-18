@@ -31,10 +31,19 @@ namespace MyAtras
             double rightAscension = Degrees(Math.Atan2(
                 Math.Cos(obliquity) * Math.Sin(eclipticLongitude), Math.Cos(eclipticLongitude)));
             double declination = Degrees(Math.Asin(Math.Sin(obliquity) * Math.Sin(eclipticLongitude)));
-            double siderealTime = Wrap360(280.46061837 + 360.98564736629 * n);
-
-            double longitude = Wrap180(rightAscension - siderealTime);
+            double longitude = Wrap180(rightAscension - GreenwichSiderealDegrees(utc));
             return new Vector2((float)declination, (float)longitude);
+        }
+
+        /// <summary>
+        /// Greenwich mean sidereal time, in degrees: the right ascension overhead at
+        /// longitude 0. The stars behind the globe are turned by it, since a direction with
+        /// right ascension a lies over longitude a minus this.
+        /// </summary>
+        public static double GreenwichSiderealDegrees(DateTime utc)
+        {
+            double n = (utc.ToUniversalTime() - J2000).TotalDays;
+            return Wrap360(280.46061837 + 360.98564736629 * n);
         }
 
         /// <summary>

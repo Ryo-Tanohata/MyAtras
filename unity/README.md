@@ -164,6 +164,33 @@ both sides of the terminator and on open ocean too, which read as a pink stripe 
 the Pacific; the tint now stays within a few degrees on the lit side and mostly on
 cloud.
 
+Behind the globe are real stars, not a pattern. `scripts/build-stars.py` draws every
+star of the Bright Star Catalogue down to magnitude 6.0 at its J2000 position, with
+brightness from its magnitude and colour from B-V, into a map of right ascension and
+declination; the shader looks out along each background pixel's ray, turns it into the
+Earth's frame with the same rotation as the globe and into right ascension with
+Greenwich sidereal time, so the sky stands as it stood at the observation's time and
+moves with a drag. Sidereal time is checked against Meeus's worked examples 12.a and
+12.b (to 0.02 arcsecond). The whole chain was checked end to end on a paused frame at
+09:00 UTC: the pixel positions of the bright stars behind the Earth were computed
+independently in Python from the catalogue, the time and the view, and all eight -
+Aldebaran, Elnath, Canopus, Alhena, Aludra, Procyon, Naos and Gamma Velorum - were
+found lit at their predicted pixels, while a mirrored sky matched none of five.
+Precession since 2000, about 0.36 degree, is not applied. Brightness is adjusted for
+the screen, and the page says both.
+
+Clouds are given relief and shadows from a relative height. In infrared a colder cloud
+top shows brighter and stands higher, so brightness ranks cloud tops against each
+other; these are processed greyscale images with no temperature scale, so it is only a
+ranking, exaggerated tenfold to be seen at all, and the page says so. Where a cloud top
+falls away towards the sun it faces the sun and is lit; where it rises towards the sun
+it is turned away - strongest with the sun low. The ground is darkened by the cloud
+that lies towards the sun as far as a cloud top at about two thirds of the exaggerated
+height would cast at that elevation: long near the terminator, short around noon. The
+first version took the slope a quarter of an observation pixel either side, which only
+traced the pixel grid and creased the clouds like paper; it is now taken a whole pixel
+either side, and weaker.
+
 The first observation, 09:00 UTC, is 18:00 in Japan, just after sunset there: the
 terminator falls just east of Japan, 90 degrees from the subsolar point at 43.7°E. At
 15:00 UTC, midnight in Japan, the whole visible hemisphere is dark and the lights of

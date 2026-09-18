@@ -45,6 +45,8 @@ namespace MyAtras
         bool loaded;
         bool loadFinished;
         bool sunlight = true;
+        bool stars = true;
+        bool cloudRelief = true;
         Vector2 lastPointer;
         float lastPinchDistance;
         string lastReport;
@@ -67,6 +69,9 @@ namespace MyAtras
             public bool dissolve;
             public bool sunlight;    // day and night drawn from the sun at the observation time
             public bool nightLights; // the Black Marble texture loaded
+            public bool stars;       // the star background drawn
+            public bool starMap;     // the star map loaded
+            public bool cloudRelief; // cloud relief and shadows drawn
             public float sunLat;     // subsolar point at the observation time, degrees
             public float sunLon;     // east positive
             public string error;
@@ -108,6 +113,7 @@ namespace MyAtras
             material.SetTexture("_Earth", loader.Earth);
             if (loader.Night != null) material.SetTexture("_Night", loader.Night);
             material.SetFloat("_NightLights", loader.Night != null ? 1f : 0f);
+            if (loader.Stars != null) material.SetTexture("_StarMap", loader.Stars);
             material.SetVector("_Watermark", loader.Watermark);
             material.SetFloat("_WeatherActive", 1f);
             playback = new ObservationPlayback(loader.Frames.Count, Time.unscaledTime);
@@ -212,6 +218,16 @@ namespace MyAtras
             sunlight = on != 0;
         }
 
+        public void SetStars(int on)
+        {
+            stars = on != 0;
+        }
+
+        public void SetCloudRelief(int on)
+        {
+            cloudRelief = on != 0;
+        }
+
         /// <summary>
         /// The moment whose sun is drawn. During a dissolve between an observation and the
         /// next hour's, the sun moves with it: the sunlight at each instant in between is
@@ -245,6 +261,9 @@ namespace MyAtras
                 dissolve = !loaded || playback.Dissolve,
                 sunlight = sunlight,
                 nightLights = loader.Night != null,
+                stars = stars,
+                starMap = loader.Stars != null,
+                cloudRelief = cloudRelief,
                 error = loader.Error ?? "",
             };
             if (loaded)
@@ -287,8 +306,12 @@ namespace MyAtras
             material.SetTexture("_Weather", loader.Frames[playback.Current]);
             material.SetTexture("_WeatherPrev", loader.Frames[playback.Previous]);
             material.SetFloat("_Fade", playback.Fade(now));
+            DateTime shown = SunTime(now);
             material.SetFloat("_Sunlight", sunlight ? 1f : 0f);
-            material.SetVector("_Sun", SolarPosition.Direction(SolarPosition.Subsolar(SunTime(now))));
+            material.SetVector("_Sun", SolarPosition.Direction(SolarPosition.Subsolar(shown)));
+            material.SetFloat("_StarsOn", stars && loader.Stars != null ? 1f : 0f);
+            material.SetFloat("_Sidereal", (float)(SolarPosition.GreenwichSiderealDegrees(shown) * Math.PI / 180.0));
+            material.SetFloat("_CloudRelief", cloudRelief ? 1f : 0f);
             Graphics.Blit(source, destination, material);
         }
 

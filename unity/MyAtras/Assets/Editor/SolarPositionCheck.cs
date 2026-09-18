@@ -76,6 +76,13 @@ namespace MyAtras
                           (k.lon.HasValue ? $" (expected lon {k.lon.Value:F3})" : ""));
             }
 
+            // Greenwich sidereal time turns the stars. Meeus, Astronomical Algorithms,
+            // examples 12.a and 12.b: 13h10m46.3668s and 8h34m57.0896s on 1987 April 10.
+            failures += Sidereal("sidereal time, Meeus 12.a", new DateTime(1987, 4, 10, 0, 0, 0, DateTimeKind.Utc),
+                (13 + 10 / 60.0 + 46.3668 / 3600.0) * 15.0);
+            failures += Sidereal("sidereal time, Meeus 12.b", new DateTime(1987, 4, 10, 19, 21, 0, DateTimeKind.Utc),
+                (8 + 34 / 60.0 + 57.0896 / 3600.0) * 15.0);
+
             // The direction must be in the frame the shader samples the ground texture in:
             // longitude = atan2(x, z), y towards the north pole.
             failures += Direction("sun over 0N 0E faces +z", new Vector2(0f, 0f), new Vector3(0f, 0f, 1f));
@@ -93,6 +100,15 @@ namespace MyAtras
                 label = label, utc = new DateTime(y, mo, d, h, mi, 0, DateTimeKind.Utc),
                 lat = lat, lon = lon, tolerance = tolerance,
             };
+        }
+
+        static int Sidereal(string label, DateTime utc, double expectedDegrees)
+        {
+            double got = SolarPosition.GreenwichSiderealDegrees(utc);
+            double error = Math.Abs(((got - expectedDegrees) % 360.0 + 540.0) % 360.0 - 180.0);
+            bool ok = error < 0.001;
+            Debug.Log($"MyAtras sun: {(ok ? "ok  " : "FAIL")} {label}: {got:F5} (expected {expectedDegrees:F5})");
+            return ok ? 0 : 1;
         }
 
         static int Direction(string label, Vector2 subsolar, Vector3 expected)
