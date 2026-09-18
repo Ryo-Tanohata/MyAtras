@@ -52,11 +52,13 @@ Altitude is estimated from pressure under a standard-atmosphere approximation. D
 ## Development and validation
 
 - `dist/data-sources.js` reads the bundled observations: the served tree fetches `weather/snapshot.json`, `weather/sequence/manifest.json` and `data/amv.json`, while the standalone export uses the copies inlined into the page. Both builds show the same frames.
+- `node scripts/fetch-observations.cjs` replaces the bundled observations with the newest ones SSEC serves: the hourly frames playback cycles through, both opening snapshots, and with `--wind` the observed wind through `build-amv.cjs`. Every frame is checked against the `RE-Time` header the image comes back with, so a frame is only ever stored under the time the server itself confirms; a mismatch, or a missing header, stops the run before any manifest claims otherwise. Frames an earlier run left behind are removed. Run it where SSEC is reachable, then commit `dist/weather/`.
 - `node scripts/build-amv.cjs TIME LOW_GEOJSON MID_GEOJSON` validates and samples downloaded observations.
 - `python scripts/export-html.py` regenerates the standalone file.
 - `node tests/cloud-model.test.cjs` checks wind units/direction, pressure altitude, spherical advection, longitude wrapping, timestamps, stale/malformed records and finite 3-hour positions of all bundled vectors.
 - `node tests/weather.test.cjs` covers observation loading and failure retention.
 - `node tests/weather-playback.test.cjs` verifies changing frames/timestamps, looping, pausing, cache reuse and reference-mode guards.
+- `node tests/fetch-observations.test.cjs` drives the fetch script against a stand-in for the API: what it stores, what it records, the removal of earlier frames, and the refusal to store an observation whose time the server does not confirm.
 - `node tests/observation-fade.test.cjs` covers the dissolve between observations: the first observation appearing at once, the timing, restarting on each observation, the toggle, and the cap that keeps a dissolve inside one playback step.
 - `node tests/cloud-simulation.test.cjs` covers the model's playback clock: the rate, the 0.1 s cap that stops a background tab fast-forwarding it, pausing, returning to the start, the three-hour bound and the pressure-band filter.
 - `python scripts/export-html.py` re-checks every bundled frame against the SHA-256 in its manifest and fails the build on a mismatch.

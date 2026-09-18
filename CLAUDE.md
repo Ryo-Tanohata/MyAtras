@@ -29,6 +29,7 @@ GitHubへの公開コード登録はユーザーが了承済み。GitHub Pages�
 - `dist/index.html`, `dist/style.css`: UI。
 - `scripts/export-html.py`: 単体HTML生成。埋め込み時にSHA256を再照合し、不一致ならビルドを止める。
 - `scripts/build-amv.cjs`: 取得したAMV GeoJSONから `dist/data/amv.json` を作る。
+- `scripts/fetch-observations.cjs`: 同梱観測を最新に入れ替える。13枚の時系列・両製品のスナップショット・`--wind` で観測風。画像の `RE-Time` ヘッダと要求時刻が一致しなければ停止し、別時刻として保存しない。古いフレームは削除。**SSECに到達できる機械で実行**（エージェントのコンテナからは403で不可）。実行後は `python scripts/export-html.py` と `node tools/check-webgl.cjs` を通して `dist/` をcommit。
 - `tests/harness.cjs`: テスト用の最小DOMと通信スタブ。観測の中身は偽装しない。
 
 ## Unity版の方針
@@ -50,7 +51,7 @@ Unity版は観測を独自取得せず、`dist/weather/` と `dist/data/` の同
 4. 単なるテクスチャ平行移動や生成した雲を実観測として見せない。出典とロゴを維持する。
 
 ## 検証済みと未検証
-`node tests/weather.test.cjs`（9件）、`node tests/weather-playback.test.cjs`（10件）、`node tests/cloud-model.test.cjs`（9件）、`node tests/cloud-simulation.test.cjs`（10件）、`node tests/observation-fade.test.cjs`（8件）はこの環境で成功。同梱3,333ベクトルすべてが3時間後まで有限であることも確認済み。
+`node tests/weather.test.cjs`（9件）、`node tests/weather-playback.test.cjs`（10件）、`node tests/cloud-model.test.cjs`（9件）、`node tests/cloud-simulation.test.cjs`（10件）、`node tests/observation-fade.test.cjs`（8件）、`node tests/fetch-observations.test.cjs`（6件・API模擬サーバー）はこの環境で成功。同梱3,333ベクトルすべてが3時間後まで有限であることも確認済み。
 Windows上のChrome（`--headless=new` + SwiftShader）で実描画を確認：配信版の合成表示・13時刻の再生、白黒観測モード、立体の模型モード（3,333地点）、および単体HTMLのfile://単体起動。地球・雲模型のGLSLは実ブラウザでコンパイル・リンク成功。
 2026-09-17、Linuxコンテナの同梱Chromium（SwiftShader）とAndroid幅412×915のタッチ操作エミュレーションでも再確認：地球描画、13時刻が一巡してループ、一時停止で時刻が止まること、白黒観測トグル、可視光への切替（追加取得は失敗し、設計どおり表示中の観測を保持）、立体の模型（3,333地点の移流）、昼夜モード。約56fps。
 Android実機でのUI QA、実機のタッチ操作、実ネットワークでの「最新を取得」は未検証。エミュレーションのタッチは実機の代わりにならない。
