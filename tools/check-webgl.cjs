@@ -279,7 +279,18 @@ async function loadWithWebGL(page, url) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     await page.send('Page.navigate', { url });
     await page.waitFor('!!document.querySelector("canvas")', 20000, 'no canvas on the page');
-    await sleep(1500);
+    if (UNITY) {
+      // Asking the canvas for a context before Unity does would hand Unity ours, with
+      // our attributes. Wait for the page to say the player exists, then ask: the
+      // browser returns the context Unity made.
+      try {
+        await page.waitFor('!!window.myatrasUnity', 120000, 'the Unity player never started');
+      } catch {
+        return '';
+      }
+    } else {
+      await sleep(1500);
+    }
     const granted = await page.js(`(() => {
       const c = document.querySelector('canvas');
       const gl = c.getContext('webgl2') || c.getContext('webgl');
@@ -320,6 +331,19 @@ async function checkJavaScriptGlobe(page) {
   }
   check(seen.size >= 3, 'observations play back', `${seen.size} distinct times seen`);
 
+  // Consecutive observations fade into one another. Sampled from inside the page, since
+  // a dissolve lasts well under half a second and a screenshot takes longer than that.
+  const fades = await page.js(`new Promise(resolve => {
+    const samples = [], started = performance.now();
+    (function sample() {
+      samples.push(window.geoFade ? window.geoFade.progress : -1);
+      if (performance.now() - started < 3000) setTimeout(sample, 40); else resolve(samples);
+    })();
+  })`);
+  const blended = fades.filter(p => p > 0 && p < 1).length;
+  check(blended > 0, 'consecutive observations dissolve',
+    `${blended} of ${fades.length} samples caught mid-dissolve`);
+
   const later = await page.shot('02-later-observation');
   const moved = png.changed(first, later);
   check(moved >= 0.005, 'the picture changes with the observation',
@@ -335,26 +359,63 @@ async function checkJavaScriptGlobe(page) {
 }
 
 async function checkUnityBuild(page) {
-  await page.waitFor(`(() => {
-    const c = document.querySelector('canvas');
-    const gl = c && (c.getContext('webgl2') || c.getContext('webgl'));
-    return !!gl && c.width > 1 && c.height > 1;
-  })()`, 120000, 'the Unity canvas never came up');
-  check(true, 'unity canvas sized',
-    await page.js("(c => c.width + 'x' + c.height)(document.querySelector('canvas'))"));
-  check(await page.js("typeof createUnityInstance === 'function' || !!window.unityInstance"),
-    'unity loader present');
-  await sleep(5000);
+  check(await page.js("typeof createUnityInstance === 'function'"), 'unity loader present');
+
+  // The page around the Unity canvas is the JavaScript site's page: the same status
+  // overlay, timestamp and playback line, filled in from what the player reports.
+  await page.waitFor("document.getElementById('status').hidden ||" +
+    " /できません|読み込めません/.test(document.getElementById('status').textContent)",
+    120000, 'the observations never finished loading');
+  const status = await page.js(`(s => ({hidden: s.hidden, text: s.textContent.trim()}))
+    (document.getElementById('status'))`);
+  check(status.hidden, 'the globe started', status.hidden ? '' : `status: ${status.text}`);
+  check(true, 'observation shown',
+    await page.js("document.getElementById('observationTime').textContent.trim()"));
+  check(true, 'playback line',
+    await page.js("document.getElementById('weatherPlaybackStatus').textContent.trim()"));
 
   const first = await page.shot('unity-01-load');
   const drawn = globeRegion(first);
   check(drawn.colours >= DRAWN_COLOURS, 'the globe is drawn, not a blank frame',
     `${drawn.colours} colours, mean brightness ${drawn.mean.toFixed(1)}`);
 
+  // Beside the globe the page's own dark background should show through the canvas,
+  // as it does around the JavaScript globe. If Unity's end-of-frame alpha clear comes
+  // back, the canvas turns opaque and the halo colour fills it (mean brightness ~130).
+  const beside = png.region(first,
+    Math.round(first.width * 0.05), Math.round(first.height * 0.36),
+    Math.round(first.width * 0.09), Math.round(first.height * 0.40));
+  check(beside.mean < 40, 'the page shows through around the globe',
+    `mean brightness ${beside.mean.toFixed(1)} beside the globe`);
+
+  const seen = new Set([await page.js("document.getElementById('observationTime').textContent.trim()")]);
+  const deadline = Date.now() + 40000;
+  while (Date.now() < deadline && seen.size < 3) {
+    seen.add(await page.js("document.getElementById('observationTime').textContent.trim()"));
+    await sleep(250);
+  }
+  check(seen.size >= 3, 'observations play back', `${seen.size} distinct times seen`);
+
+  const later = await page.shot('unity-02-later-observation');
+  const moved = png.changed(first, later);
+  check(moved >= 0.005, 'the picture changes with the observation',
+    `${(moved * 100).toFixed(1)}% of pixels differ`);
+
+  // The page's own button pauses the player, and the timestamp then holds.
+  await page.js("document.getElementById('weatherPlay').click()");
+  await sleep(800);
+  const held = await page.js("document.getElementById('observationTime').textContent.trim()");
+  await sleep(2000);
+  const still = await page.js("document.getElementById('observationTime').textContent.trim()");
+  const pausedLine = await page.js("document.getElementById('weatherPlaybackStatus').textContent.trim()");
+  check(held === still && /一時停止/.test(pausedLine), 'the page pauses the player', pausedLine);
+
+  // Paused, so the only thing a drag can change is the view.
+  const paused = await page.shot('unity-03-paused');
   await page.drag(200, 420, 320, 470);
   await sleep(1500);
-  const after = await page.shot('unity-02-after-drag');
-  const rotated = png.changed(first, after);
+  const after = await page.shot('unity-04-after-drag');
+  const rotated = png.changed(paused, after);
   check(rotated >= 0.02, 'a touch drag rotates the globe',
     `${(rotated * 100).toFixed(1)}% of pixels differ`);
 }

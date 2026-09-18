@@ -14,16 +14,18 @@ Unity 6 renames the build target to **Web** in the editor UI; it is still WebGL
 unity/MyAtras/
   Packages/manifest.json                    only the modules the globe uses
   Assets/Shaders/EarthComposite.shader      the WebGL fragment shader, ported line for line
-  Assets/Scripts/GlobeView.cs               full-screen pass, drag / pinch / wheel
+  Assets/Scripts/GlobeView.cs               full-screen pass, drag / pinch / wheel, the page's controls
   Assets/Scripts/ObservationLoader.cs       reads dist/assets and dist/weather next to the build
+  Assets/Scripts/ObservationPlayback.cs     which observation is up, and the dissolve into it
+  Assets/WebGLTemplates/MyAtras/index.html  the JavaScript site's page around the canvas
+  Assets/Plugins/WebGL/MyAtrasBridge.jslib  hands the globe's state to that page
+  Assets/Plugins/WebGL/MyAtrasTransparency.jslib  lets the page show through the canvas
   Assets/Editor/WebGlBuild.cs               applies the player settings, generates the scene, builds
 ```
 
-No scene asset and no `ProjectSettings/` are committed yet. Unity writes
-`ProjectSettings/` itself the first time the project is opened, and `WebGlBuild`
-generates `Assets/Scenes/Main.unity` on every build, so nothing hand-written has to be
-kept in step with the editor version. Commit the generated `.meta` files and
-`ProjectSettings/` after the first open; the generated scene is ignored by git.
+`WebGlBuild` generates `Assets/Scenes/Main.unity` on every build, so no hand-written
+scene has to be kept in step with the editor version; the generated scene is ignored by
+git.
 
 `ProjectSettings/` is committed as Unity wrote it on the first open with
 **6000.4.8f1**, the version the author's other Unity WebGL project ships from; the build
@@ -87,8 +89,7 @@ from `dist/` directly when playing in the editor. Nothing is copied into
   Mercator lookup and the same ±85.05° limit.
 - Drag to rotate, pinch to zoom, wheel to zoom, with the step sizes and limits from
   `dist/app.js`.
-- Shows the observation time (UTC and JST) and the sources on screen, measured after
-  wrapping and placed from the bottom edge so the credits never run off a narrow screen.
+- Sits inside the JavaScript site's own page. See "The page around the canvas" below.
 
 Built with 6000.4.8f1 on Windows on 2026-09-18 — 0 errors, 0 warnings, about 4 MB —
 and checked with `node tools/check-webgl.cjs --unity` at an Android viewport: the globe
@@ -108,10 +109,47 @@ the same colour there. North of 85.05° there is no observation, so the cloud-fr
 reference shows dark Arctic ocean, while cold surface just inside the limit comes
 through the brightness threshold as white.
 
-Not yet ported: playback of all 13 observations, the grayscale observation toggle, the
-day/night mode, the wind model, and a Japanese UI. The on-screen text is ASCII because
-the built-in font has no CJK glyphs; Japanese labels need a font asset (Noto Sans JP
-subset) added first.
+Playback of all thirteen stored observations follows the JavaScript version's timing
+(`ObservationPlayback.cs`): one observation every 0.65 s, the newest held twice as long,
+and a dissolve of 0.12-0.38 s between an observation and the one an hour after it. Each
+observation goes through the brightness threshold on its own and only the drawn layers
+are mixed, so nothing in between two observed times is ever shown as observed. Starting
+over from the newest to the oldest is a twelve-hour jump and is not dissolved. If an
+observation fails to load, playback stops at the gap rather than skipping it, and the
+page says how many of the thirteen could be loaded.
+
+Not yet ported: the visible-light product, the grayscale observation toggle, the
+day/night mode, the wind model and fetching the latest observations. The page says so
+and links to the JavaScript version for them, rather than showing buttons that do
+nothing.
+
+## The page around the canvas
+
+The Unity build uses its own WebGL template, `Assets/WebGLTemplates/MyAtras`, which is
+the JavaScript site's page: the same header, headings, buttons, notes, footer and
+wording, and the same stylesheet, loaded from `../style.css` beside the build. Unity
+draws the globe and nothing else. Every word the viewer reads is HTML, so Japanese
+comes from the browser's fonts and the build carries no font of its own.
+
+The two talk in both directions:
+
+- Page to Unity: the controls call `SendMessage` on the object named `Globe`
+  (`GlobeView.ObjectName`): `SetPlaying`, `SetDissolve`, `SetIntervalMs`,
+  `ShowObservation`, `ZoomBy`, `ResetView`.
+- Unity to page: `GlobeView` sends its state as JSON through `MyAtrasBridge.jslib` to
+  `window.myatrasReport` whenever it changes - loading progress, the observation on the
+  globe and its stamp, all loaded stamps, playing, dissolve, any error. The page formats
+  the stamp in Japan time with the JavaScript version's own `Intl.DateTimeFormat` and
+  words the playback line as that version does.
+
+Around the globe the canvas is transparent, so the page's radial background continues
+behind it as it does around the JavaScript globe. Unity creates its context with the
+same attributes the JavaScript globe asks for - alpha on, premultipliedAlpha off - but
+clears the alpha channel alone back to 1 at the end of every frame, which made the
+canvas opaque and filled it with the halo colour. `MyAtrasTransparency.jslib` skips
+exactly that clear. Measured beside the globe, the Unity page now matches the
+JavaScript one within a few levels (7,12,19 against 7,12,18), and the browser check
+fails if the canvas turns opaque again.
 
 ## Building in CI
 

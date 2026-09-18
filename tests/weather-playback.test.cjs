@@ -36,12 +36,14 @@ function setup() {
   env.document.getElementById('autoWeather').checked = false;
   env.reset();
   const shown = [];
+  const continuing = [];
+  let playback = null;
   const controller = new W.WeatherController({
-    onImage: () => shown.push(1),
+    onImage: () => { shown.push(1); continuing.push(playback ? playback.continuing : false); },
     onEnabled: () => {}
   });
-  const playback = new WeatherPlayback(controller);
-  return { controller, playback, shown };
+  playback = new WeatherPlayback(controller);
+  return { controller, playback, shown, continuing };
 }
 
 // step() schedules the next frame; tests drive it by hand instead of waiting.
@@ -65,6 +67,23 @@ s.test('the bundled sequence holds 13 distinct ordered observations', () => {
     assert.ok(frame.source.includes('products=globalir_' + frame.time.replace('.', '_')),
       'each frame records the request it came from');
   }
+});
+
+// The globe dissolves only between an observation and the one an hour after it.
+// Starting over from the newest to the oldest is a jump of twelve hours, so the
+// playback must not present it as a continuation.
+s.test('only a step to the next observation counts as continuing', async () => {
+  const { playback, continuing } = setup();
+  await playback.prepare(true);
+  clearTimeout(playback.timer);
+  continuing.length = 0;
+  playback.index = 0;
+  for (let i = 0; i < 14; i++) stepOnce(playback);
+  assert.strictEqual(continuing[0], false, 'the first observation follows nothing');
+  assert.deepStrictEqual(continuing.slice(1, 13), Array(12).fill(true),
+    'each of the next twelve is one hour after the last');
+  assert.strictEqual(continuing[13], false, 'going back to the oldest is not a continuation');
+  assert.strictEqual(playback.continuing, false, 'and the flag is only true while handing over');
 });
 
 s.test('playback loads every bundled frame once, then replays from cache', async () => {

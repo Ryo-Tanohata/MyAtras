@@ -1,4 +1,9 @@
+using System;
+using System.Collections;
 using UnityEngine;
+#if UNITY_WEBGL && !UNITY_EDITOR
+using System.Runtime.InteropServices;
+#endif
 
 namespace MyAtras
 {
@@ -8,16 +13,27 @@ namespace MyAtras
     ///
     /// Everything is rendered by one full-screen pass, as in the WebGL version: there is
     /// no sphere mesh, the shader intersects the sphere analytically.
+    ///
+    /// In a browser the page around the canvas does all the talking. It draws the
+    /// buttons, times, notes and credits in the JavaScript site's own markup and
+    /// stylesheet, calls the public methods below through SendMessage, and hears back
+    /// through <see cref="Report"/>. That keeps the two versions looking alike and means
+    /// the Unity build carries no font. The page addresses this object by name, so the
+    /// build script names it <see cref="ObjectName"/>.
     /// </summary>
     [RequireComponent(typeof(Camera))]
     public sealed class GlobeView : MonoBehaviour
     {
+        public const string ObjectName = "Globe";
+
         const float DragSpeed = 0.006f;
         const float PitchLimit = 1.4f;
         const float ZoomMin = 0.65f;
         const float ZoomMax = 1.7f;
 
-        static readonly Color Background = new Color(0.027f, 0.047f, 0.071f);
+        // Transparent: the page's background shows through the canvas, as it does
+        // around the JavaScript globe.
+        static readonly Color Background = new Color(0f, 0f, 0f, 0f);
 
         float yaw = 2.35f;
         float pitch = 0.20f;
@@ -25,9 +41,31 @@ namespace MyAtras
 
         Material material;
         ObservationLoader loader;
+        ObservationPlayback playback;
         bool loaded;
+        bool loadFinished;
         Vector2 lastPointer;
         float lastPinchDistance;
+        string lastReport;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        static extern void MyAtrasReport(string json);
+#endif
+
+        [Serializable]
+        class State
+        {
+            public string state;     // "loading", "ready" or "error"
+            public int loadedCount;  // observations loaded so far
+            public int expected;     // observations the manifest lists
+            public int index;        // the observation on the globe, oldest = 0
+            public string time;      // its stamp, e.g. 20260916.210000; the page formats it
+            public string[] times;   // every loaded stamp, for the page's time slider
+            public bool playing;
+            public bool dissolve;
+            public string error;
+        }
 
         void Awake()
         {
@@ -48,23 +86,32 @@ namespace MyAtras
             StartCoroutine(LoadRoutine());
         }
 
-        System.Collections.IEnumerator LoadRoutine()
+        IEnumerator LoadRoutine()
         {
             yield return loader.Load();
-            if (loader.Error != null)
+            loadFinished = true;
+            if (loader.Earth == null || loader.Frames.Count == 0)
             {
                 Debug.LogError("MyAtras: " + loader.Error);
+                Report();
                 yield break;
             }
+            // A gap part way through is reported but does not stop what did load from
+            // being shown; the loader already stopped at the gap.
+            if (loader.Error != null) Debug.LogWarning("MyAtras: " + loader.Error);
+
             material.SetTexture("_Earth", loader.Earth);
-            material.SetTexture("_Weather", loader.Observation);
             material.SetVector("_Watermark", loader.Watermark);
             material.SetFloat("_WeatherActive", 1f);
+            playback = new ObservationPlayback(loader.Frames.Count, Time.unscaledTime);
             loaded = true;
         }
 
         void Update()
         {
+            if (loaded) playback.Tick(Time.unscaledTime);
+            Report();
+
             if (Input.touchCount >= 2)
             {
                 Pinch(Input.GetTouch(0).position, Input.GetTouch(1).position,
@@ -117,6 +164,8 @@ namespace MyAtras
             zoom = Mathf.Clamp(value, ZoomMin, ZoomMax);
         }
 
+        // ------------------------------------------------ called by the page (SendMessage)
+
         public void ResetView()
         {
             yaw = 2.35f;
@@ -124,9 +173,71 @@ namespace MyAtras
             zoom = 1f;
         }
 
+        /// <summary>The page's zoom buttons step by 0.12, as in dist/app.js.</summary>
+        public void ZoomBy(float delta)
+        {
+            SetZoom(zoom + delta);
+        }
+
+        public void SetPlaying(int playing)
+        {
+            if (loaded) playback.SetPlaying(playing != 0, Time.unscaledTime);
+        }
+
+        public void SetDissolve(int dissolve)
+        {
+            if (loaded) playback.Dissolve = dissolve != 0;
+        }
+
+        /// <summary>Milliseconds per observation: 1200, 650 or 300 on the page, as in the JavaScript version.</summary>
+        public void SetIntervalMs(float milliseconds)
+        {
+            if (loaded && milliseconds > 0f) playback.Interval = milliseconds / 1000f;
+        }
+
+        public void ShowObservation(int index)
+        {
+            if (loaded) playback.Show(index, Time.unscaledTime);
+        }
+
+        // ------------------------------------------------ told to the page
+
+        /// <summary>Sends the state to the page whenever it changes.</summary>
+        void Report()
+        {
+            if (loader == null) return;
+            State state = new State
+            {
+                state = loaded ? "ready" : loadFinished ? "error" : "loading",
+                loadedCount = loader.Frames.Count,
+                expected = loader.Expected,
+                index = loaded ? playback.Current : 0,
+                time = loaded ? loader.Stamps[playback.Current] : "",
+                times = loaded ? ToArray(loader.Stamps) : new string[0],
+                playing = loaded && playback.Playing,
+                dissolve = !loaded || playback.Dissolve,
+                error = loader.Error ?? "",
+            };
+            string json = JsonUtility.ToJson(state);
+            if (json == lastReport) return;
+            lastReport = json;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            MyAtrasReport(json);
+#endif
+        }
+
+        static string[] ToArray(System.Collections.Generic.IReadOnlyList<string> list)
+        {
+            string[] array = new string[list.Count];
+            for (int i = 0; i < list.Count; i++) array[i] = list[i];
+            return array;
+        }
+
         void OnRenderImage(RenderTexture source, RenderTexture destination)
         {
-            if (material == null)
+            // Until the ground texture and the observations are in, the shader would draw
+            // its default white; the canvas stays clear and the page shows its status.
+            if (material == null || !loaded)
             {
                 Graphics.Blit(source, destination);
                 return;
@@ -137,31 +248,23 @@ namespace MyAtras
             material.SetFloat("_Mode", 0f);
             material.SetFloat("_Panels", 0f);
             material.SetFloat("_RawObservation", 0f);
+            material.SetTexture("_Weather", loader.Frames[playback.Current]);
+            material.SetTexture("_WeatherPrev", loader.Frames[playback.Previous]);
+            material.SetFloat("_Fade", playback.Fade(Time.unscaledTime));
             Graphics.Blit(source, destination, material);
         }
 
-        // Credits and the observation time stay on screen. The built-in font has no CJK
-        // glyphs, so this overlay is ASCII until a Japanese font asset is added.
+#if UNITY_EDITOR
+        // There is no page around the canvas in the editor, so say at least what is on
+        // the globe. The published build shows nothing drawn by Unity but the globe.
         void OnGUI()
         {
-            GUIStyle style = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = Mathf.RoundToInt(Mathf.Max(12f, Mathf.Min(Screen.width, Screen.height) * 0.03f)),
-                wordWrap = true,
-                normal = { textColor = new Color(0.82f, 0.88f, 0.92f) },
-            };
-            string line = loaded ? loader.ObservationLabel
-                : loader?.Error ?? "Loading the stored observation...";
-            GUIContent text = new GUIContent(line +
-                "\nInfrared brightness composited as a white layer - uncalibrated, not a cloud mask." +
-                "\nSource: SSEC RealEarth, UW-Madison. Ground reference: NASA Blue Marble.");
-
-            // The credits have to stay on screen however narrow it is, so the block is
-            // measured after wrapping and placed from the bottom edge up.
-            float margin = style.fontSize;
-            float width = Screen.width - margin * 2f;
-            float height = style.CalcHeight(text, width);
-            GUI.Label(new Rect(margin, Screen.height - margin - height, width, height), text, style);
+            string line = loaded
+                ? $"{loader.Labels[playback.Current]}  ({playback.Current + 1} / {loader.Frames.Count})" +
+                  (playback.Playing ? "" : "  paused")
+                : loader?.Error ?? "Loading the stored observations...";
+            GUI.Label(new Rect(12f, Screen.height - 32f, Screen.width - 24f, 24f), line);
         }
+#endif
     }
 }

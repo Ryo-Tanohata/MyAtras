@@ -24,11 +24,20 @@ namespace MyAtras
         static readonly Vector2 WatermarkPixels = new Vector2(54f, 44f);
 
         public Texture2D Earth { get; private set; }
-        public Texture2D Observation { get; private set; }
+        /// <summary>The stored observations, oldest first, as the manifest lists them.</summary>
+        public IReadOnlyList<Texture2D> Frames => frames;
+        /// <summary>Each frame's observation time in UTC and JST, in ASCII, for the editor.</summary>
+        public IReadOnlyList<string> Labels => labels;
+        /// <summary>Each frame's SSEC stamp, e.g. 20260916.210000, for the page to format.</summary>
+        public IReadOnlyList<string> Stamps => stamps;
         public Vector2 Watermark { get; private set; }
-        /// <summary>Observation time as the site labels it, in ASCII (the built-in font has no CJK glyphs).</summary>
-        public string ObservationLabel { get; private set; } = "";
+        /// <summary>How many observations the manifest lists, loaded or not.</summary>
+        public int Expected { get; private set; }
         public string Error { get; private set; }
+
+        readonly List<Texture2D> frames = new List<Texture2D>();
+        readonly List<string> labels = new List<string>();
+        readonly List<string> stamps = new List<string>();
 
         [Serializable]
         class Frame
@@ -84,23 +93,38 @@ namespace MyAtras
                 yield break;
             }
 
-            // The newest stored frame. A minimal build shows one observation; the
-            // sequence of 13 is what the playback step adds next.
-            Frame frame = manifest.globalir[manifest.globalir.Count - 1];
-            yield return Texture(root + "weather/sequence/" + frame.file, TextureWrapMode.Clamp, texture =>
+            // Oldest first. The stamps sort as text, so this holds whatever order the
+            // manifest was written in.
+            manifest.globalir.Sort((a, b) => string.CompareOrdinal(a.time, b.time));
+            Expected = manifest.globalir.Count;
+
+            foreach (Frame frame in manifest.globalir)
             {
-                Observation = texture;
-            });
-            if (Observation == null)
+                Texture2D observation = null;
+                yield return Texture(root + "weather/sequence/" + frame.file, TextureWrapMode.Clamp,
+                    texture => observation = texture);
+                if (observation == null)
+                {
+                    // Stop at the first gap rather than skip it: playing on past a missing
+                    // hour would show two observations as if they were an hour apart.
+                    Error = $"The observation for {Label(frame.time)} could not be loaded; " +
+                            "showing only the ones before it.";
+                    break;
+                }
+                frames.Add(observation);
+                labels.Add(Label(frame.time));
+                stamps.Add(frame.time);
+            }
+
+            if (frames.Count == 0)
             {
-                Error = "The stored observation image could not be loaded.";
+                Error = "No stored observation could be loaded.";
                 yield break;
             }
 
             Watermark = new Vector2(
-                WatermarkPixels.x / Mathf.Max(1, Observation.width),
-                WatermarkPixels.y / Mathf.Max(1, Observation.height));
-            ObservationLabel = Label(frame.time);
+                WatermarkPixels.x / Mathf.Max(1, frames[0].width),
+                WatermarkPixels.y / Mathf.Max(1, frames[0].height));
         }
 
         /// <summary>
@@ -165,9 +189,9 @@ namespace MyAtras
                     DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime utc))
             {
                 DateTime jst = utc.AddHours(9);
-                return $"Observed {utc:yyyy-MM-dd HH:mm} UTC / {jst:yyyy-MM-dd HH:mm} JST";
+                return $"{utc:yyyy-MM-dd HH:mm} UTC / {jst:yyyy-MM-dd HH:mm} JST";
             }
-            return "Observed " + stamp;
+            return stamp;
         }
     }
 }

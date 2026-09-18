@@ -23,7 +23,7 @@
 </aside>
 </main>
 <footer><span>日本科学未来館の展示「ジオ・コスモス」に着想を得た個人制作です。同館とは関係がありません。</span><details><summary>この展示について</summary><p>SSEC RealEarthの全球衛星合成画像（赤外線）を球面に投影します。予報ではなく観測画像です。画像中の透かし・ロゴは保持します。観測には遅れや欠測があります。地表の参考画像は雲のない地表で、現在の観測ではありません。描画はUnityで行い、観測は同じサイトのJavaScript版と同じファイルを読み込みます。</p><p>地球画像：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_2048.jpg" target="_blank" rel="noreferrer">NASA Visible Earth (Blue Marble)</a> · <a href="https://www.miraikan.jst.go.jp/" target="_blank" rel="noreferrer">日本科学未来館</a></p></details></footer>
-<script src="Build/0608200447e209d52664a7eda05f9a1f.loader.js"></script>
+<script src="Build/{{{ LOADER_FILENAME }}}"></script>
 <script>
 (function () {
   'use strict';
@@ -124,13 +124,18 @@
   });
 
   createUnityInstance($('globe'), {
-    dataUrl: 'Build/1b3ef4f83ef460a995f0e48d48da74be.data.unityweb',
-    frameworkUrl: 'Build/617624a19a18bf50a7d3607f31e41602.framework.js.unityweb',
-    codeUrl: 'Build/efb9a7745422b0f32d8933ad620cd813.wasm.unityweb',
+    dataUrl: 'Build/{{{ DATA_FILENAME }}}',
+    frameworkUrl: 'Build/{{{ FRAMEWORK_FILENAME }}}',
+#if USE_WASM
+    codeUrl: 'Build/{{{ CODE_FILENAME }}}',
+#endif
+#if SYMBOLS_FILENAME
+    symbolsUrl: 'Build/{{{ SYMBOLS_FILENAME }}}',
+#endif
     streamingAssetsUrl: 'StreamingAssets',
-    companyName: "MyAtras",
-    productName: "MyAtras",
-    productVersion: "1.0",
+    companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+    productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+    productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
     // The JavaScript globe caps its resolution the same way.
     devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.75),
     // Unity's own banner would sit over the page; problems go to the status line instead.

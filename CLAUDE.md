@@ -16,7 +16,7 @@ GitHubへの公開コード登録はユーザーが了承済み。GitHub Pages�
 - 2026-09-16 09:00–21:00 UTCの13枚の全球赤外線観測を順に再生。日時は日本時間で表示。データは保存時点の観測であり常時最新ではない。
 - 地表参考画像に観測輝度から白い層を合成。チェックボックス「元の白黒観測を表示」で元の観測に戻せる。地球回転は初期OFF。
 - 最新取得、再生速度、時刻選択、キャッシュ、取得失敗時の保持。
-- 観測の切り替わりは380ms以下の溶け込み（`dist/observation-fade.js`）。画面上の2枚はどちらも実観測で、閾値は各観測に個別に適用し、描画結果だけを混ぜる。中間時刻の観測は作らない。日時は溶け込み先の観測を指す。「観測の切り替わりをなめらかに」で解除できる。
+- 観測の切り替わりは380ms以下の溶け込み（`dist/observation-fade.js`）。画面上の2枚はどちらも実観測で、閾値は各観測に個別に適用し、描画結果だけを混ぜる。中間時刻の観測は作らない。日時は溶け込み先の観測を指す。溶け込むのは1時間後の観測へ進むときだけで、最新から最古へ戻るとき（12時間の飛び）や、時刻選択・再取得のときは即座に切り替える。「観測の切り替わりをなめらかに」で解除できる。Unity版も同じ規則（`unity/MyAtras/Assets/Scripts/ObservationPlayback.cs`）。
 - 別モード「立体の模型」はSSEC AMV風向・風速を使う簡易移流。雲の形や量は模型で、実際の雲分布・気象予報ではない。
 
 ## 主要ファイル
@@ -36,6 +36,7 @@ GitHubへの公開コード登録はユーザーが了承済み。GitHub Pages�
 エージェントのコンテナにはUnity Editorもライセンスも無いためビルドはできない。ビルドはユーザーのローカルで行い、成果物をcommitする。詳細と必要なPlayer設定は `unity/README.md`。
 2026-09-18、Windows（SHINYLABRY0）に Unity 6000.4.8f1 と Web Build Support を Unity Hub のCLIで導入し、初ビルドに成功（エラー0・警告0、約4MB）。Hub をVS Code拡張のシェルから起動すると `ELECTRON_RUN_AS_NODE=1` のせいで Node として動き `Cannot find module '--headless'` で失敗するので、この変数を外して起動する。
 ビルドコマンド：`Unity.exe -batchmode -nographics -quit -projectPath unity/MyAtras -executeMethod MyAtras.WebGlBuild.Build -logFile <log>`。確認は `node tools/check-webgl.cjs --unity`（`dist/` を配信して `/unity/` を開く＝Pagesと同じ配置）。
+Unity版は独自のWebGLテンプレート（`unity/MyAtras/Assets/WebGLTemplates/MyAtras`）でJS版と同じページ・同じ `style.css` の中に描画する。文字はすべてHTML側で、Unity内にフォントは持たない。操作はSendMessage、状態は `MyAtrasBridge.jslib` 経由でページへ渡す。
 Unity版は観測を独自取得せず、`dist/weather/` と `dist/data/` の同じファイルを読む。SHA-256マニフェストを唯一の正とし、両版が同じ観測を表示する状態を保つ。
 
 ## 科学的な限界

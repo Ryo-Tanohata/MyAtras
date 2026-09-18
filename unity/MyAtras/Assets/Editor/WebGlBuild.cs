@@ -113,6 +113,11 @@ namespace MyAtras
             PlayerSettings.WebGL.decompressionFallback = true;
             PlayerSettings.WebGL.nameFilesAsHashes = true;
             PlayerSettings.WebGL.dataCaching = true;
+
+            // Assets/WebGLTemplates/MyAtras: the JavaScript site's page and stylesheet
+            // around the canvas, so both versions look alike and speak Japanese without
+            // the build carrying a font.
+            PlayerSettings.WebGL.template = "PROJECT:MyAtras";
         }
 
         /// <summary>
@@ -169,7 +174,8 @@ namespace MyAtras
             Directory.CreateDirectory(Path.Combine(Application.dataPath, "Scenes"));
 
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            GameObject cameraObject = new GameObject("Globe Camera", typeof(Camera), typeof(GlobeView));
+            // The page reaches the globe through SendMessage, which finds it by this name.
+            GameObject cameraObject = new GameObject(GlobeView.ObjectName, typeof(Camera), typeof(GlobeView));
             cameraObject.tag = "MainCamera";
 
             EditorSceneManager.SaveScene(scene, ScenePath);
