@@ -315,6 +315,19 @@ async function checkJavaScriptGlobe(page) {
   }
   check(seen.size >= 3, 'observations play back', `${seen.size} distinct times seen`);
 
+  // Consecutive observations fade into one another. Sampled from inside the page, since
+  // a dissolve lasts well under half a second and a screenshot takes longer than that.
+  const fades = await page.js(`new Promise(resolve => {
+    const samples = [], started = performance.now();
+    (function sample() {
+      samples.push(window.geoFade ? window.geoFade.progress : -1);
+      if (performance.now() - started < 3000) setTimeout(sample, 40); else resolve(samples);
+    })();
+  })`);
+  const blended = fades.filter(p => p > 0 && p < 1).length;
+  check(blended > 0, 'consecutive observations dissolve',
+    `${blended} of ${fades.length} samples caught mid-dissolve`);
+
   const later = await page.shot('02-later-observation');
   const moved = png.changed(first, later);
   check(moved >= 0.005, 'the picture changes with the observation',
@@ -346,10 +359,18 @@ async function checkUnityBuild(page) {
   check(drawn.colours >= DRAWN_COLOURS, 'the globe is drawn, not a blank frame',
     `${drawn.colours} colours, mean brightness ${drawn.mean.toFixed(1)}`);
 
+  // Nothing touches the globe between these two frames, so any change is the stored
+  // observations being played - the Unity build has no timestamp in the DOM to read.
+  await sleep(2500);
+  const later = await page.shot('unity-02-later-observation');
+  const moved = png.changed(first, later);
+  check(moved >= 0.005, 'the picture changes with the observation',
+    `${(moved * 100).toFixed(1)}% of pixels differ`);
+
   await page.drag(200, 420, 320, 470);
   await sleep(1500);
-  const after = await page.shot('unity-02-after-drag');
-  const rotated = png.changed(first, after);
+  const after = await page.shot('unity-03-after-drag');
+  const rotated = png.changed(later, after);
   check(rotated >= 0.02, 'a touch drag rotates the globe',
     `${(rotated * 100).toFixed(1)}% of pixels differ`);
 }
