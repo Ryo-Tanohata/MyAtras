@@ -71,7 +71,8 @@ export and publishes `dist/` to GitHub Pages on every push to `main`:
 https://ryo-tanohata.github.io/MyAtras/ . A Unity WebGL build of the same globe is
 published from `dist/unity/` at https://ryo-tanohata.github.io/MyAtras/unity/ . It adds
 what the JavaScript globe does not have: sunlight from where the sun actually was at
-each observation's time, and NASA Black Marble city lights on the night side; see
+each observation's time, NASA Black Marble city lights on the night side, and an
+atmosphere lit by that sun (for effect; the page says so); see
 `unity/README.md` for how it is built and checked.
 
 ## Local browser preview

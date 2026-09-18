@@ -67,6 +67,23 @@ Shader "MyAtras/EarthComposite"
                 return o;
             }
 
+            // A view-space direction on the unit sphere, turned into the globe's own frame:
+            // the frame the textures are sampled in and _Sun is given in.
+            float3 ToGlobe(float3 n)
+            {
+                float cp = cos(_Pitch), sp = sin(_Pitch);
+                float3 q = float3(n.x, n.y * cp + n.z * sp, -n.y * sp + n.z * cp);
+                float cy = cos(_Yaw), sy = sin(_Yaw);
+                return float3(q.x * cy + q.z * sy, q.y, -q.x * sy + q.z * cy);
+            }
+
+            // Where the sun is near the horizon, as a bump centred on the terminator. The
+            // width is the sine of the solar elevation, about 7 degrees for 0.12.
+            float Twilight(float sunSine, float width)
+            {
+                return exp(-(sunSine / width) * (sunSine / width));
+            }
+
             fixed4 frag(v2f i) : SV_Target
             {
                 float2 res = _ScreenParams.xy;
@@ -79,16 +96,28 @@ Shader "MyAtras/EarthComposite"
                     // exactly as the WebGL version does: the page's own background shows
                     // through. Unity asks for the same context the JavaScript globe does -
                     // alpha on, premultipliedAlpha off - so the browser composites this alpha.
-                    float halo = exp(-(sqrt(rr) - 1.0) * 25.0) * 0.11;
+                    float r = sqrt(rr);
+                    if (_Sunlight > 0.5 && _RawObservation < 0.5)
+                    {
+                        // Atmosphere, for effect: the air above the limb glows blue where
+                        // the sun is up there and warm where it is setting, and keeps only a
+                        // faint edge on the night side. The sun's direction is real; the
+                        // colours are not a scattering calculation.
+                        float3 limb = ToGlobe(float3(p / r, 0.0));
+                        float sunSine = dot(limb, _Sun.xyz);
+                        float lit = smoothstep(-0.25, 0.15, sunSine);
+                        float3 air = lerp(float3(0.30, 0.60, 0.95), float3(1.0, 0.55, 0.25),
+                                          Twilight(sunSine, 0.18) * 0.6);
+                        float alpha = exp(-(r - 1.0) * 14.0) * (0.05 + 0.40 * lit);
+                        return float4(air, saturate(alpha));
+                    }
+                    float halo = exp(-(r - 1.0) * 25.0) * 0.11;
                     return float4(0.25, 0.55, 0.75, halo);
                 }
 
                 float z = sqrt(1.0 - rr);
                 float3 n = float3(p.x, p.y, z);
-                float cp = cos(_Pitch), sp = sin(_Pitch);
-                float3 q = float3(n.x, n.y * cp + n.z * sp, -n.y * sp + n.z * cp);
-                float cy = cos(_Yaw), sy = sin(_Yaw);
-                q = float3(q.x * cy + q.z * sy, q.y, -q.x * sy + q.z * cy);
+                float3 q = ToGlobe(n);
 
                 // uv is in the JavaScript version's convention: v = 0 at the north pole.
                 float2 uv = float2(atan2(q.x, q.z) / (2.0 * PI) + 0.5,
@@ -173,7 +202,26 @@ Shader "MyAtras/EarthComposite"
                 float seam = min(min(cell.x, 1.0 - cell.x), min(cell.y, 1.0 - cell.y));
                 float grid = lerp(1.0, smoothstep(0.015, 0.065, seam) * 0.25 + 0.75, _Panels);
                 color *= lum * grid;
-                color += float3(0.12, 0.35, 0.5) * pow(1.0 - z, 3.0) * 0.20;
+                if (_Sunlight > 0.5 && _RawObservation < 0.5)
+                {
+                    // Atmosphere, for effect, lit by the real sun: looking through more air
+                    // towards the limb hazes the day side blue, and across the terminator,
+                    // where sunlight crosses the most air, ground and cloud tops take a warm
+                    // tint - cloud tops more, as they still catch the setting sun.
+                    float sunSine = dot(q, _Sun.xyz);
+                    float lit = smoothstep(-0.25, 0.15, sunSine);
+                    // The warm light belongs to the side where the sun is still just up: the
+                    // bump sits a degree above the horizon and dies away within a few degrees
+                    // below it. Open ground takes little of it, cloud tops more.
+                    float dusk = Twilight(sunSine - 0.02, 0.09) * smoothstep(-0.08, 0.0, sunSine);
+                    float3 air = lerp(float3(0.35, 0.62, 1.0), float3(1.0, 0.5, 0.2), dusk * 0.7);
+                    color += air * pow(1.0 - z, 2.5) * 0.45 * lit;
+                    color += float3(1.0, 0.5, 0.2) * dusk * (0.03 + 0.18 * cloudCover);
+                }
+                else
+                {
+                    color += float3(0.12, 0.35, 0.5) * pow(1.0 - z, 3.0) * 0.20;
+                }
                 return float4(color, 1.0);
             }
             ENDCG
