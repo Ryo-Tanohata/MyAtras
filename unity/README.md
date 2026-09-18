@@ -175,6 +175,21 @@ land and coastline into `dist/assets/land.png`, and at night the sea stays nearl
 black, land is lifted a little, and a thin pale coastline shows the edges, faintly even
 under cloud. It is an aid, not an observation, and the page says so.
 
+Flow lines show the observed wind: SSEC's atmospheric motion vectors in the same
+`dist/data/amv.json` the JavaScript version's wind model reads, both pressure bands.
+`WindField.cs` turns the 3,333 vectors into a one-degree texture, each texel taking only
+the vectors within 2.5 degrees of arc, weighted towards the nearest, and left empty
+where there are none - a gap in the observations is not calm air and is not filled in.
+`Assets/Editor/WindFieldCheck.cs` checks it on vectors with known answers: the texel on a
+vector carries it, a vector reaches across the antimeridian, nothing appears beyond the
+reach, and south is south. The shader draws one short dash per 3-degree cell moving
+along the wind there, on the same clock as the cloud playback, so a line moves as far as
+the clouds do between two observations. The page says what they are: the direction and
+speed of wind observed at one time only (04:00 JST on 2026-09-17), not the wind at each
+played hour, drawn only near observations, and a way of drawing wind rather than
+particles of cloud. Over the western Pacific they circle the large cloud system and run
+along the frontal band east of Japan.
+
 Behind the globe are real stars, not a pattern. `scripts/build-stars.py` draws every
 star of the Bright Star Catalogue down to magnitude 6.0 at its J2000 position, with
 brightness from its magnitude and colour from B-V, into a map of right ascension and

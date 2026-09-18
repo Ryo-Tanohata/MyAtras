@@ -74,7 +74,8 @@ what the JavaScript globe does not have: sunlight from where the sun actually wa
 each observation's time, NASA Black Marble city lights on the night side, and an
 atmosphere lit by that sun (for effect; the page says so), the real stars of the Bright
 Star Catalogue behind the Earth as they stood at that time, and cloud relief and
-shadows from a relative height estimated from infrared brightness (for effect); see
+shadows from a relative height estimated from infrared brightness (for effect), and
+flow lines along the observed wind of the bundled AMV data; see
 `unity/README.md` for how it is built and checked.
 
 ## Local browser preview
