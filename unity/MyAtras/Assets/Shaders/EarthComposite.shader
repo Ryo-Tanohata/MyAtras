@@ -16,6 +16,7 @@ Shader "MyAtras/EarthComposite"
         _Earth ("Ground reference", 2D) = "white" {}
         _Weather ("Observation", 2D) = "black" {}
         _WeatherPrev ("Previous observation", 2D) = "black" {}
+        _Night ("City lights", 2D) = "black" {}
     }
 
     SubShader
@@ -45,6 +46,12 @@ Shader "MyAtras/EarthComposite"
             // 0 shows the previous observation, 1 the current one; see ObservationPlayback.
             float _Fade;
             float2 _Watermark;
+            // Sunlight at the observation's own time (SolarPosition.cs): _Sun is the
+            // subsolar direction in the same frame as q below, so dot(q, _Sun) is the sine
+            // of the sun's elevation at that point. Only this Unity build draws it.
+            sampler2D _Night;
+            float4 _Sun;
+            float _Sunlight, _NightLights;
 
             struct v2f
             {
@@ -92,6 +99,10 @@ Shader "MyAtras/EarthComposite"
                 // from them draws a thin line down the globe along longitude 180.
                 float3 color = tex2Dlod(_Earth, float4(uv.x, 1.0 - uv.y, 0.0, 0.0)).rgb;
                 color = pow(color, 0.85);
+                float3 ground = color;
+                float cloudCover = 0.0;
+                float markAmount = 0.0;
+                float3 markColor = color;
 
                 if (_WeatherActive > 0.5)
                 {
@@ -121,12 +132,32 @@ Shader "MyAtras/EarthComposite"
                             // The SSEC logo corner is drawn from the observation itself.
                             float mark = step(uv.x, _Watermark.x) * step(1.0 - _Watermark.y, my);
                             color = lerp(composite, lerp(color, observed.rgb, observed.a), mark);
+                            cloudCover = cloud;
+                            markAmount = mark;
+                            markColor = lerp(ground, observed.rgb, observed.a);
                         }
                     }
                     else if (_RawObservation > 0.5)
                     {
                         color = float3(0.075, 0.10, 0.13);
                     }
+                }
+
+                if (_Sunlight > 0.5 && _RawObservation < 0.5)
+                {
+                    // The day side is left exactly as it was drawn above. Across the
+                    // terminator - a soft band of about 6 degrees of solar elevation either
+                    // side - the night side takes over: the ground falls to 5%, towns from
+                    // NASA's Black Marble glow where no cloud covers them, and cloud stays
+                    // faintly visible, since infrared observes it by night as by day.
+                    float day = smoothstep(-0.10, 0.10, dot(q, _Sun.xyz));
+                    float3 lights = tex2Dlod(_Night, float4(uv.x, 1.0 - uv.y, 0.0, 0.0)).rgb;
+                    float glow = smoothstep(0.12, 0.9, dot(lights, float3(0.299, 0.587, 0.114))) * _NightLights;
+                    float3 nightGround = ground * 0.05 + float3(1.0, 0.78, 0.5) * glow * (1.0 - cloudCover) * 0.95;
+                    float3 night = lerp(nightGround, float3(0.95, 0.97, 1.0) * 0.16, cloudCover);
+                    color = lerp(night, color, day);
+                    // The SSEC logo stays readable on either side.
+                    color = lerp(color, markColor, markAmount);
                 }
 
                 float lum = 0.83 + 0.17 * z;

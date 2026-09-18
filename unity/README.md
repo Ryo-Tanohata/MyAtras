@@ -123,6 +123,40 @@ day/night mode, the wind model and fetching the latest observations. The page sa
 and links to the JavaScript version for them, rather than showing buttons that do
 nothing.
 
+## Sunlight at the observation's own time
+
+This is where the Unity build goes past the JavaScript one. The JavaScript globe's
+"昼と夜" mode lights it from a fixed direction for effect; the Unity globe is lit by the
+sun where it actually was at each observation's time, so across the twelve hours the
+terminator sweeps about 180 degrees while the clouds move.
+
+- `SolarPosition.cs` gives the subsolar point from the UTC time, with the Astronomical
+  Almanac's low-precision formulas for the sun and Greenwich mean sidereal time (about
+  0.01 degree, 1950-2050). NOAA's fractional-year series was compared and not used: it
+  agrees on longitude within 0.03 degree but is off by about 0.4 degree of declination
+  near the equinoxes, which is where the bundled observations sit.
+- `Assets/Editor/SolarPositionCheck.cs` checks it and exits 1 on failure: the 2026 March
+  and September equinoxes (declination 0.002 and 0.003) and June solstice (23.435), the
+  thirteen observation times against the same formulas evaluated in Python, and the
+  direction vector against the frame the shader samples in. Run it with
+  `-executeMethod MyAtras.SolarPositionCheck.Run`.
+- The shader compares each point with that direction. The day side is drawn exactly as
+  before. Across a soft band of about 6 degrees of solar elevation the night side takes
+  over: the ground falls to 5%, cloud stays faintly visible because infrared observes it
+  by night as by day, and towns from NASA's Black Marble 2016 glow where no cloud covers
+  them. The SSEC logo corner stays readable on both sides.
+- During a dissolve the sun moves with the time between the two observations. The
+  sunlight at each of those instants is real astronomy rather than an invented
+  observation, and it spares the terminator a fifteen-degree jump at every step.
+- The page names the subsolar point of the observation on screen and says that the
+  city lights are a fixed 2016 image, not a current observation. "観測時刻の昼と夜" turns
+  it off.
+
+The first observation, 09:00 UTC, is 18:00 in Japan, just after sunset there: the
+terminator falls just east of Japan, 90 degrees from the subsolar point at 43.7°E. At
+15:00 UTC, midnight in Japan, the whole visible hemisphere is dark and the lights of
+Japan, Korea, eastern China and eastern Australia show between the clouds.
+
 ## The page around the canvas
 
 The Unity build uses its own WebGL template, `Assets/WebGLTemplates/MyAtras`, which is

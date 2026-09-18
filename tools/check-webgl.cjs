@@ -373,6 +373,10 @@ async function checkUnityBuild(page) {
     await page.js("document.getElementById('observationTime').textContent.trim()"));
   check(true, 'playback line',
     await page.js("document.getElementById('weatherPlaybackStatus').textContent.trim()"));
+  // The day/night line is drawn from the sun at the observation's own time; the page
+  // names the point where that sun is overhead.
+  const sunPoint = await page.js("(e => e ? e.textContent.trim() : '')(document.getElementById('sunPoint'))");
+  check(/太陽直下点：[北南]緯\d+\.\d° [東西]経\d+\.\d°/.test(sunPoint), 'the sun position is shown', sunPoint);
 
   const first = await page.shot('unity-01-load');
   const drawn = globeRegion(first);

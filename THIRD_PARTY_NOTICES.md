@@ -45,6 +45,21 @@ Shallow Topography*, stored byte for byte as downloaded.
 - 2048 x 1024 equirectangular, 238,676 bytes
 - SHA-256: `5b54cc586c6cbf2b28762ef4d4011f6cf4227a8b93a637b818a0c54090ce6c2c`
 
+## NASA — city lights (Unity version only)
+
+`dist/assets/night.jpg` is NASA Earth Observatory's Black Marble 2016 global
+composite of the Earth at night. Unlike `earth.jpg` it is not stored as downloaded:
+it was resized to match the ground reference texture.
+
+- Source: https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg
+- Downloaded: 3600 x 1800 equirectangular, 779,638 bytes,
+  SHA-256 `d87de751a264e4f8ff69c68de5dab9606daee87a6f15ae743c93200743bd7ec1`
+- Stored: resized to 2048 x 1024 with Pillow (Lanczos) and saved as JPEG quality 85,
+  151,835 bytes, SHA-256 `6e53c95e71a42870850731c47cb4a477941882c0699d7b41e2fbb8aa2b03ac10`
+- Registration checked after resizing: Tokyo and Cairo bright, the open Pacific dark.
+
+It is a fixed 2016 composite, not a current observation, and the Unity page says so.
+
 NASA still images are not subject to copyright in the United States and may be
 reused with NASA credited as the source. NASA's insignia and logotype are not
 used here, and nothing in this project implies NASA endorsement.

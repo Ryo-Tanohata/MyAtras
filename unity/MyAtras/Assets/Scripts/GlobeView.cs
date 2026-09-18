@@ -44,6 +44,7 @@ namespace MyAtras
         ObservationPlayback playback;
         bool loaded;
         bool loadFinished;
+        bool sunlight = true;
         Vector2 lastPointer;
         float lastPinchDistance;
         string lastReport;
@@ -64,6 +65,10 @@ namespace MyAtras
             public string[] times;   // every loaded stamp, for the page's time slider
             public bool playing;
             public bool dissolve;
+            public bool sunlight;    // day and night drawn from the sun at the observation time
+            public bool nightLights; // the Black Marble texture loaded
+            public float sunLat;     // subsolar point at the observation time, degrees
+            public float sunLon;     // east positive
             public string error;
         }
 
@@ -101,6 +106,8 @@ namespace MyAtras
             if (loader.Error != null) Debug.LogWarning("MyAtras: " + loader.Error);
 
             material.SetTexture("_Earth", loader.Earth);
+            if (loader.Night != null) material.SetTexture("_Night", loader.Night);
+            material.SetFloat("_NightLights", loader.Night != null ? 1f : 0f);
             material.SetVector("_Watermark", loader.Watermark);
             material.SetFloat("_WeatherActive", 1f);
             playback = new ObservationPlayback(loader.Frames.Count, Time.unscaledTime);
@@ -200,6 +207,26 @@ namespace MyAtras
             if (loaded) playback.Show(index, Time.unscaledTime);
         }
 
+        public void SetSunlight(int on)
+        {
+            sunlight = on != 0;
+        }
+
+        /// <summary>
+        /// The moment whose sun is drawn. During a dissolve between an observation and the
+        /// next hour's, the sun moves with it: the sunlight at each instant in between is
+        /// real astronomy, not an invented observation, and it spares the terminator a
+        /// fifteen-degree jump every step.
+        /// </summary>
+        DateTime SunTime(float now)
+        {
+            DateTime current = loader.Times[playback.Current];
+            float fade = playback.Fade(now);
+            if (fade >= 1f) return current;
+            DateTime previous = loader.Times[playback.Previous];
+            return previous + TimeSpan.FromTicks((long)((current - previous).Ticks * fade));
+        }
+
         // ------------------------------------------------ told to the page
 
         /// <summary>Sends the state to the page whenever it changes.</summary>
@@ -216,8 +243,16 @@ namespace MyAtras
                 times = loaded ? ToArray(loader.Stamps) : new string[0],
                 playing = loaded && playback.Playing,
                 dissolve = !loaded || playback.Dissolve,
+                sunlight = sunlight,
+                nightLights = loader.Night != null,
                 error = loader.Error ?? "",
             };
+            if (loaded)
+            {
+                Vector2 subsolar = SolarPosition.Subsolar(loader.Times[playback.Current]);
+                state.sunLat = Mathf.Round(subsolar.x * 10f) / 10f;
+                state.sunLon = Mathf.Round(subsolar.y * 10f) / 10f;
+            }
             string json = JsonUtility.ToJson(state);
             if (json == lastReport) return;
             lastReport = json;
@@ -248,9 +283,12 @@ namespace MyAtras
             material.SetFloat("_Mode", 0f);
             material.SetFloat("_Panels", 0f);
             material.SetFloat("_RawObservation", 0f);
+            float now = Time.unscaledTime;
             material.SetTexture("_Weather", loader.Frames[playback.Current]);
             material.SetTexture("_WeatherPrev", loader.Frames[playback.Previous]);
-            material.SetFloat("_Fade", playback.Fade(Time.unscaledTime));
+            material.SetFloat("_Fade", playback.Fade(now));
+            material.SetFloat("_Sunlight", sunlight ? 1f : 0f);
+            material.SetVector("_Sun", SolarPosition.Direction(SolarPosition.Subsolar(SunTime(now))));
             Graphics.Blit(source, destination, material);
         }
 
