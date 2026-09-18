@@ -60,6 +60,24 @@ it was resized to match the ground reference texture.
 
 It is a fixed 2016 composite, not a current observation, and the Unity page says so.
 
+## Bright Star Catalogue — stars (Unity version only)
+
+`dist/assets/stars.png` is drawn by `scripts/build-stars.py` from the Bright Star
+Catalogue, 5th Revised Edition (Hoffleit D., Warren Jr W.H., 1991), as distributed by
+CDS in VizieR catalogue V/50. Only the J2000 positions, V magnitudes and B-V colours
+of the 5,080 stars brighter than magnitude 6.0 are used; no other part of the
+catalogue is included.
+
+- Source: https://cdsarc.cds.unistra.fr/ftp/V/50/catalog.gz
+- 573,921 bytes, SHA-256 `3dc44b1e90be8fbe5bcc7656032560f51275f985c7e3f783c9028e1838ec7bed`;
+  the script refuses any other file
+- Drawn: 2048 x 1024, 202,702 bytes,
+  SHA-256 `b35d3c234c09c7e7c5708201fffb1b22d3fee73013e100839025356dd956f594`;
+  the drawing is deterministic and reproduces this hash
+
+No licence file accompanies the CDS distribution. It is cited here and on the Unity
+page as CDS asks: the authors, the edition and the VizieR catalogue number.
+
 NASA still images are not subject to copyright in the United States and may be
 reused with NASA credited as the source. NASA's insignia and logotype are not
 used here, and nothing in this project implies NASA endorsement.
