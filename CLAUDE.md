@@ -3,7 +3,7 @@
 ## 目的とユーザーの希望
 日本科学未来館のジオ・コスモスのように、青い海と白い雲の地球をブラウザ（特にAndroid Chrome）で操作して、実際の雲の流れを見たい。静止画像を単に回す演出ではなく、SSECの異なる観測時刻を再生することが主目的。
 
-GitHubへの公開コード登録はユーザーが了承済み。GitHub Pagesでの公開も了承済みで、`.github/workflows/pages.yml` が main への push ごとに `dist/` を公開する。公開先は https://ryo-tanohata.github.io/MyAtras/ で、ユーザーはこのURLをAndroid Chromeで開いて確認する。公式の未来館製品と表示しない。展示名「ジオ・コスモス」をサイト名や見出しに使わず、着想元として本文で触れるだけにする（画面上の名称は MYATRAS）。
+GitHubへの公開コード登録はユーザーが了承済み。GitHub Pagesでの公開も了承済みで、`.github/workflows/pages.yml` が main への push ごと、および毎日21:00 UTC（06:00 JST）に `dist/` を公開する。毎日の公開では、まずテストを通してから `scripts/fetch-observations.cjs --frames 24 --every 60` で直近24時間の観測をランナー上で取得し、それを載せて公開する（ランナーはSSECに到達できる。取得に失敗したら同梱の観測をそのまま公開し、その旨をサマリに出す）。取得した画像はcommitしない（1日約5MBで画像は差分が効かない）。代わりに `records/published-observations.json` に公開した観測の時刻・SHA-256・取得元を記録してcommitする。公開先は https://ryo-tanohata.github.io/MyAtras/ で、ユーザーはこのURLをAndroid Chromeで開いて確認する。公式の未来館製品と表示しない。展示名「ジオ・コスモス」をサイト名や見出しに使わず、着想元として本文で触れるだけにする（画面上の名称は MYATRAS）。
 
 ## 起動
 フレームワークやnpmインストールは不要。Python 3で `python -m http.server 8000 --directory dist` を実行し、ブラウザで http://localhost:8000 を開く。
@@ -52,7 +52,7 @@ Unity版は観測を独自取得せず、`dist/weather/` と `dist/data/` の同
 4. 単なるテクスチャ平行移動や生成した雲を実観測として見せない。出典とロゴを維持する。
 
 ## 検証済みと未検証
-`node tests/weather.test.cjs`（9件）、`node tests/weather-playback.test.cjs`（14件）、`node tests/cloud-model.test.cjs`（9件）、`node tests/cloud-simulation.test.cjs`（10件）、`node tests/observation-fade.test.cjs`（8件）、`node tests/fetch-observations.test.cjs`（9件・API模擬サーバー）はこの環境で成功。同梱3,333ベクトルすべてが3時間後まで有限であることも確認済み。
+`node tests/weather.test.cjs`（9件）、`node tests/weather-playback.test.cjs`（15件）、`node tests/cloud-model.test.cjs`（9件）、`node tests/cloud-simulation.test.cjs`（10件）、`node tests/observation-fade.test.cjs`（8件）、`node tests/fetch-observations.test.cjs`（9件・API模擬サーバー）はこの環境で成功。同梱3,333ベクトルすべてが3時間後まで有限であることも確認済み。
 Windows上のChrome（`--headless=new` + SwiftShader）で実描画を確認：配信版の合成表示・13時刻の再生、白黒観測モード、立体の模型モード（3,333地点）、および単体HTMLのfile://単体起動。地球・雲模型のGLSLは実ブラウザでコンパイル・リンク成功。
 2026-09-17、Linuxコンテナの同梱Chromium（SwiftShader）とAndroid幅412×915のタッチ操作エミュレーションでも再確認：地球描画、13時刻が一巡してループ、一時停止で時刻が止まること、白黒観測トグル、可視光への切替（追加取得は失敗し、設計どおり表示中の観測を保持）、立体の模型（3,333地点の移流）、昼夜モード。約56fps。
 Android実機でのUI QA、実機のタッチ操作、実ネットワークでの「最新を取得」は未検証。エミュレーションのタッチは実機の代わりにならない。

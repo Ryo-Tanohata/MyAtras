@@ -1,16 +1,42 @@
 name: Publish site
 
-# Serves dist/ on GitHub Pages. The standalone single-file build is produced here
-# rather than committed, so the published copy is always rebuilt from the same
-# observations the site serves.
+# Serves dist/ on GitHub Pages, and does it once a day as well as on every push, so
+# the globe keeps showing recent weather without anyone at a desk. A GitHub runner
+# can reach SSEC, which neither the agent containers nor a phone can, so the newest
+# day of observations is fetched here, just before the site is built from it.
+#
+# The fetched images are not committed. A day of hourly frames is about 5 MB and
+# images do not diff, so committing them daily would add well over a gigabyte a year
+# to a repository whose source is a few megabytes. What is committed is the record of
+# what was published - records/published-observations.json, a few kilobytes - so the
+# history still says which observations the site was showing on a given day, with the
+# SHA-256 of each one. dist/weather/ keeps its own bundled observations: the copy that
+# works offline, that a fresh clone can check, and that is published when SSEC cannot
+# be reached.
+#
+# The standalone single-file build is produced here rather than committed, so the
+# published copy is always rebuilt from the same observations the site serves.
 
 on:
   push:
     branches: [main]
+    # The record this workflow writes must not start it again.
+    paths-ignore: ['records/**']
+  schedule:
+    # 21:00 UTC is 06:00 in Japan. GitHub runs scheduled jobs late when it is busy,
+    # and stops scheduling them on a repository left untouched for 60 days.
+    - cron: '0 21 * * *'
   workflow_dispatch:
+    inputs:
+      frames:
+        description: 'How many observations to publish'
+        default: '24'
+      every:
+        description: 'Minutes between them'
+        default: '60'
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -19,13 +45,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
+  publish:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Against the bundled observations, before they are replaced: a failure here is
+      # about the code, not about what SSEC served this morning.
       - name: Test suites
         run: |
           for suite in tests/*.test.cjs; do
@@ -33,29 +68,101 @@ jobs:
             node "$suite" || exit 1
           done
 
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      # Re-checks every bundled frame against the SHA-256 in its manifest and
-      # fails the build on a mismatch.
+      # Best effort on purpose. SSEC being unreachable, or serving an observation
+      # under a time it will not confirm, must not take the site down: the bundled
+      # observations are then published instead, and the step says so.
+      - name: Fetch the newest observations
+        id: fetch
+        continue-on-error: true
+        run: |
+          node scripts/fetch-observations.cjs \
+            --frames "${{ inputs.frames || '24' }}" \
+            --every "${{ inputs.every || '60' }}" | tee fetch.log
+
+      - name: Say which observations are being published
+        run: |
+          if [ "${{ steps.fetch.outcome }}" = "success" ]; then
+            echo "Publishing the observations fetched just now." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "SSEC could not be reached; publishing the bundled observations." >> "$GITHUB_STEP_SUMMARY"
+            # A run that failed part way may have left frames behind that no manifest
+            # names; restore the bundled set exactly.
+            git checkout -- dist/weather
+            git clean -fd dist/weather
+          fi
+          node -e '
+            const m = require("./dist/weather/sequence/manifest.json").globalir;
+            console.log(`${m.length} frames, ${m[0].time} to ${m.at(-1).time}`);
+          ' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Re-checks every frame against the SHA-256 recorded for it and fails the build
+      # on a mismatch, so a frame that arrived corrupted never reaches the site.
       - name: Build the standalone export
         run: python scripts/export-html.py
+
+      - name: Find the browser on the runner
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "No Chromium or Chrome on this runner image." >&2
+            exit 1
+          fi
+          echo "CHROMIUM=$CHROME" >> "$GITHUB_ENV"
+
+      # What is about to be published is opened and looked at first: a globe that
+      # stopped drawing, or a frame that will not load, fails here rather than on
+      # someone's phone.
+      - name: The site plays the observations it is about to publish
+        run: node tools/check-webgl.cjs --shots
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Record what was published
+        if: steps.fetch.outcome == 'success'
+        run: |
+          mkdir -p records
+          node -e '
+            const fs = require("fs");
+            const frames = JSON.parse(fs.readFileSync("dist/weather/sequence/manifest.json", "utf8")).globalir;
+            const snapshot = JSON.parse(fs.readFileSync("dist/weather/snapshot.json", "utf8"));
+            fs.writeFileSync("records/published-observations.json", JSON.stringify({
+              published: new Date().toISOString(),
+              run: process.env.GITHUB_RUN_ID,
+              first: frames[0].time,
+              last: frames.at(-1).time,
+              count: frames.length,
+              megabytes: +(frames.reduce((s, f) => s + f.bytes, 0) / 1048576).toFixed(2),
+              frames: frames.map(f => ({ time: f.time, sha256: f.sha256, source: f.source })),
+              snapshot: Object.fromEntries(Object.entries(snapshot)
+                .map(([k, v]) => [k, { time: v.time, sha256: v.sha256 }])),
+            }, null, 1) + "\n");
+          '
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add records/published-observations.json
+          if git diff --cached --quiet; then
+            echo "The same observations as last time; nothing to record."
+            exit 0
+          fi
+          git commit -m "Record the observations published on $(date -u +%Y-%m-%d)"
+          # Someone may have pushed while this ran. The record is not worth failing a
+          # publish that already succeeded, so try once and leave it for tomorrow.
+          git pull --rebase --quiet origin main && git push origin HEAD:main || \
+            echo "Could not push the record; the publish itself succeeded."
+
+      - name: Keep the screenshots and the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-observations
+          path: |
+            .check-shots/
+            fetch.log
+            records/published-observations.json
+          if-no-files-found: ignore

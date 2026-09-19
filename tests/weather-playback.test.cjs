@@ -4,6 +4,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { install, suite } = require('./harness.cjs');
 
 const env = install([
@@ -93,19 +94,36 @@ s.test('changing the number stops playback rather than mixing two lengths', () =
   assert.strictEqual(playback.frameCount, 25);
 });
 
-s.test('the bundled sequence holds 13 distinct ordered observations', () => {
-  assert.strictEqual(TIMES.length, 13, 'thirteen observation times');
+s.test('the bundled sequence is distinct observations in order, evenly spaced', () => {
+  assert.ok(TIMES.length >= 2, `a time-lapse needs at least two observations, has ${TIMES.length}`);
   assert.deepStrictEqual(TIMES, [...new Set(TIMES)].sort(), 'distinct and in order');
-  assert.strictEqual(TIMES[0], '20260916.090000');
-  assert.strictEqual(TIMES[12], '20260916.210000');
-  const hours = TIMES.map(t => W.parseTime(t).getTime());
-  for (let i = 1; i < hours.length; i++) {
-    assert.strictEqual(hours[i] - hours[i - 1], 3600000, 'one hour between observations');
+
+  const stamps = TIMES.map(t => {
+    const date = W.parseTime(t);
+    assert.ok(date, `${t} is a readable observation time`);
+    return date.getTime();
+  });
+  const step = stamps[1] - stamps[0];
+  assert.ok(step > 0, 'time moves forward');
+  for (let i = 1; i < stamps.length; i++) {
+    assert.strictEqual(stamps[i] - stamps[i - 1], step,
+      'the same gap between every pair, so playback runs at one rate');
   }
+});
+
+// The manifest is what the standalone export and any later refresh are checked
+// against, so it has to describe the files that are actually there.
+s.test('every bundled frame is the one its manifest entry describes', () => {
   for (const frame of MANIFEST.globalir) {
     assert.ok(/^[0-9a-f]{64}$/.test(frame.sha256), 'each frame records its SHA-256');
     assert.ok(frame.source.includes('products=globalir_' + frame.time.replace('.', '_')),
       'each frame records the request it came from');
+
+    const file = path.join(__dirname, '..', 'dist', 'weather', 'sequence', frame.file);
+    const bytes = fs.readFileSync(file);
+    assert.strictEqual(crypto.createHash('sha256').update(bytes).digest('hex'), frame.sha256,
+      `${frame.file} holds the bytes the manifest recorded`);
+    assert.strictEqual(bytes.length, frame.bytes);
   }
 });
 

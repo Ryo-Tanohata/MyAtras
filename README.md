@@ -68,9 +68,18 @@ Altitude is estimated from pressure under a standard-atmosphere approximation. D
 
 ## Published site
 
-`.github/workflows/pages.yml` runs the three test suites, rebuilds the standalone
-export and publishes `dist/` to GitHub Pages on every push to `main`:
-https://ryo-tanohata.github.io/MyAtras/ . A Unity WebGL build of the same globe is
+`.github/workflows/pages.yml` publishes `dist/` to GitHub Pages at
+https://ryo-tanohata.github.io/MyAtras/ - on every push to `main`, and once a day at
+21:00 UTC. Each publish runs the test suites against the bundled observations, then
+fetches the newest day of them from SSEC (24 frames an hour apart by default; the
+workflow can be started by hand with other numbers), rebuilds the standalone export,
+opens the site in headless Chromium, and only then deploys.
+
+The fetch is best effort: if SSEC cannot be reached, or serves an observation under a
+time it will not confirm, the bundled observations are published instead and the run
+says so. The fetched images are not committed - a day of frames is about 5 MB and
+images do not diff - but `records/published-observations.json` is, so the history says
+which observations the site was showing on a given day, with the SHA-256 of each. A Unity WebGL build of the same globe is
 published from `dist/unity/` at https://ryo-tanohata.github.io/MyAtras/unity/ . It adds
 what the JavaScript globe does not have: sunlight from where the sun actually was at
 each observation's time, NASA Black Marble city lights on the night side, an
