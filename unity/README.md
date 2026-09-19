@@ -126,6 +126,21 @@ observation, so the clouds never drift from what was observed; only the motion i
 between is estimated. Pausing holds the globe where it is, part way between two
 observations.
 
+The model loops without a cut. It plays the newest 48 hours - a whole number of days -
+and hands the end over to the start across 12 hours: for the first 12 steps of the
+loop, the observations that follow its end are carried on as usual and faded out while
+its own start is carried on and faded in, both going forward in time, so the clouds
+keep moving while one day's sky gives way to another's. Because the window is whole
+days, the two overlaid times are at the same hour of the day, and blending their suns
+moves the terminator only by the change in declination over two days, under a degree.
+The page says while two days are overlaid, and that it is not an observation. The
+oldest observations before the window are not in the loop; "observations only" still
+plays all of them and cuts back to the first. `Assets/Editor/PlaybackCheck.cs` checks
+the window, the seam and that nothing jumps where it wraps. Watched screenshot by
+screenshot with day and night and the stars off, the cut in "observations only" is a
+jump of 49.2% of the globe's pixels; the model's seam changes by at most 33.0%, inside
+the range of its ordinary steps (28.1% at the 90th percentile, 38.1% at most).
+
 How much of the change between observations the wind explains was measured on the
 bundled three days (23 intervals of three hours, 1.7 million cloudy samples): carrying
 the earlier observation over the whole interval and comparing it with the later one,

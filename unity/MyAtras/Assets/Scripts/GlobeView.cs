@@ -87,6 +87,9 @@ namespace MyAtras
             public string windTime;  // the wind's observation stamp; empty if it could not be read
             public bool windEachTime; // the wind is the observed wind at each observation's own time
             public bool motionMeasured; // clouds are carried by the motion measured between observations
+            public bool seam;        // the loop's end is being overlaid on its start
+            public int loopHours;    // hours in the model's loop; 0 if it cuts back to the start
+            public int seamHours;    // hours over which the loop's end is handed over
             public int windTexels;   // one-degree texels with observed wind
             public float sunLat;     // subsolar point at the observation time, degrees
             public float sunLon;     // east positive
@@ -138,7 +141,7 @@ namespace MyAtras
             material.SetFloat("_LandOn", loader.Land != null ? 1f : 0f);
             material.SetVector("_Watermark", loader.Watermark);
             material.SetFloat("_WeatherActive", 1f);
-            playback = new ObservationPlayback(loader.Frames.Count, Time.unscaledTime) { Model = model };
+            playback = new ObservationPlayback(loader.Times, Time.unscaledTime) { Model = model };
             loaded = true;
         }
 
@@ -280,6 +283,12 @@ namespace MyAtras
             flow = on != 0;
         }
 
+        /// <summary>Hours between consecutive stored observations.</summary>
+        double StepHours()
+        {
+            return loader.Times.Count >= 2 ? (loader.Times[1] - loader.Times[0]).TotalHours : 1.0;
+        }
+
         /// <summary>
         /// Seconds of the atmosphere's time per playback step: the gap between the two
         /// observations on screen, or between the first two on the step back to the start.
@@ -307,11 +316,15 @@ namespace MyAtras
         /// </summary>
         DateTime SunTime(float now)
         {
-            DateTime current = loader.Times[playback.Current];
-            float fade = playback.Fade(now);
-            if (fade >= 1f) return current;
-            DateTime previous = loader.Times[playback.Previous];
-            return previous + TimeSpan.FromTicks((long)((current - previous).Ticks * fade));
+            return Between(playback.Previous, playback.Current, playback.Fade(now));
+        }
+
+        DateTime Between(int previous, int current, float fade)
+        {
+            DateTime later = loader.Times[current];
+            if (fade >= 1f) return later;
+            DateTime earlier = loader.Times[previous];
+            return earlier + TimeSpan.FromTicks((long)((later - earlier).Ticks * fade));
         }
 
         // ------------------------------------------------ told to the page
@@ -326,9 +339,11 @@ namespace MyAtras
         void Report()
         {
             if (loader == null) return;
+            // During the loop's seam the page names whichever observation mostly shows.
+            int shownIndex = loaded ? playback.Shown(Time.unscaledTime) : 0;
             long key = (loaded ? 1L : loadFinished ? 2L : 0L)
                        | (long)(loaded ? loader.Frames.Count : loader.Progress) << 2
-                       | (long)(loaded ? playback.Current : 0) << 10
+                       | (long)shownIndex << 10
                        | (loaded && playback.Playing ? 1L : 0L) << 18
                        | (!loaded || playback.Dissolve ? 1L : 0L) << 19
                        | (sunlight ? 1L : 0L) << 20
@@ -337,7 +352,8 @@ namespace MyAtras
                        | (flow ? 1L : 0L) << 23
                        | (loader.Error != null ? 1L : 0L) << 24
                        | (long)Mathf.RoundToInt(renderScale * 20f) << 25
-                       | (model ? 1L : 0L) << 31;
+                       | (model ? 1L : 0L) << 31
+                       | (loaded && playback.Overlaid ? 1L : 0L) << 32;
             if (key == lastReportKey) return;
             lastReportKey = key;
             if (loaded && stampArray == null) stampArray = ToArray(loader.Stamps);
@@ -347,8 +363,8 @@ namespace MyAtras
                 state = loaded ? "ready" : loadFinished ? "error" : "loading",
                 loadedCount = loaded ? loader.Frames.Count : loader.Progress,
                 expected = loader.Expected,
-                index = loaded ? playback.Current : 0,
-                time = loaded ? loader.Stamps[playback.Current] : "",
+                index = shownIndex,
+                time = loaded ? loader.Stamps[shownIndex] : "",
                 times = loaded ? stampArray : new string[0],
                 playing = loaded && playback.Playing,
                 dissolve = !loaded || playback.Dissolve,
@@ -360,7 +376,10 @@ namespace MyAtras
                 cloudRelief = cloudRelief,
                 landMap = loader.Land != null,
                 flow = flow,
-                windTime = loaded && WindFor(playback.Current) != loader.Wind ? loader.Stamps[playback.Current] : loader.WindStamp,
+                windTime = loaded && WindFor(shownIndex) != loader.Wind ? loader.Stamps[shownIndex] : loader.WindStamp,
+                seam = loaded && playback.Overlaid,
+                loopHours = loaded && playback.Seam > 0 ? (int)Math.Round(StepHours() * playback.LoopLength) : 0,
+                seamHours = loaded && playback.Seam > 0 ? (int)Math.Round(StepHours() * playback.Seam) : 0,
                 windEachTime = loader.WindsLoaded > 0,
                 motionMeasured = loader.MotionsLoaded > 0,
                 windTexels = loader.WindTexels,
@@ -369,7 +388,7 @@ namespace MyAtras
             };
             if (loaded)
             {
-                Vector2 subsolar = SolarPosition.Subsolar(loader.Times[playback.Current]);
+                Vector2 subsolar = SolarPosition.Subsolar(loader.Times[shownIndex]);
                 state.sunLat = Mathf.Round(subsolar.x * 10f) / 10f;
                 state.sunLon = Mathf.Round(subsolar.y * 10f) / 10f;
             }
@@ -419,10 +438,39 @@ namespace MyAtras
                 ? (float)(loader.Times[playback.Current] - loader.Times[playback.Previous]).TotalSeconds
                 : 0f);
             DateTime shown = SunTime(now);
+            Vector3 sun = SolarPosition.Direction(SolarPosition.Subsolar(shown));
+            double sidereal = SolarPosition.GreenwichSiderealDegrees(shown);
+            float overlay = playback.OverlayWeight(now);
+            if (overlay > 0f)
+            {
+                // The overlaid pair is a whole number of days away, so its sun stands at the
+                // same hour of the day; blending the two only moves the terminator by the
+                // change of the sun's declination over those days, under a degree.
+                DateTime shownB = Between(playback.OverlayPrevious, playback.OverlayCurrent, playback.Fade(now));
+                sun = Vector3.Slerp(sun, SolarPosition.Direction(SolarPosition.Subsolar(shownB)), overlay).normalized;
+                double otherSidereal = SolarPosition.GreenwichSiderealDegrees(shownB);
+                sidereal += overlay * ((((otherSidereal - sidereal) % 360.0) + 540.0) % 360.0 - 180.0);
+            }
             material.SetFloat("_Sunlight", sunlight ? 1f : 0f);
-            material.SetVector("_Sun", SolarPosition.Direction(SolarPosition.Subsolar(shown)));
+            material.SetVector("_Sun", sun);
             material.SetFloat("_StarsOn", stars && loader.Stars != null ? 1f : 0f);
-            material.SetFloat("_Sidereal", (float)(SolarPosition.GreenwichSiderealDegrees(shown) * Math.PI / 180.0));
+            material.SetFloat("_Sidereal", (float)(sidereal * Math.PI / 180.0));
+
+            // The loop's seam: the observations after the loop's end, carried on in time and
+            // faded out while the loop's start fades in (ObservationPlayback).
+            material.SetFloat("_OverlayOn", overlay);
+            if (overlay > 0f)
+            {
+                material.SetTexture("_WeatherB", loader.Frames[playback.OverlayCurrent]);
+                material.SetTexture("_WeatherPrevB", loader.Frames[playback.OverlayPrevious]);
+                Texture2D measuredB = playback.OverlayPrevious < loader.Motions.Count
+                    ? loader.Motions[playback.OverlayPrevious] : null;
+                if (measuredB != null) material.SetTexture("_MotionB", measuredB);
+                material.SetFloat("_MotionOnB", measuredB != null ? 1f : 0f);
+                material.SetFloat("_AdvectB", model ? 1f : 0f);
+                material.SetFloat("_GapB", (float)(loader.Times[playback.OverlayCurrent]
+                                                   - loader.Times[playback.OverlayPrevious]).TotalSeconds);
+            }
             material.SetFloat("_CloudRelief", cloudRelief ? 1f : 0f);
             // Each observation's own wind; the interval between two uses both, and the flow
             // lines are drawn from whichever observation is nearer in time.

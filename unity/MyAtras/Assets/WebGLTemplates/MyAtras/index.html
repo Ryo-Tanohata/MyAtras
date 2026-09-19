@@ -97,6 +97,14 @@
       send('SetIntervalMs', stepMs());
       send('SetDissolve', $('smoothObservations').checked ? 1 : 0);
       send('SetModel', motion === 'model' ? 1 : 0);
+      if (s.loopHours > 0) {
+        // How the model loops, in its own numbers.
+        MOTION_NOTE.model += '模型の再生は新しい方の' + Math.round(s.loopHours / 24) + '日分をくり返します。' +
+          '最後の' + s.seamHours + '時間と最初の' + s.seamHours + '時間はどちらも時間を進めながら重ね、少しずつ入れ替えてつなぎます。' +
+          'その間は' + Math.round(s.loopHours / 24) + '日違いの観測を重ねた表示で、観測ではありません。' +
+          '同じ時刻帯どうしを重ねるので、昼と夜の境目はほとんど動きません。';
+        if (motion === 'model') $('motionNote').textContent = MOTION_NOTE.model;
+      }
       send('SetSunlight', $('sunlight').checked ? 1 : 0);
       send('SetStars', $('stars').checked ? 1 : 0);
       send('SetCloudRelief', $('cloudRelief').checked ? 1 : 0);
@@ -127,7 +135,9 @@
     $('weatherTime').value = String(s.index);
     $('weatherPlay').textContent = s.playing ? '❚❚ 一時停止' : '▶ 雲の流れを再生';
     $('weatherPlay').setAttribute('aria-pressed', String(s.playing));
-    $('weatherPlaybackStatus').textContent = s.playing
+    $('weatherPlaybackStatus').textContent = s.playing && s.seam
+      ? '風で流す模型 · ループのつなぎ目：' + Math.round(s.loopHours / 24) + '日違いの観測を重ねて戻しています'
+      : s.playing
       ? (s.model ? '風で流す模型 · ' : '実観測を連続再生 · ') + (s.index + 1) + ' / ' + count + ' 時刻' +
         (s.model ? 'の観測へ' : '') + (s.index === 0 ? ' · 先頭から' : '')
       : '一時停止 · ' + (s.index + 1) + ' / ' + count + ' 観測';

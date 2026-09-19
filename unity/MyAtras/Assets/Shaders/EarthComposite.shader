@@ -23,6 +23,9 @@ Shader "MyAtras/EarthComposite"
         _WindNext ("Observed wind at the later observation", 2D) = "black" {}
         _FlowWind ("Observed wind the flow lines are drawn from", 2D) = "black" {}
         _Motion ("Cloud motion measured between the two observations", 2D) = "black" {}
+        _WeatherB ("Overlaid observation at the loop's seam", 2D) = "black" {}
+        _WeatherPrevB ("Overlaid previous observation at the loop's seam", 2D) = "black" {}
+        _MotionB ("Cloud motion of the overlaid pair", 2D) = "black" {}
         _AirDepth ("Optical depth to the sun", 2D) = "black" {}
     }
 
@@ -87,6 +90,13 @@ Shader "MyAtras/EarthComposite"
             // -_MotionScale..+_MotionScale m/s, confidence in blue. Two degrees a texel.
             sampler2D _Motion;
             float _MotionOn, _MotionScale;
+            // The loop's seam (ObservationPlayback): while the end of the loop is handed
+            // over to its start, a second pair of observations - with its own motion - is
+            // carried the same way and overlaid, _OverlayOn being its weight.
+            sampler2D _WeatherB;
+            sampler2D _WeatherPrevB;
+            sampler2D _MotionB;
+            float _OverlayOn, _AdvectB, _GapB, _MotionOnB;
 
             // Cloud-top height is exaggerated tenfold so it can be seen at all: 15 km at the
             // top of the troposphere, as an angle on the unit sphere, times ten.
@@ -149,7 +159,7 @@ Shader "MyAtras/EarthComposite"
             // could not be measured (clear sky, or no clear best match), the observed wind at
             // each of their times, averaged; where no wind was observed either, the general
             // circulation.
-            float2 WindAt(float2 lonLat)
+            float2 WindOf(float2 lonLat, sampler2D motion, float motionOn)
             {
                 float4 at = float4((lonLat.x + 180.0) / 360.0, (lonLat.y + 90.0) / 180.0, 0.0, 0.0);
                 float4 before = tex2Dlod(_Wind, at);
@@ -157,9 +167,9 @@ Shader "MyAtras/EarthComposite"
                 float2 climate = ClimateWind(lonLat.y);
                 float2 wind = 0.5 * (lerp(climate, (before.rg - 0.5) * 80.0, saturate(before.b)) +
                                      lerp(climate, (after.rg - 0.5) * 80.0, saturate(after.b)));
-                if (_MotionOn > 0.5)
+                if (motionOn > 0.5)
                 {
-                    float4 measured = tex2Dlod(_Motion, at);
+                    float4 measured = tex2Dlod(motion, at);
                     wind = lerp(wind, (measured.rg - 0.5) * 2.0 * _MotionScale, saturate(measured.b));
                 }
                 return wind;
@@ -189,16 +199,30 @@ Shader "MyAtras/EarthComposite"
                 return tex2Dlod(image, float4(lonLat.x / 360.0 + 0.5, 1.0 - my, 0.0, 0.0));
             }
 
-            // The two observations on screen at a point. With the model off, or on the step
-            // back to the start of the sequence (_Gap 0), both are sampled in place, which
-            // is the plain dissolve.
+            // A pair of observations at a point, carried towards each other. With the model
+            // off, or on a step that does not follow on (gap 0), both are sampled in place,
+            // which is the plain dissolve.
+            void PairOf(sampler2D earlier, sampler2D later, sampler2D motion, float motionOn,
+                        float advect, float gap, float2 lonLat, out float4 now, out float4 was)
+            {
+                float2 wind = WindOf(lonLat, motion, motionOn);
+                float since = advect * _Fade * gap;
+                float until = advect * (1.0 - _Fade) * gap;
+                was = ObservedAt(earlier, Carried(lonLat, wind, -since));
+                now = ObservedAt(later, Carried(lonLat, wind, until));
+            }
+
+            // The two observations on screen.
             void Pair(float2 lonLat, out float4 now, out float4 was)
             {
-                float2 wind = WindAt(lonLat);
-                float since = _Advect * _Fade * _Gap;
-                float until = _Advect * (1.0 - _Fade) * _Gap;
-                was = ObservedAt(_WeatherPrev, Carried(lonLat, wind, -since));
-                now = ObservedAt(_Weather, Carried(lonLat, wind, until));
+                PairOf(_WeatherPrev, _Weather, _Motion, _MotionOn, _Advect, _Gap, lonLat, now, was);
+            }
+
+            // The overlaid pair at the loop's seam. Where no wind was observed it falls back
+            // on the other pair's observed wind; its own measured motion covers most of it.
+            void PairB(float2 lonLat, out float4 now, out float4 was)
+            {
+                PairOf(_WeatherPrevB, _WeatherB, _MotionB, _MotionOnB, _AdvectB, _GapB, lonLat, now, was);
             }
 
             // Cloud cover and relative cloud-top height at a point on the globe, from the two
@@ -212,12 +236,22 @@ Shader "MyAtras/EarthComposite"
             {
                 float lat = asin(clamp(at.y, -1.0, 1.0));
                 if (abs(lat) >= MERCATOR_LIMIT) return float2(0.0, 0.0);
+                float2 lonLat = float2(degrees(atan2(at.x, at.z)), degrees(lat));
                 float4 now, was;
-                Pair(float2(degrees(atan2(at.x, at.z)), degrees(lat)), now, was);
+                Pair(lonLat, now, was);
                 float3 luma = float3(0.299, 0.587, 0.114);
                 float bNow = dot(now.rgb, luma), bWas = dot(was.rgb, luma);
                 float cover = lerp(smoothstep(0.38, 0.82, bWas) * was.a, smoothstep(0.38, 0.82, bNow) * now.a, _Fade);
                 float height = lerp(smoothstep(0.38, 1.0, bWas) * was.a, smoothstep(0.38, 1.0, bNow) * now.a, _Fade);
+                if (_OverlayOn > 0.001)
+                {
+                    PairB(lonLat, now, was);
+                    bNow = dot(now.rgb, luma); bWas = dot(was.rgb, luma);
+                    float coverB = lerp(smoothstep(0.38, 0.82, bWas) * was.a, smoothstep(0.38, 0.82, bNow) * now.a, _Fade);
+                    float heightB = lerp(smoothstep(0.38, 1.0, bWas) * was.a, smoothstep(0.38, 1.0, bNow) * now.a, _Fade);
+                    cover = lerp(cover, coverB, _OverlayOn);
+                    height = lerp(height, heightB, _OverlayOn);
+                }
                 return float2(cover, height);
             }
 
@@ -458,6 +492,17 @@ Shader "MyAtras/EarthComposite"
                             float cloudNow = smoothstep(0.38, 0.82, dot(observed.rgb, luma)) * observed.a;
                             float cloudWas = smoothstep(0.38, 0.82, dot(earlier.rgb, luma)) * earlier.a;
                             float cloud = lerp(cloudWas, cloudNow, _Fade);
+                            if (_OverlayOn > 0.001)
+                            {
+                                // The loop's seam: the end of the loop and its start, each carried
+                                // on in time, overlaid and handed over (ObservationPlayback).
+                                // Each still goes through the threshold on its own.
+                                float4 observedB, earlierB;
+                                PairB(float2((uv.x - 0.5) * 360.0, degrees(lat)), observedB, earlierB);
+                                float cloudB = lerp(smoothstep(0.38, 0.82, dot(earlierB.rgb, luma)) * earlierB.a,
+                                                    smoothstep(0.38, 0.82, dot(observedB.rgb, luma)) * observedB.a, _Fade);
+                                cloud = lerp(cloud, cloudB, _OverlayOn);
+                            }
                             float3 cloudColour = float3(0.95, 0.97, 1.0);
                             float3 groundLit = color;
                             float sunSine = dot(q, _Sun.xyz);
