@@ -9,3 +9,10 @@ main{min-height:1040px;height:auto}.stage{height:820px;align-self:start;position
 #weatherPlay{width:100%;background:#c0dcde;color:#10202a}#weatherPlaybackStatus{min-height:24px;font-size:13px;color:#b1d3d5}
 
 .weather-controls .toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 4px;border-top:1px solid #24313d;min-height:48px;font-size:14px}.weather-controls .toggle span{display:block;flex:none}.weather-controls .toggle input{width:40px;height:24px;margin:0}@media(max-width:900px){main{max-height:none}}
+/* The panel's explanations, folded away so the switches stay within reach of each
+   other on a phone. The limitation a viewer needs while using a control stays
+   outside, in one line; everything else lives behind this summary. */
+.weather-controls details.notes{margin:14px 0 4px;border-top:1px solid #24313d;padding-top:10px}
+.weather-controls details.notes>summary{font-size:13px;color:#93a7b7;cursor:pointer;min-height:36px;display:flex;align-items:center}
+.weather-controls details.notes>summary::marker{color:#6d8496}
+.weather-controls details.notes .weather-note:first-of-type{margin-top:4px}
