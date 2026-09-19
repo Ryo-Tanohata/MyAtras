@@ -44,6 +44,16 @@ namespace MyAtras
         public IReadOnlyList<Texture2D> Winds => winds;
         /// <summary>How many frames have their own time's wind.</summary>
         public int WindsLoaded { get; private set; }
+        /// <summary>
+        /// How the clouds moved from each frame to the next, measured from the two
+        /// observations themselves (dist/data/motion/, scripts/build-motion.cjs), indexed by
+        /// the earlier frame; null where there is none, leaving that interval to the wind.
+        /// </summary>
+        public IReadOnlyList<Texture2D> Motions => motions;
+        /// <summary>How many intervals have a measured motion.</summary>
+        public int MotionsLoaded { get; private set; }
+        /// <summary>The m/s either way that a motion image's red and green span.</summary>
+        public float MotionScale { get; private set; } = 80f;
         /// <summary>The stored observations, oldest first, as the manifest lists them.</summary>
         public IReadOnlyList<Texture2D> Frames => frames;
         /// <summary>Each frame's observation time in UTC and JST, in ASCII, for the editor.</summary>
@@ -62,6 +72,22 @@ namespace MyAtras
         readonly List<string> stamps = new List<string>();
         readonly List<DateTime> times = new List<DateTime>();
         readonly List<Texture2D> winds = new List<Texture2D>();
+        readonly List<Texture2D> motions = new List<Texture2D>();
+
+        [Serializable]
+        class MotionEntry
+        {
+            public string from;
+            public string to;
+            public string file;
+        }
+
+        [Serializable]
+        class MotionManifest
+        {
+            public float scale;
+            public List<MotionEntry> intervals;
+        }
 
         [Serializable]
         class WindEntry
@@ -246,6 +272,42 @@ namespace MyAtras
                 }
                 winds.Add(wind);
                 if (wind != null) WindsLoaded++;
+            }
+
+            // The measured motion between each frame and the next. Used only for the pair
+            // it was measured from - the same two times - and optional like the winds.
+            var motionFiles = new Dictionary<string, string>();
+            string motionManifestJson = null;
+            yield return Text(root + "data/motion/manifest.json", text => motionManifestJson = text);
+            if (motionManifestJson != null)
+            {
+                try
+                {
+                    MotionManifest motionManifest = JsonUtility.FromJson<MotionManifest>(motionManifestJson);
+                    if (motionManifest != null && motionManifest.scale > 0f) MotionScale = motionManifest.scale;
+                    if (motionManifest?.intervals != null)
+                    {
+                        foreach (MotionEntry entry in motionManifest.intervals)
+                        {
+                            if (!string.IsNullOrEmpty(entry.from) && !string.IsNullOrEmpty(entry.file))
+                                motionFiles[entry.from + ">" + entry.to] = entry.file;
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("MyAtras: the motion manifest could not be read: " + e.Message);
+                }
+            }
+            for (int k = 0; k + 1 < stamps.Count; k++)
+            {
+                Texture2D measured = null;
+                if (motionFiles.TryGetValue(stamps[k] + ">" + stamps[k + 1], out string file))
+                {
+                    yield return Texture(root + "data/motion/" + file, TextureWrapMode.Repeat, texture => measured = texture);
+                }
+                motions.Add(measured);
+                if (measured != null) MotionsLoaded++;
             }
         }
 

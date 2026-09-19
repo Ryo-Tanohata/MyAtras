@@ -117,6 +117,13 @@ jobs:
             console.log(`${m.length} frames, ${m[0].time} to ${m.at(-1).time}`);
           ' | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # The measured motion belongs to the observations it was measured from, so it is
+      # rebuilt whenever they are replaced. No network: scripts/build-motion.cjs reads
+      # only the frames just fetched. A test holds each field to its two frames.
+      - name: Measure the cloud motion between the fetched observations
+        if: steps.fetch.outcome == 'success'
+        run: node scripts/build-motion.cjs
+
       # The suites ran above against the bundled observations; this runs them against
       # the ones just fetched, before anything is published or committed. A fetched set
       # the suites reject is neither - the first `commit` run bundled 24 observations

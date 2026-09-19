@@ -1,0 +1,236 @@
+{
+ "method": "scripts/build-motion.cjs: block matching of the drawn cloud layer between consecutive observations; 8-degree blocks every 3 degrees within 66 degrees of the equator, searched to 650 km; median outlier replacement and confidence-weighted smoothing. An estimate of the motion between two observed times, not an observation.",
+ "scale": 80,
+ "intervals": [
+  {
+   "from": "20260916.060000",
+   "to": "20260916.090000",
+   "file": "motion_20260916_060000.png",
+   "fromSha256": "d75826811404bf711287a1ced9a59b9614dfcb0e7a38650ca2a096ff79f234c4",
+   "toSha256": "9dab27b19c62caac4e1bbec207c04686d058b33d4f9c37187a37a0b89280fa1f",
+   "sha256": "5eec625b3de189b8796a4ef410046acdc6ae8710f97bc8ffc1147a44e3a42b36",
+   "bytes": 19615,
+   "confidentShare": 0.684
+  },
+  {
+   "from": "20260916.090000",
+   "to": "20260916.120000",
+   "file": "motion_20260916_090000.png",
+   "fromSha256": "9dab27b19c62caac4e1bbec207c04686d058b33d4f9c37187a37a0b89280fa1f",
+   "toSha256": "a0b872140c2e746165bec6583e213a823e257e53429f7982c07f4cdc97d17e49",
+   "sha256": "d8d43d796085d7021666b803215a6ddb620d14ec348b1d4d22931f5c5a79b603",
+   "bytes": 19386,
+   "confidentShare": 0.679
+  },
+  {
+   "from": "20260916.120000",
+   "to": "20260916.150000",
+   "file": "motion_20260916_120000.png",
+   "fromSha256": "a0b872140c2e746165bec6583e213a823e257e53429f7982c07f4cdc97d17e49",
+   "toSha256": "34438cd73043aa2106dc7937d453dc2cf565930df6700a3a9af34d0e0f564ab7",
+   "sha256": "1c5b0452213b06655d39cec74f1e9237f2e49df098d02e07b2f1febc4b1f40fc",
+   "bytes": 19406,
+   "confidentShare": 0.681
+  },
+  {
+   "from": "20260916.150000",
+   "to": "20260916.180000",
+   "file": "motion_20260916_150000.png",
+   "fromSha256": "34438cd73043aa2106dc7937d453dc2cf565930df6700a3a9af34d0e0f564ab7",
+   "toSha256": "89b35e2a43256b4c5aeae27c96ef5b34b444275cd03ef842531eac0643d82f81",
+   "sha256": "53e9ea46da4b31ee03c13d0b92ad807ef355e2a0a08184834e6970d76f368003",
+   "bytes": 19284,
+   "confidentShare": 0.684
+  },
+  {
+   "from": "20260916.180000",
+   "to": "20260916.210000",
+   "file": "motion_20260916_180000.png",
+   "fromSha256": "89b35e2a43256b4c5aeae27c96ef5b34b444275cd03ef842531eac0643d82f81",
+   "toSha256": "438b4eae6833e28c9f2f9b3e7e6ae641fe9872ff2a33505313a1a474edcfd66a",
+   "sha256": "fbad96c27d11dc26f8313cff09405c1f00f783edc85d7d8768a5d8e3e2cd1d28",
+   "bytes": 19253,
+   "confidentShare": 0.699
+  },
+  {
+   "from": "20260916.210000",
+   "to": "20260917.000000",
+   "file": "motion_20260916_210000.png",
+   "fromSha256": "438b4eae6833e28c9f2f9b3e7e6ae641fe9872ff2a33505313a1a474edcfd66a",
+   "toSha256": "9d79aaa5d91fc28e7b3ef9cf24bad8ded2b74725168aa3434a2bd109a842fbca",
+   "sha256": "31fe2d887023ef586f16818d8775847ebf43f86d208e81807fd6d1f3a89718f0",
+   "bytes": 19457,
+   "confidentShare": 0.698
+  },
+  {
+   "from": "20260917.000000",
+   "to": "20260917.030000",
+   "file": "motion_20260917_000000.png",
+   "fromSha256": "9d79aaa5d91fc28e7b3ef9cf24bad8ded2b74725168aa3434a2bd109a842fbca",
+   "toSha256": "e036957e086a71b0650a85aeb51a7e5ff103d2eb20e6c4c4a4cd6d902370e2ba",
+   "sha256": "8ad87bd051495e576281e19df188e5452ce1cea3ac372712f13c0cba336cd83e",
+   "bytes": 19696,
+   "confidentShare": 0.701
+  },
+  {
+   "from": "20260917.030000",
+   "to": "20260917.060000",
+   "file": "motion_20260917_030000.png",
+   "fromSha256": "e036957e086a71b0650a85aeb51a7e5ff103d2eb20e6c4c4a4cd6d902370e2ba",
+   "toSha256": "ab79cc62276ddd2a17027d57d1d2249b7ca0355faa3daf40b184ecf5b0f3a53a",
+   "sha256": "64840f117789612aa6e2be91a38448835ade3494fa36aec93e14259399a102aa",
+   "bytes": 19043,
+   "confidentShare": 0.7
+  },
+  {
+   "from": "20260917.060000",
+   "to": "20260917.090000",
+   "file": "motion_20260917_060000.png",
+   "fromSha256": "ab79cc62276ddd2a17027d57d1d2249b7ca0355faa3daf40b184ecf5b0f3a53a",
+   "toSha256": "d9203334043c199def8351981c52e7e4ee93311b17be5b98d5b890f39b3221df",
+   "sha256": "7eea0cc5bf1e5c8bbf04749b875dc2088c9d0ae1bb8da263534da0f66ffbf54f",
+   "bytes": 19065,
+   "confidentShare": 0.697
+  },
+  {
+   "from": "20260917.090000",
+   "to": "20260917.120000",
+   "file": "motion_20260917_090000.png",
+   "fromSha256": "d9203334043c199def8351981c52e7e4ee93311b17be5b98d5b890f39b3221df",
+   "toSha256": "62f7bda48485cd24ab2070ff090769e60edc228f65ba97c7b4c99ecd7d76f60d",
+   "sha256": "d402a910b8bc04d431b0f60869ff96da420d73b6f2a61731c13d4d28f7220c4c",
+   "bytes": 19185,
+   "confidentShare": 0.707
+  },
+  {
+   "from": "20260917.120000",
+   "to": "20260917.150000",
+   "file": "motion_20260917_120000.png",
+   "fromSha256": "62f7bda48485cd24ab2070ff090769e60edc228f65ba97c7b4c99ecd7d76f60d",
+   "toSha256": "56064560c567b98bde16ac3bd1f803587c85e2842a67cc41bfeb29630ebaddcc",
+   "sha256": "09c53cf144e6960390ec984f6b8479b4aae7f9744af41b242db668414a854062",
+   "bytes": 19252,
+   "confidentShare": 0.711
+  },
+  {
+   "from": "20260917.150000",
+   "to": "20260917.180000",
+   "file": "motion_20260917_150000.png",
+   "fromSha256": "56064560c567b98bde16ac3bd1f803587c85e2842a67cc41bfeb29630ebaddcc",
+   "toSha256": "36fb315c590ee9f807c51a95eb36f3b3fca22e71457eed16525de0a66031bdbb",
+   "sha256": "5f5e8be07126c726a76f47bdff9d54aa696e3d2d88e3fc8f1527c940e6cf7c19",
+   "bytes": 19158,
+   "confidentShare": 0.721
+  },
+  {
+   "from": "20260917.180000",
+   "to": "20260917.210000",
+   "file": "motion_20260917_180000.png",
+   "fromSha256": "36fb315c590ee9f807c51a95eb36f3b3fca22e71457eed16525de0a66031bdbb",
+   "toSha256": "b1a13df39b97b8e00d913489b4a659f9c6b913fd3fca56b2b43abd1d78351d93",
+   "sha256": "17a58b01f6d8c58a1be9c4980c4b94e4d8a5826a5e62ca8eed89d2fbecdd6dee",
+   "bytes": 19145,
+   "confidentShare": 0.729
+  },
+  {
+   "from": "20260917.210000",
+   "to": "20260918.000000",
+   "file": "motion_20260917_210000.png",
+   "fromSha256": "b1a13df39b97b8e00d913489b4a659f9c6b913fd3fca56b2b43abd1d78351d93",
+   "toSha256": "caa7bdfac63e9170acb2de2e5cc809c5808b119a9d2fe969d9104ad0d1ed162b",
+   "sha256": "cee8a7f57e1a95b0e889169fb4c94922ecb6ebec0d0b236c143d8eeacfecbd52",
+   "bytes": 18843,
+   "confidentShare": 0.738
+  },
+  {
+   "from": "20260918.000000",
+   "to": "20260918.030000",
+   "file": "motion_20260918_000000.png",
+   "fromSha256": "caa7bdfac63e9170acb2de2e5cc809c5808b119a9d2fe969d9104ad0d1ed162b",
+   "toSha256": "8662ca99be090d61d670c22f113f5917cc57abf6d8eba086a7309647cb21e10e",
+   "sha256": "6653394eaa96ecd3207ea126311a5140e72c593e4bc6bf5587f6fcff8afcc3ca",
+   "bytes": 18913,
+   "confidentShare": 0.731
+  },
+  {
+   "from": "20260918.030000",
+   "to": "20260918.060000",
+   "file": "motion_20260918_030000.png",
+   "fromSha256": "8662ca99be090d61d670c22f113f5917cc57abf6d8eba086a7309647cb21e10e",
+   "toSha256": "732e49dbdb8b634c07967535ec5e4b7c66255f8e5733f1ee65d5132ac13c0906",
+   "sha256": "d71432b803eecf449ed9c5ae6d27f1b6c7abe680a7928ee8a537b9475bf7b0cf",
+   "bytes": 19105,
+   "confidentShare": 0.724
+  },
+  {
+   "from": "20260918.060000",
+   "to": "20260918.090000",
+   "file": "motion_20260918_060000.png",
+   "fromSha256": "732e49dbdb8b634c07967535ec5e4b7c66255f8e5733f1ee65d5132ac13c0906",
+   "toSha256": "efb4c91068b0111fb6438b559d12f3157ff97dd530a717a044c27149222a7090",
+   "sha256": "9060183d702b2fb081e9f3a8ac48939538cebc2f3f0f1056df68545c1439c507",
+   "bytes": 19519,
+   "confidentShare": 0.716
+  },
+  {
+   "from": "20260918.090000",
+   "to": "20260918.120000",
+   "file": "motion_20260918_090000.png",
+   "fromSha256": "efb4c91068b0111fb6438b559d12f3157ff97dd530a717a044c27149222a7090",
+   "toSha256": "053090d9b8c59663e91fef93d331fca0a346960fa2cac5e53ca81714297f2811",
+   "sha256": "96d17bd836c8ec3213b3a787d66e35aca5aeb8ce8d8ee29ee93d0857abfa840a",
+   "bytes": 19029,
+   "confidentShare": 0.715
+  },
+  {
+   "from": "20260918.120000",
+   "to": "20260918.150000",
+   "file": "motion_20260918_120000.png",
+   "fromSha256": "053090d9b8c59663e91fef93d331fca0a346960fa2cac5e53ca81714297f2811",
+   "toSha256": "a76a3ad977dfa4a2690e65806e7a9d396958f21b80fb380569221e2af09cefbc",
+   "sha256": "255a2b8c0d1c357baed2c1fdbc25eaed1efa3b1ca6a021c2280b3bec36fe7519",
+   "bytes": 18948,
+   "confidentShare": 0.726
+  },
+  {
+   "from": "20260918.150000",
+   "to": "20260918.180000",
+   "file": "motion_20260918_150000.png",
+   "fromSha256": "a76a3ad977dfa4a2690e65806e7a9d396958f21b80fb380569221e2af09cefbc",
+   "toSha256": "703bbfe5d59b3fab1a6579f817dc82326926210455278746f75a3a6d59b29a82",
+   "sha256": "511fa02f6515ab01b8c245f8b8f7a0ada7b6edbed31161768d2fbffe550db787",
+   "bytes": 19497,
+   "confidentShare": 0.732
+  },
+  {
+   "from": "20260918.180000",
+   "to": "20260918.210000",
+   "file": "motion_20260918_180000.png",
+   "fromSha256": "703bbfe5d59b3fab1a6579f817dc82326926210455278746f75a3a6d59b29a82",
+   "toSha256": "796b819c1f4f8511fff6d63da7fc381b42f56208998838d19b0e59538ee70650",
+   "sha256": "de5efcba35d9de30854f2ca574db1e0fb450391029cff91145b43df8314f929d",
+   "bytes": 19225,
+   "confidentShare": 0.733
+  },
+  {
+   "from": "20260918.210000",
+   "to": "20260919.000000",
+   "file": "motion_20260918_210000.png",
+   "fromSha256": "796b819c1f4f8511fff6d63da7fc381b42f56208998838d19b0e59538ee70650",
+   "toSha256": "932e34b6aeb37bad03916e99d288c9b1782f115ab35ef5f025410a4c1123d382",
+   "sha256": "ad11027faacd1dd3ecef140e4dfd6807f67850c61bb8d1e6156d608cfe2e9fa4",
+   "bytes": 18997,
+   "confidentShare": 0.729
+  },
+  {
+   "from": "20260919.000000",
+   "to": "20260919.030000",
+   "file": "motion_20260919_000000.png",
+   "fromSha256": "932e34b6aeb37bad03916e99d288c9b1782f115ab35ef5f025410a4c1123d382",
+   "toSha256": "4baf3d5d4aa0cc140e2e1017f0da5029d101f588db5cf028e658f624a155a505",
+   "sha256": "5e010d9b9bf4efb3dcbb5ebcb67dd270a5dc875cad6c5920f9d627b29674c029",
+   "bytes": 19431,
+   "confidentShare": 0.718
+  }
+ ]
+}

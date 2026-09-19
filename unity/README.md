@@ -113,8 +113,10 @@ By default the clouds are carried by the wind between observations - a model, an
 page says so (`ObservationPlayback.cs`, `Pair` in the shader). Over the interval from
 one observation to the next, the earlier observation is moved forward along the wind
 from its own time to now, the later one is moved back from its time to now, and the
-two are crossfaded; where the wind is right the clouds glide, where it is not the result
-is close to a plain dissolve. The wind is SSEC's observed wind at each of the two
+two are crossfaded. What carries them is, first, the motion of the cloud pattern
+measured between those two observations themselves (`dist/data/motion/`, written by
+scripts/build-motion.cjs), where it could be measured with confidence; elsewhere the wind:
+SSEC's observed wind at each of the two
 observations' own times, averaged (`dist/data/wind/`, written by
 scripts/wind-grid.cjs; `WindField.cs` builds a single one from amv.json if those images
 are missing), spread from nearby vectors into gaps, and a textbook general circulation
@@ -133,6 +135,13 @@ each 10-degree block, fitted on the very samples it is judged on, reaches 31.7%:
 of what changes in three hours is cloud forming, dissolving and changing shape, which
 carrying cannot show. That remainder is what appears as clouds sliding a little and
 being pulled back at each observation.
+
+Carried by the motion measured from the observations themselves instead, the difference
+falls by 32.4% - twice what the wind achieves - measured on the same frames the motion
+was estimated from. That is the right measure for joining two observations, which is
+all the model does; it says nothing about predicting a third. The measured speeds are
+what the atmosphere does: a median of 12 m/s, 38 m/s at the 99th percentile, westerly
+in mid-latitudes and weakly easterly in the tropics.
 
 「実観測だけ」 on the page shows the observations alone, with the timing of the
 JavaScript version: one observation every 0.65 s, the newest held twice as long, and a

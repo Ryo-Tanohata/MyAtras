@@ -22,6 +22,7 @@ Shader "MyAtras/EarthComposite"
         _Wind ("Observed wind at the earlier observation", 2D) = "black" {}
         _WindNext ("Observed wind at the later observation", 2D) = "black" {}
         _FlowWind ("Observed wind the flow lines are drawn from", 2D) = "black" {}
+        _Motion ("Cloud motion measured between the two observations", 2D) = "black" {}
         _AirDepth ("Optical depth to the sun", 2D) = "black" {}
     }
 
@@ -81,6 +82,11 @@ Shader "MyAtras/EarthComposite"
             // The model between two observations (see Pair): _Advect turns it on, _Gap is
             // the time between the two observations in seconds of the atmosphere's own time.
             float _Advect, _Gap;
+            // How the cloud pattern moved between the two observations, measured from them
+            // (scripts/build-motion.cjs): speed east and north in red and green, spanning
+            // -_MotionScale..+_MotionScale m/s, confidence in blue. Two degrees a texel.
+            sampler2D _Motion;
+            float _MotionOn, _MotionScale;
 
             // Cloud-top height is exaggerated tenfold so it can be seen at all: 15 km at the
             // top of the troposphere, as an angle on the unit sphere, times ten.
@@ -137,17 +143,26 @@ Shader "MyAtras/EarthComposite"
                 return float2(east, 0.0);
             }
 
-            // East and north in m/s over the interval between the two observations: the
-            // observed wind at each of their times, filled from the general circulation
-            // where it was not observed, and the two averaged.
+            // East and north in m/s over the interval between the two observations. First
+            // choice, the motion of the cloud pattern measured between the two observations
+            // themselves - what carries the earlier one onto the later one best. Where that
+            // could not be measured (clear sky, or no clear best match), the observed wind at
+            // each of their times, averaged; where no wind was observed either, the general
+            // circulation.
             float2 WindAt(float2 lonLat)
             {
                 float4 at = float4((lonLat.x + 180.0) / 360.0, (lonLat.y + 90.0) / 180.0, 0.0, 0.0);
                 float4 before = tex2Dlod(_Wind, at);
                 float4 after = tex2Dlod(_WindNext, at);
                 float2 climate = ClimateWind(lonLat.y);
-                return 0.5 * (lerp(climate, (before.rg - 0.5) * 80.0, saturate(before.b)) +
-                              lerp(climate, (after.rg - 0.5) * 80.0, saturate(after.b)));
+                float2 wind = 0.5 * (lerp(climate, (before.rg - 0.5) * 80.0, saturate(before.b)) +
+                                     lerp(climate, (after.rg - 0.5) * 80.0, saturate(after.b)));
+                if (_MotionOn > 0.5)
+                {
+                    float4 measured = tex2Dlod(_Motion, at);
+                    wind = lerp(wind, (measured.rg - 0.5) * 2.0 * _MotionScale, saturate(measured.b));
+                }
+                return wind;
             }
 
             // Where air that is at lonLat now was `seconds` ago (negative) or will be

@@ -86,6 +86,7 @@ namespace MyAtras
             public bool flow;        // the flow lines drawn
             public string windTime;  // the wind's observation stamp; empty if it could not be read
             public bool windEachTime; // the wind is the observed wind at each observation's own time
+            public bool motionMeasured; // clouds are carried by the motion measured between observations
             public int windTexels;   // one-degree texels with observed wind
             public float sunLat;     // subsolar point at the observation time, degrees
             public float sunLon;     // east positive
@@ -361,6 +362,7 @@ namespace MyAtras
                 flow = flow,
                 windTime = loaded && WindFor(playback.Current) != loader.Wind ? loader.Stamps[playback.Current] : loader.WindStamp,
                 windEachTime = loader.WindsLoaded > 0,
+                motionMeasured = loader.MotionsLoaded > 0,
                 windTexels = loader.WindTexels,
                 renderPercent = Mathf.RoundToInt(renderScale * 100f),
                 error = loader.Error ?? "",
@@ -405,6 +407,13 @@ namespace MyAtras
             // The model carries the clouds over the time between the two observations; on
             // the step back to the start there is nothing to carry them across.
             bool carried = model && playback.Continuing;
+            // The motion measured between exactly these two observations, if there is one.
+            Texture2D measured = carried && playback.Current == playback.Previous + 1
+                                 && playback.Previous < loader.Motions.Count
+                ? loader.Motions[playback.Previous] : null;
+            if (measured != null) material.SetTexture("_Motion", measured);
+            material.SetFloat("_MotionOn", measured != null ? 1f : 0f);
+            material.SetFloat("_MotionScale", loader.MotionScale);
             material.SetFloat("_Advect", carried ? 1f : 0f);
             material.SetFloat("_Gap", carried
                 ? (float)(loader.Times[playback.Current] - loader.Times[playback.Previous]).TotalSeconds
