@@ -109,15 +109,29 @@ the same colour there. North of 85.05° there is no observation, so the cloud-fr
 reference shows dark Arctic ocean, while cold surface just inside the limit comes
 through the brightness threshold as white.
 
-Playback of all the stored observations follows the JavaScript version's timing
-(`ObservationPlayback.cs`): one observation every 0.65 s, the newest held twice as long,
-and a dissolve of 0.12-0.38 s between an observation and the one after it. Each
-observation goes through the brightness threshold on its own and only the drawn layers
-are mixed, so nothing in between two observed times is ever shown as observed. Starting
-over from the newest to the oldest jumps back across the whole sequence and is not
-dissolved. If an
-observation fails to load, playback stops at the gap rather than skipping it, and the
-page says how many of them could be loaded.
+By default the clouds are carried by the wind between observations - a model, and the
+page says so (`ObservationPlayback.cs`, `Pair` in the shader). Over the interval from
+one observation to the next, the earlier observation is moved forward along the wind
+from its own time to now, the later one is moved back from its time to now, and the
+two are crossfaded; where the wind is right the clouds glide, where it is not the result
+is close to a plain dissolve. The wind is SSEC's observed wind where it was observed
+(the same one-degree texture as the flow lines) and a textbook general circulation
+elsewhere - easterly trades near 12 degrees, westerlies peaking near 45, weak polar
+easterlies. Every step the globe is back on a real observation, so the clouds never
+drift from what was observed; only the motion in between is estimated. Pausing holds
+the globe where it is, part way between two observations. Held part way and switched
+between the model and the observations alone, 1.6-2.3% of the globe's pixels differ -
+the displacement alone, since the same state drawn twice differs by 0.00% - which is
+about a degree an hour, a pixel or two of the observation, mostly at cloud edges.
+
+「実観測だけ」 on the page shows the observations alone, with the timing of the
+JavaScript version: one observation every 0.65 s, the newest held twice as long, and a
+dissolve of 0.12-0.38 s between an observation and the one after it. Each observation
+goes through the brightness threshold on its own and only the drawn layers are mixed,
+in both. Starting over from the newest to the oldest jumps back across the whole
+sequence and is neither dissolved nor carried. If an observation fails to load,
+playback stops at the gap rather than skipping it, and the page says how many of them
+could be loaded.
 
 Not yet ported: the visible-light product, the grayscale observation toggle, the
 day/night mode, the wind model and fetching the latest observations. The page says so

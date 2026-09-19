@@ -71,6 +71,9 @@ Shader "MyAtras/EarthComposite"
             // screen, set from the playback speed so the flow and the clouds share a clock.
             sampler2D _Wind;
             float _FlowOn, _FlowScale;
+            // The model between two observations (see Pair): _Advect turns it on, _Gap is
+            // the time between the two observations in seconds of the atmosphere's own time.
+            float _Advect, _Gap;
 
             // Cloud-top height is exaggerated tenfold so it can be seen at all: 15 km at the
             // top of the troposphere, as an angle on the unit sphere, times ten.
@@ -100,6 +103,77 @@ Shader "MyAtras/EarthComposite"
                 return float3(q.x * cy + q.z * sy, q.y, -q.x * sy + q.z * cy);
             }
 
+            // ---- The model between two observations --------------------------------------
+            //
+            // Between an observation and the next one an hour later, the clouds are carried
+            // by the wind instead of dissolved in place: the earlier observation is moved
+            // forward from its time to now, the later one is moved back from its time to
+            // now, and the two are crossfaded. Where the wind is right the clouds glide;
+            // where it is not, what shows is close to the plain dissolve. Every hour the
+            // globe is back on a real observation, so the model never drifts away from what
+            // was observed; what it adds is only the motion in between, and the page says so.
+            //
+            // Each observation still goes through the brightness threshold on its own, and
+            // only the drawn layers are mixed.
+
+            // Where nothing was observed: a textbook general circulation, east-west only.
+            // Trade winds from the east near 12 degrees, westerlies peaking near 45, weak
+            // polar easterlies - about the steering level of the clouds the images show.
+            float2 ClimateWind(float latDeg)
+            {
+                float a = abs(latDeg);
+                float trades = (a - 12.0) / 10.0;
+                float westerlies = (a - 45.0) / 13.0;
+                float polar = (a - 75.0) / 8.0;
+                float east = -6.0 * exp(-trades * trades) + 14.0 * exp(-westerlies * westerlies)
+                             - 3.0 * exp(-polar * polar);
+                return float2(east, 0.0);
+            }
+
+            // East and north in m/s: SSEC's observed wind where it was observed (the same
+            // texture the flow lines use), the general circulation elsewhere.
+            float2 WindAt(float2 lonLat)
+            {
+                float4 w = tex2Dlod(_Wind, float4((lonLat.x + 180.0) / 360.0, (lonLat.y + 90.0) / 180.0, 0.0, 0.0));
+                return lerp(ClimateWind(lonLat.y), (w.rg - 0.5) * 80.0, saturate(w.a));
+            }
+
+            // Where air that is at lonLat now was `seconds` ago (negative) or will be
+            // (positive), moving with the given wind. One step: over an hour the clouds
+            // move about a degree, a pixel or two of the observation.
+            float2 Carried(float2 lonLat, float2 wind, float seconds)
+            {
+                const float EARTH = 6371000.0;
+                float dLat = degrees(wind.y * seconds / EARTH);
+                float dLon = degrees(wind.x * seconds / (EARTH * max(cos(radians(lonLat.y)), 0.15)));
+                float2 moved = lonLat + float2(dLon, dLat);
+                moved.x = frac((moved.x + 180.0) / 360.0) * 360.0 - 180.0;
+                moved.y = clamp(moved.y, -89.0, 89.0);
+                return moved;
+            }
+
+            // An observation at a longitude and latitude in degrees. The images are Web
+            // Mercator and stop at 85.05 degrees; beyond that nothing was observed.
+            float4 ObservedAt(sampler2D image, float2 lonLat)
+            {
+                float lat = radians(lonLat.y);
+                if (abs(lat) >= MERCATOR_LIMIT) return float4(0.0, 0.0, 0.0, 0.0);
+                float my = 0.5 - log(tan(PI * 0.25 + lat * 0.5)) / (2.0 * PI);
+                return tex2Dlod(image, float4(lonLat.x / 360.0 + 0.5, 1.0 - my, 0.0, 0.0));
+            }
+
+            // The two observations on screen at a point. With the model off, or on the step
+            // back to the start of the sequence (_Gap 0), both are sampled in place, which
+            // is the plain dissolve.
+            void Pair(float2 lonLat, out float4 now, out float4 was)
+            {
+                float2 wind = WindAt(lonLat);
+                float since = _Advect * _Fade * _Gap;
+                float until = _Advect * (1.0 - _Fade) * _Gap;
+                was = ObservedAt(_WeatherPrev, Carried(lonLat, wind, -since));
+                now = ObservedAt(_Weather, Carried(lonLat, wind, until));
+            }
+
             // Cloud cover and relative cloud-top height at a point on the globe, from the two
             // observations on screen, mixed the same way as the drawn layer.
             //
@@ -111,10 +185,8 @@ Shader "MyAtras/EarthComposite"
             {
                 float lat = asin(clamp(at.y, -1.0, 1.0));
                 if (abs(lat) >= MERCATOR_LIMIT) return float2(0.0, 0.0);
-                float u = atan2(at.x, at.z) / (2.0 * PI) + 0.5;
-                float my = 0.5 - log(tan(PI * 0.25 + lat * 0.5)) / (2.0 * PI);
-                float4 now = tex2Dlod(_Weather, float4(u, 1.0 - my, 0.0, 0.0));
-                float4 was = tex2Dlod(_WeatherPrev, float4(u, 1.0 - my, 0.0, 0.0));
+                float4 now, was;
+                Pair(float2(degrees(atan2(at.x, at.z)), degrees(lat)), now, was);
                 float3 luma = float3(0.299, 0.587, 0.114);
                 float bNow = dot(now.rgb, luma), bWas = dot(was.rgb, luma);
                 float cover = lerp(smoothstep(0.38, 0.82, bWas) * was.a, smoothstep(0.38, 0.82, bNow) * now.a, _Fade);
@@ -338,8 +410,8 @@ Shader "MyAtras/EarthComposite"
                     if (abs(lat) < MERCATOR_LIMIT)
                     {
                         float my = 0.5 - log(tan(PI * 0.25 + lat * 0.5)) / (2.0 * PI);
-                        float4 observed = tex2Dlod(_Weather, float4(uv.x, 1.0 - my, 0.0, 0.0));
-                        float4 earlier = tex2Dlod(_WeatherPrev, float4(uv.x, 1.0 - my, 0.0, 0.0));
+                        float4 observed, earlier;
+                        Pair(float2((uv.x - 0.5) * 360.0, degrees(lat)), observed, earlier);
                         if (_RawObservation > 0.5)
                         {
                             float3 now = lerp(float3(0.075, 0.10, 0.13), observed.rgb, observed.a);

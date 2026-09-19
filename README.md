@@ -20,7 +20,7 @@ An optional **立体の模型** mode preserves the numerical-wind-driven 3D mode
 - Downloaded GeoJSON contains point locations plus `SPD` (knots), `DIR` (meteorological wind FROM direction), `PRE` (hPa), `DAY` and `TIME`.
 - Only points whose **actual DAY/TIME** exactly match the selected product time are used. Old observations mixed into the API response are discarded, not relabeled as current.
 - One observed vector nearest the center of each 2° cell is selected separately per pressure band. These are representative tracers, not a cloud-cover map.
-- Bundled time: 2026-09-16 19:00 UTC / 2026-09-17 04:00 JST. 3,333 representative vectors from 26,858 matching observations; 12,139 old observations excluded.
+- Bundled time: 2026-09-18 12:00 UTC / 21:00 JST, the middle of the bundled day of cloud observations. 3,180 representative vectors from 26,478 matching observations (2,180 low, 1,000 mid); 14,747 old observations excluded. The first bundled wind, 2026-09-16 19:00 UTC, is in the history.
 - Dataset coverage is uneven. A lack of model clouds does not mean clear sky.
 
 ## Motion and 3D rendering

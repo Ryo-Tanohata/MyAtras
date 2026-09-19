@@ -48,6 +48,9 @@ namespace MyAtras
         bool stars = true;
         bool cloudRelief = true;
         bool flow = true;
+        // The model between observations (ObservationPlayback, the shader's Pair): on unless
+        // the page asks for the observations alone.
+        bool model = true;
         Vector2 lastPointer;
         float lastPinchDistance;
         long lastReportKey = -1;
@@ -73,6 +76,7 @@ namespace MyAtras
             public string[] times;   // every loaded stamp, for the page's time slider
             public bool playing;
             public bool dissolve;
+            public bool model;       // clouds carried by the wind between observations
             public bool sunlight;    // day and night drawn from the sun at the observation time
             public bool nightLights; // the Black Marble texture loaded
             public bool stars;       // the star background drawn
@@ -133,7 +137,7 @@ namespace MyAtras
             if (loader.Wind != null) material.SetTexture("_Wind", loader.Wind);
             material.SetVector("_Watermark", loader.Watermark);
             material.SetFloat("_WeatherActive", 1f);
-            playback = new ObservationPlayback(loader.Frames.Count, Time.unscaledTime);
+            playback = new ObservationPlayback(loader.Frames.Count, Time.unscaledTime) { Model = model };
             loaded = true;
         }
 
@@ -237,6 +241,13 @@ namespace MyAtras
             if (loaded) playback.Dissolve = dissolve != 0;
         }
 
+        /// <summary>1 carries the clouds with the wind between observations, 0 shows the observations alone.</summary>
+        public void SetModel(int on)
+        {
+            model = on != 0;
+            if (loaded) playback.Model = model;
+        }
+
         /// <summary>Milliseconds per observation: 1200, 650 or 300 on the page, as in the JavaScript version.</summary>
         public void SetIntervalMs(float milliseconds)
         {
@@ -305,7 +316,8 @@ namespace MyAtras
                        | (cloudRelief ? 1L : 0L) << 22
                        | (flow ? 1L : 0L) << 23
                        | (loader.Error != null ? 1L : 0L) << 24
-                       | (long)Mathf.RoundToInt(renderScale * 20f) << 25;
+                       | (long)Mathf.RoundToInt(renderScale * 20f) << 25
+                       | (model ? 1L : 0L) << 31;
             if (key == lastReportKey) return;
             lastReportKey = key;
             if (loaded && stampArray == null) stampArray = ToArray(loader.Stamps);
@@ -320,6 +332,7 @@ namespace MyAtras
                 times = loaded ? stampArray : new string[0],
                 playing = loaded && playback.Playing,
                 dissolve = !loaded || playback.Dissolve,
+                model = model,
                 sunlight = sunlight,
                 nightLights = loader.Night != null,
                 stars = stars,
@@ -369,6 +382,13 @@ namespace MyAtras
             material.SetTexture("_Weather", loader.Frames[playback.Current]);
             material.SetTexture("_WeatherPrev", loader.Frames[playback.Previous]);
             material.SetFloat("_Fade", playback.Fade(now));
+            // The model carries the clouds over the time between the two observations; on
+            // the step back to the start there is nothing to carry them across.
+            bool carried = model && playback.Continuing;
+            material.SetFloat("_Advect", carried ? 1f : 0f);
+            material.SetFloat("_Gap", carried
+                ? (float)(loader.Times[playback.Current] - loader.Times[playback.Previous]).TotalSeconds
+                : 0f);
             DateTime shown = SunTime(now);
             material.SetFloat("_Sunlight", sunlight ? 1f : 0f);
             material.SetVector("_Sun", SolarPosition.Direction(SolarPosition.Subsolar(shown)));
