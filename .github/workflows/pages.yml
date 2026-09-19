@@ -38,7 +38,14 @@ on:
         default: '24'
       every:
         description: 'Minutes between them'
-        default: '60'
+        default: '180'
+      span:
+        description: 'Hours back SSEC is asked to list (it keeps about a week of images, three days of wind)'
+        default: '72'
+      winds:
+        description: 'Also store the observed wind at each observation time, for the Unity model'
+        type: boolean
+        default: true
       commit:
         description: 'Commit the fetched observations, making them the bundled set'
         type: boolean
@@ -88,7 +95,9 @@ jobs:
         run: |
           node scripts/fetch-observations.cjs \
             --frames "${{ inputs.frames || '24' }}" \
-            --every "${{ inputs.every || '60' }}" | tee fetch.log
+            --every "${{ inputs.every || '180' }}" \
+            --span "${{ inputs.span || '72' }}" \
+            ${{ inputs.winds && '--winds' || '' }} | tee fetch.log
 
       - name: Say which observations are being published
         run: |
@@ -100,8 +109,8 @@ jobs:
             echo "SSEC could not be reached; publishing the bundled observations." >> "$GITHUB_STEP_SUMMARY"
             # A run that failed part way may have left frames behind that no manifest
             # names; restore the bundled set exactly.
-            git checkout -- dist/weather
-            git clean -fd dist/weather
+            git checkout -- dist/weather dist/data
+            git clean -fd dist/weather dist/data
           fi
           node -e '
             const m = require("./dist/weather/sequence/manifest.json").globalir;
@@ -181,7 +190,7 @@ jobs:
           # site keeps showing them when nothing is fetching any more. About 5 MB,
           # which is why it is not what a fetch does by default.
           if [ "$COMMIT_OBSERVATIONS" = "true" ]; then
-            git add -A dist/weather
+            git add -A dist/weather dist/data
           fi
           git status --short
           if git diff --cached --quiet; then

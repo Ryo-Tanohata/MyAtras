@@ -15,9 +15,11 @@ namespace MyAtras
     /// texel is left empty, so the globe draws no flow there: an empty patch is a gap in
     /// the observations, not calm air, and it is not filled in.
     ///
-    /// Encoding, RGBA32: red and green are the eastward and northward wind, -40 to +40 m/s
-    /// mapped to 0..255 (128 is still air); blue is the speed over 40 m/s; alpha is how
-    /// well observed the texel is, 1 next to a vector and falling to 0 at the reach.
+    /// Encoding, RGBA32, the same as the per-observation wind images scripts/wind-grid.cjs
+    /// writes: red and green are the eastward and northward wind, -40 to +40 m/s mapped
+    /// to 0..255 (128 is still air); blue is how well observed the texel is, 1 next to a
+    /// vector and falling to 0 at the reach; alpha is always opaque. This one is only the
+    /// fallback for when those images are missing.
     /// </summary>
     public static class WindField
     {
@@ -91,16 +93,14 @@ namespace MyAtras
 
                     if (weights <= 0f)
                     {
-                        pixels[y * Width + x] = new Color32(128, 128, 0, 0);
+                        pixels[y * Width + x] = new Color32(128, 128, 0, 255);
                         continue;
                     }
                     u /= weights;
                     v /= weights;
                     float observed = Mathf.Clamp01(1f - nearest / Reach);
                     pixels[y * Width + x] = new Color32(
-                        Encode(u), Encode(v),
-                        (byte)Mathf.RoundToInt(Mathf.Clamp01(Mathf.Sqrt(u * u + v * v) / Scale) * 255f),
-                        (byte)Mathf.RoundToInt(observed * 255f));
+                        Encode(u), Encode(v), (byte)Mathf.RoundToInt(observed * 255f), 255);
                     observedTexels++;
                 }
             }

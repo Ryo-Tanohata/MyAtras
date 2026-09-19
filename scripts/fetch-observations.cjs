@@ -9,6 +9,16 @@
 //   node scripts/fetch-observations.cjs --wind           # also rebuild dist/data/amv.json
 //   node scripts/fetch-observations.cjs --out /tmp/try   # write somewhere else
 //
+//   # Three days, one observation every three hours, with the wind at each of them:
+//   node scripts/fetch-observations.cjs --span 72 --frames 24 --every 180 --winds
+//
+// --span is how many hours back SSEC is asked to list (24 unless given). SSEC keeps
+// about a week of the infrared images and three days of the wind. --winds stores the
+// observed wind at every bundled observation's time as a one-degree image
+// (scripts/wind-grid.cjs) in dist/data/wind/, which the Unity globe carries the
+// clouds with between observations, and rebuilds dist/data/amv.json from the wind at
+// the middle of the sequence for the JavaScript version's wind model.
+//
 // Without --every the newest listed observations are taken as they come, whatever
 // spacing SSEC is publishing. The run prints that spacing, so the cadence actually
 // on offer is visible before choosing. Every frame is around 200 KB and the page
@@ -43,6 +53,11 @@ const FRAMES = Number(opt('--frames', 13));
 // Minutes between kept frames. 0 keeps the listing's own spacing.
 const EVERY = Number(opt('--every', 0));
 const WIND = flag('--wind');
+const WINDS = flag('--winds');
+const SPAN = Number(opt('--span', 24));
+// With --out the winds go beside the observations, so a trial run touches nothing else.
+const WIND_OUT = path.resolve(ROOT, opt('--wind-out',
+  ARGS.includes('--out') ? path.join(OUT, 'wind') : path.join('dist', 'data', 'wind')));
 const BOUNDS = '-85.05112878,-180,85.05112878,180';
 const SEQUENCE_SIZE = 512;   // the frames playback cycles through
 const SNAPSHOT_SIZE = 1024;  // the single observation the globe opens with
@@ -68,7 +83,7 @@ async function json(url) {
 
 /// The observation times SSEC currently lists for a product, oldest first.
 async function times(product) {
-  const data = await json(`${BASE}products?products=${encodeURIComponent(product)}&timespan=-24h`);
+  const data = await json(`${BASE}products?products=${encodeURIComponent(product)}&timespan=-${SPAN}h`);
   if (!Array.isArray(data)) throw new Error(`unexpected product listing for ${product}`);
   const entry = data.find(x => x && x.id === product);
   const list = [...new Set((entry?.times || []).filter(t => /^\d{8}[._]\d{6}$/.test(t)))].sort();
@@ -187,6 +202,7 @@ async function sequence() {
     last: entries.at(-1).time,
     span: `${hours.toFixed(1)} hours, ${megabytes.toFixed(1)} MB`,
     removed,
+    times: entries.map(e => e.time),
   };
 }
 
@@ -241,6 +257,103 @@ async function wind() {
   return time;
 }
 
+/// A few at a time: the low band's GeoJSON is over 20 MB for every time.
+async function pool(items, size, work) {
+  const results = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(size, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await work(items[i], i);
+    }
+  }));
+  return results;
+}
+
+async function shapes(product, time) {
+  const url = `${BASE}shapes?products=${product}_${time.replace('.', '_')}`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${product} ${time} answered ${response.status}`);
+  return { url, text: await response.text() };
+}
+
+/// The observed wind at each bundled observation's time, as images. cloud-model.js's
+/// normalize() is what decides which vectors are kept, and it keeps only those whose
+/// own DAY and TIME are the requested time: the wind's equivalent of the RE-Time check,
+/// so no wind is ever stored under a time it was not observed at. A time with no wind
+/// listed, or none kept, is recorded as missing rather than filled from another hour.
+async function winds(frameTimes) {
+  const M = require(path.join(ROOT, 'dist', 'cloud-model.js'));
+  const W = require('./wind-grid.cjs');
+  const listed = await Promise.all(WIND_PRODUCTS.map(times));
+  const common = new Set(listed[0].filter(t => listed.every(l => l.includes(t))));
+  fs.mkdirSync(WIND_OUT, { recursive: true });
+
+  const middle = frameTimes[Math.floor((frameTimes.length - 1) / 2)];
+  const missing = [];
+  const made = await pool(frameTimes, 3, async time => {
+    if (!common.has(time)) { missing.push(time); return null; }
+    const points = [], vectors = {}, sources = {}, texts = {};
+    for (const product of WIND_PRODUCTS) {
+      const { url, text } = await shapes(product, time);
+      // normalize() throws when nothing at all was observed at this time; that is a
+      // missing wind, not a failed run.
+      let kept = { points: [] };
+      try { kept = M.normalize(JSON.parse(text), product, time); } catch { /* none kept */ }
+      points.push(...kept.points);
+      vectors[product] = kept.points.length;
+      sources[product] = url;
+      texts[product] = text;
+    }
+    const grid = W.grid(points);
+    if (!grid.nearTexels) { missing.push(time); return null; }
+    // The middle one also becomes amv.json, through the script that already builds it.
+    if (time === middle) {
+      for (const product of WIND_PRODUCTS) {
+        fs.writeFileSync(path.join(WIND_OUT, `.${product}.geojson`), texts[product]);
+      }
+    }
+    const file = `wind_${time.replace('.', '_')}.png`;
+    const bytes = W.encodePng(grid.width, grid.height, grid.rgb);
+    fs.writeFileSync(path.join(WIND_OUT, file), bytes);
+    process.stdout.write(`  wind ${time}  ${points.length} vectors, ${(bytes.length / 1024).toFixed(0)} KB\n`);
+    return {
+      time, file, sources, vectors,
+      sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+      bytes: bytes.length,
+      nearTexels: grid.nearTexels,
+      spreadTexels: grid.spreadTexels,
+    };
+  });
+
+  const entries = made.filter(Boolean);
+  prune(WIND_OUT, new Set(entries.map(e => e.file)));
+  fs.writeFileSync(path.join(WIND_OUT, 'manifest.json'), JSON.stringify({
+    source: 'SSEC RealEarth, UW-Madison: AMV-LLlow and AMV-LLmid',
+    method: 'scripts/wind-grid.cjs: 1-degree grid; within ' + W.NEAR + ' degrees the vectors there, ' +
+      'further out spread from within ' + W.FAR + ' degrees by a ' + W.SPREAD + '-degree Gaussian',
+    winds: entries,
+    missing: missing.sort(),
+  }, null, 1) + '\n');
+
+  const low = path.join(WIND_OUT, '.AMV-LLlow.geojson'), mid = path.join(WIND_OUT, '.AMV-LLmid.geojson');
+  let amvTime = null;
+  try {
+    if (fs.existsSync(low) && fs.existsSync(mid)) {
+      execFileSync('node', [path.join(ROOT, 'scripts', 'build-amv.cjs'), middle, low, mid,
+        path.join(WIND_OUT, '..', 'amv.json')], { stdio: 'inherit' });
+      amvTime = middle;
+    }
+  } catch (error) {
+    // The images are still good; amv.json simply stays as it was.
+    console.log(`  amv.json not rebuilt: ${error.message.split('\n')[0]}`);
+  } finally {
+    fs.rmSync(low, { force: true });
+    fs.rmSync(mid, { force: true });
+  }
+  return { count: entries.length, missing: missing.sort(), amvTime };
+}
+
 async function main() {
   console.log(`fetching from ${BASE}`);
   console.log(`writing to   ${path.relative(ROOT, OUT) || OUT}`);
@@ -248,11 +361,17 @@ async function main() {
   const frames = await sequence();
   const snapshots = await snapshot();
   const windTime = WIND ? await wind() : null;
+  const windSet = WINDS ? await winds(frames.times) : null;
 
   console.log('\nstored');
   console.log(`  ${frames.count} frames  ${frames.first} → ${frames.last}  (${frames.span})`);
   console.log(`  snapshots  ${Object.entries(snapshots.times).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   if (windTime) console.log(`  observed wind  ${windTime}`);
+  if (windSet) {
+    console.log(`  winds  ${windSet.count} of ${frames.count} observation times` +
+      (windSet.missing.length ? `; none kept for ${windSet.missing.join(', ')}` : ''));
+    if (windSet.amvTime) console.log(`  amv.json  ${windSet.amvTime}, the middle of the sequence`);
+  }
   const removed = frames.removed + snapshots.removed;
   if (removed) console.log(`  ${removed} file(s) from an earlier run removed`);
   console.log('\nNext: python scripts/export-html.py, node tools/check-webgl.cjs, then commit dist/.');

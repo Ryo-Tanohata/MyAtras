@@ -36,6 +36,14 @@ namespace MyAtras
         public string WindStamp { get; private set; } = "";
         /// <summary>How many one-degree texels hold observed wind.</summary>
         public int WindTexels { get; private set; }
+        /// <summary>
+        /// The observed wind at each frame's own time (dist/data/wind/, written by
+        /// scripts/wind-grid.cjs), in the same order as Frames; null where none was stored
+        /// for that time, in which case the single wind above stands in.
+        /// </summary>
+        public IReadOnlyList<Texture2D> Winds => winds;
+        /// <summary>How many frames have their own time's wind.</summary>
+        public int WindsLoaded { get; private set; }
         /// <summary>The stored observations, oldest first, as the manifest lists them.</summary>
         public IReadOnlyList<Texture2D> Frames => frames;
         /// <summary>Each frame's observation time in UTC and JST, in ASCII, for the editor.</summary>
@@ -53,6 +61,20 @@ namespace MyAtras
         readonly List<string> labels = new List<string>();
         readonly List<string> stamps = new List<string>();
         readonly List<DateTime> times = new List<DateTime>();
+        readonly List<Texture2D> winds = new List<Texture2D>();
+
+        [Serializable]
+        class WindEntry
+        {
+            public string time;
+            public string file;
+        }
+
+        [Serializable]
+        class WindManifest
+        {
+            public List<WindEntry> winds;
+        }
 
         [Serializable]
         class Frame
@@ -189,6 +211,42 @@ namespace MyAtras
             Watermark = new Vector2(
                 WatermarkPixels.x / Mathf.Max(1, frames[0].width),
                 WatermarkPixels.y / Mathf.Max(1, frames[0].height));
+
+            // The wind at each frame's time, matched by the time itself: a wind is only
+            // ever used for the observation it was observed with. Optional - without them
+            // the clouds are carried by the single wind loaded above.
+            var windFiles = new Dictionary<string, string>();
+            string windManifestJson = null;
+            yield return Text(root + "data/wind/manifest.json", text => windManifestJson = text);
+            if (windManifestJson != null)
+            {
+                try
+                {
+                    WindManifest windManifest = JsonUtility.FromJson<WindManifest>(windManifestJson);
+                    if (windManifest?.winds != null)
+                    {
+                        foreach (WindEntry entry in windManifest.winds)
+                        {
+                            if (!string.IsNullOrEmpty(entry.time) && !string.IsNullOrEmpty(entry.file))
+                                windFiles[entry.time] = entry.file;
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("MyAtras: the wind manifest could not be read: " + e.Message);
+                }
+            }
+            foreach (string stamp in stamps)
+            {
+                Texture2D wind = null;
+                if (windFiles.TryGetValue(stamp, out string file))
+                {
+                    yield return Texture(root + "data/wind/" + file, TextureWrapMode.Repeat, texture => wind = texture);
+                }
+                winds.Add(wind);
+                if (wind != null) WindsLoaded++;
+            }
         }
 
         /// <summary>

@@ -51,7 +51,7 @@ namespace MyAtras
             int y = Mathf.FloorToInt(lat + 90f);
             Color32 c = field.GetPixels32()[y * WindField.Width + x];
             float Decode(byte b) => (b / 255f - 0.5f) * 2f * WindField.Scale;
-            return new Vector3(Decode(c.r), Decode(c.g), c.a / 255f);
+            return new Vector3(Decode(c.r), Decode(c.g), c.b / 255f);
         }
 
         static int Expect(string label, Vector3 got, float u, float v)

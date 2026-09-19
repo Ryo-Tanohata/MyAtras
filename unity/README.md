@@ -114,15 +114,25 @@ page says so (`ObservationPlayback.cs`, `Pair` in the shader). Over the interval
 one observation to the next, the earlier observation is moved forward along the wind
 from its own time to now, the later one is moved back from its time to now, and the
 two are crossfaded; where the wind is right the clouds glide, where it is not the result
-is close to a plain dissolve. The wind is SSEC's observed wind where it was observed
-(the same one-degree texture as the flow lines) and a textbook general circulation
-elsewhere - easterly trades near 12 degrees, westerlies peaking near 45, weak polar
-easterlies. Every step the globe is back on a real observation, so the clouds never
-drift from what was observed; only the motion in between is estimated. Pausing holds
-the globe where it is, part way between two observations. Held part way and switched
-between the model and the observations alone, 1.6-2.3% of the globe's pixels differ -
-the displacement alone, since the same state drawn twice differs by 0.00% - which is
-about a degree an hour, a pixel or two of the observation, mostly at cloud edges.
+is close to a plain dissolve. The wind is SSEC's observed wind at each of the two
+observations' own times, averaged (`dist/data/wind/`, written by
+scripts/wind-grid.cjs; `WindField.cs` builds a single one from amv.json if those images
+are missing), spread from nearby vectors into gaps, and a textbook general circulation
+- easterly trades near 12 degrees, westerlies peaking near 45, weak polar easterlies -
+only where no observed wind reaches. Every step the globe is back on a real
+observation, so the clouds never drift from what was observed; only the motion in
+between is estimated. Pausing holds the globe where it is, part way between two
+observations.
+
+How much of the change between observations the wind explains was measured on the
+bundled three days (23 intervals of three hours, 1.7 million cloudy samples): carrying
+the earlier observation over the whole interval and comparing it with the later one,
+the difference falls by 12.8% with the textbook circulation alone, 14.2% with one wind
+for all intervals and 16.2% with each observation's own wind. The best rigid shift for
+each 10-degree block, fitted on the very samples it is judged on, reaches 31.7%: most
+of what changes in three hours is cloud forming, dissolving and changing shape, which
+carrying cannot show. That remainder is what appears as clouds sliding a little and
+being pulled back at each observation.
 
 「実観測だけ」 on the page shows the observations alone, with the timing of the
 JavaScript version: one observation every 0.65 s, the newest held twice as long, and a

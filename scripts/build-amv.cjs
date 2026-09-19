@@ -2,7 +2,7 @@
 'use strict';
 // Turn two downloaded SSEC AMV GeoJSON responses into dist/data/amv.json.
 //
-//   node scripts/build-amv.cjs TIME LOW_GEOJSON MID_GEOJSON
+//   node scripts/build-amv.cjs TIME LOW_GEOJSON MID_GEOJSON [OUT_JSON]
 //   TIME is the product time both files were requested for, e.g. 20260916.190000
 //
 // Observations whose own DAY/TIME differ from TIME are discarded, never relabeled
@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const M = require('../dist/cloud-model.js');
 
-const [, , time, lowPath, midPath] = process.argv;
+const [, , time, lowPath, midPath, outPath] = process.argv;
 if (!time || !lowPath || !midPath) {
   console.error('usage: node scripts/build-amv.cjs TIME LOW_GEOJSON MID_GEOJSON');
   process.exit(2);
@@ -51,6 +51,6 @@ const bundle = {
   counts
 };
 M.validateBundle(bundle);
-const out = path.join(__dirname, '..', 'dist', 'data', 'amv.json');
+const out = outPath ? path.resolve(outPath) : path.join(__dirname, '..', 'dist', 'data', 'amv.json');
 fs.writeFileSync(out, JSON.stringify(bundle));
 console.log('wrote ' + path.relative(path.join(__dirname, '..'), out) + ' with ' + points.length + ' tracers at ' + M.timeISO(time));

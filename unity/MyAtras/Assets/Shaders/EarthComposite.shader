@@ -19,7 +19,9 @@ Shader "MyAtras/EarthComposite"
         _Night ("City lights", 2D) = "black" {}
         _StarMap ("Stars", 2D) = "black" {}
         _Land ("Land and coastline", 2D) = "black" {}
-        _Wind ("Observed wind", 2D) = "black" {}
+        _Wind ("Observed wind at the earlier observation", 2D) = "black" {}
+        _WindNext ("Observed wind at the later observation", 2D) = "black" {}
+        _FlowWind ("Observed wind the flow lines are drawn from", 2D) = "black" {}
         _AirDepth ("Optical depth to the sun", 2D) = "black" {}
     }
 
@@ -66,10 +68,15 @@ Shader "MyAtras/EarthComposite"
             // on the night side, where land and sea would otherwise be the same black.
             sampler2D _Land;
             float _LandOn;
-            // The observed wind, one texel per degree (WindField.cs): east and north in m/s,
-            // how well observed. _FlowScale is degrees travelled per m/s per second on
-            // screen, set from the playback speed so the flow and the clouds share a clock.
+            // The observed wind, one texel per degree (scripts/wind-grid.cjs, or WindField.cs
+            // as a fallback): east and north in m/s in red and green, how well observed in
+            // blue. _Wind and _WindNext are the winds at the two observations on screen;
+            // _FlowWind is whichever of them is nearer in time, for the flow lines.
+            // _FlowScale is degrees travelled per m/s per second on screen, set from the
+            // playback speed so the flow and the clouds share a clock.
             sampler2D _Wind;
+            sampler2D _WindNext;
+            sampler2D _FlowWind;
             float _FlowOn, _FlowScale;
             // The model between two observations (see Pair): _Advect turns it on, _Gap is
             // the time between the two observations in seconds of the atmosphere's own time.
@@ -105,11 +112,11 @@ Shader "MyAtras/EarthComposite"
 
             // ---- The model between two observations --------------------------------------
             //
-            // Between an observation and the next one an hour later, the clouds are carried
+            // Between an observation and the next one (hours later), the clouds are carried
             // by the wind instead of dissolved in place: the earlier observation is moved
             // forward from its time to now, the later one is moved back from its time to
             // now, and the two are crossfaded. Where the wind is right the clouds glide;
-            // where it is not, what shows is close to the plain dissolve. Every hour the
+            // where it is not, what shows is close to the plain dissolve. Every step the
             // globe is back on a real observation, so the model never drifts away from what
             // was observed; what it adds is only the motion in between, and the page says so.
             //
@@ -130,17 +137,22 @@ Shader "MyAtras/EarthComposite"
                 return float2(east, 0.0);
             }
 
-            // East and north in m/s: SSEC's observed wind where it was observed (the same
-            // texture the flow lines use), the general circulation elsewhere.
+            // East and north in m/s over the interval between the two observations: the
+            // observed wind at each of their times, filled from the general circulation
+            // where it was not observed, and the two averaged.
             float2 WindAt(float2 lonLat)
             {
-                float4 w = tex2Dlod(_Wind, float4((lonLat.x + 180.0) / 360.0, (lonLat.y + 90.0) / 180.0, 0.0, 0.0));
-                return lerp(ClimateWind(lonLat.y), (w.rg - 0.5) * 80.0, saturate(w.a));
+                float4 at = float4((lonLat.x + 180.0) / 360.0, (lonLat.y + 90.0) / 180.0, 0.0, 0.0);
+                float4 before = tex2Dlod(_Wind, at);
+                float4 after = tex2Dlod(_WindNext, at);
+                float2 climate = ClimateWind(lonLat.y);
+                return 0.5 * (lerp(climate, (before.rg - 0.5) * 80.0, saturate(before.b)) +
+                              lerp(climate, (after.rg - 0.5) * 80.0, saturate(after.b)));
             }
 
             // Where air that is at lonLat now was `seconds` ago (negative) or will be
-            // (positive), moving with the given wind. One step: over an hour the clouds
-            // move about a degree, a pixel or two of the observation.
+            // (positive), moving with the given wind. One step: over three hours the clouds
+            // move a few degrees, a few pixels of the observation.
             float2 Carried(float2 lonLat, float2 wind, float seconds)
             {
                 const float EARTH = 6371000.0;
@@ -311,8 +323,11 @@ Shader "MyAtras/EarthComposite"
                     {
                         float2 cell = home + float2(k, j);
                         float2 anchor = (cell + 0.2 + 0.6 * float2(Hash(cell), Hash(cell + 17.0))) * CELL;
-                        float4 wind = tex2Dlod(_Wind, float4((anchor.x + 180.0) / 360.0, (anchor.y + 90.0) / 180.0, 0.0, 0.0));
-                        if (wind.a < 0.05) continue;
+                        float4 wind = tex2Dlod(_FlowWind, float4((anchor.x + 180.0) / 360.0, (anchor.y + 90.0) / 180.0, 0.0, 0.0));
+                        // Only among observed vectors: where the wind was spread into a gap
+                        // or not observed at all, no line is drawn.
+                        float observed = smoothstep(0.55, 0.8, wind.b);
+                        if (observed < 0.05) continue;
                         float2 uv = (wind.rg - 0.5) * 80.0;              // m/s, east and north
                         float speed = length(uv);
                         if (speed < 0.5) continue;
@@ -330,7 +345,7 @@ Shader "MyAtras/EarthComposite"
                         float t = saturate(dot(offset - tail, seg) / max(dot(seg, seg), 1e-4));
                         float d = length(offset - (tail + seg * t));
                         float stroke = smoothstep(0.30 + 0.12 * t, 0.05, d) * (0.25 + 0.75 * t);
-                        strongest = max(strongest, stroke * sin(3.14159 * phase) * wind.a);
+                        strongest = max(strongest, stroke * sin(3.14159 * phase) * observed);
                     }
                 }
                 return strongest;

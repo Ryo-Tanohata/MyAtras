@@ -85,6 +85,7 @@ namespace MyAtras
             public bool landMap;     // the night-side land and coastline map loaded
             public bool flow;        // the flow lines drawn
             public string windTime;  // the wind's observation stamp; empty if it could not be read
+            public bool windEachTime; // the wind is the observed wind at each observation's own time
             public int windTexels;   // one-degree texels with observed wind
             public float sunLat;     // subsolar point at the observation time, degrees
             public float sunLon;     // east positive
@@ -134,7 +135,6 @@ namespace MyAtras
             if (loader.Stars != null) material.SetTexture("_StarMap", loader.Stars);
             if (loader.Land != null) material.SetTexture("_Land", loader.Land);
             material.SetFloat("_LandOn", loader.Land != null ? 1f : 0f);
-            if (loader.Wind != null) material.SetTexture("_Wind", loader.Wind);
             material.SetVector("_Watermark", loader.Watermark);
             material.SetFloat("_WeatherActive", 1f);
             playback = new ObservationPlayback(loader.Frames.Count, Time.unscaledTime) { Model = model };
@@ -280,6 +280,25 @@ namespace MyAtras
         }
 
         /// <summary>
+        /// Seconds of the atmosphere's time per playback step: the gap between the two
+        /// observations on screen, or between the first two on the step back to the start.
+        /// </summary>
+        float StepSeconds()
+        {
+            if (loader.Times.Count < 2) return 3600f;
+            int later = playback.Continuing ? playback.Current : 1;
+            int earlier = playback.Continuing ? playback.Previous : 0;
+            return Mathf.Max(60f, (float)(loader.Times[later] - loader.Times[earlier]).TotalSeconds);
+        }
+
+        /// <summary>The wind observed at a frame's own time, or the single wind if there is none for it.</summary>
+        Texture2D WindFor(int index)
+        {
+            Texture2D own = index >= 0 && index < loader.Winds.Count ? loader.Winds[index] : null;
+            return own != null ? own : loader.Wind;
+        }
+
+        /// <summary>
         /// The moment whose sun is drawn. During a dissolve between an observation and the
         /// next hour's, the sun moves with it: the sunlight at each instant in between is
         /// real astronomy, not an invented observation, and it spares the terminator a
@@ -340,7 +359,8 @@ namespace MyAtras
                 cloudRelief = cloudRelief,
                 landMap = loader.Land != null,
                 flow = flow,
-                windTime = loader.WindStamp,
+                windTime = loaded && WindFor(playback.Current) != loader.Wind ? loader.Stamps[playback.Current] : loader.WindStamp,
+                windEachTime = loader.WindsLoaded > 0,
                 windTexels = loader.WindTexels,
                 renderPercent = Mathf.RoundToInt(renderScale * 100f),
                 error = loader.Error ?? "",
@@ -395,11 +415,18 @@ namespace MyAtras
             material.SetFloat("_StarsOn", stars && loader.Stars != null ? 1f : 0f);
             material.SetFloat("_Sidereal", (float)(SolarPosition.GreenwichSiderealDegrees(shown) * Math.PI / 180.0));
             material.SetFloat("_CloudRelief", cloudRelief ? 1f : 0f);
-            material.SetFloat("_FlowOn", flow && loader.Wind != null ? 1f : 0f);
-            // The flow keeps the playback's clock: at 0.65 s an hour, one screen second is
-            // about 1.5 hours of wind, so a line moves as far as the clouds do between
-            // two observations. 111,195 m to a degree of arc.
-            material.SetFloat("_FlowScale", 3600f / Mathf.Max(playback.Interval, 0.05f) / 111195f);
+            // Each observation's own wind; the interval between two uses both, and the flow
+            // lines are drawn from whichever observation is nearer in time.
+            Texture2D windBefore = WindFor(playback.Previous), windAfter = WindFor(playback.Current);
+            if (windBefore != null) material.SetTexture("_Wind", windBefore);
+            if (windAfter != null) material.SetTexture("_WindNext", windAfter);
+            Texture2D flowWind = playback.Fade(now) < 0.5f ? windBefore : windAfter;
+            if (flowWind != null) material.SetTexture("_FlowWind", flowWind);
+            material.SetFloat("_FlowOn", flow && flowWind != null ? 1f : 0f);
+            // The flow keeps the playback's clock: one step of the playback is the time
+            // between two observations (three hours in the bundled set), so a line moves as
+            // far as the clouds do between them. 111,195 m to a degree of arc.
+            material.SetFloat("_FlowScale", StepSeconds() / Mathf.Max(playback.Interval, 0.05f) / 111195f);
             if (renderScale > 0.99f)
             {
                 Graphics.Blit(source, destination, material);
