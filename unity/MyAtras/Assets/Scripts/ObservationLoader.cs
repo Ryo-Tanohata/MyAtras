@@ -65,6 +65,8 @@ namespace MyAtras
         public Vector2 Watermark { get; private set; }
         /// <summary>How many observations the manifest lists, loaded or not.</summary>
         public int Expected { get; private set; }
+        /// <summary>How many observations have arrived so far, while they are loading.</summary>
+        public int Progress { get; private set; }
         public string Error { get; private set; }
 
         readonly List<Texture2D> frames = new List<Texture2D>();
@@ -201,6 +203,8 @@ namespace MyAtras
             manifest.globalir.Sort((a, b) => string.CompareOrdinal(a.time, b.time));
             Expected = manifest.globalir.Count;
 
+            var wanted = new List<Frame>();
+            var wantedTimes = new List<DateTime>();
             foreach (Frame frame in manifest.globalir)
             {
                 // Without a valid time there is no knowing where the sun was, or where the
@@ -210,22 +214,27 @@ namespace MyAtras
                     Error = $"The observation {frame.time} has no valid time; showing only the ones before it.";
                     break;
                 }
+                wanted.Add(frame);
+                wantedTimes.Add(observedAt);
+            }
 
-                Texture2D observation = null;
-                yield return Texture(root + "weather/sequence/" + frame.file, TextureWrapMode.Clamp,
-                    texture => observation = texture);
-                if (observation == null)
+            var arrived = new Texture2D[wanted.Count];
+            yield return Textures(wanted.ConvertAll(f => root + "weather/sequence/" + f.file),
+                TextureWrapMode.Clamp, arrived, () => Progress++);
+            for (int i = 0; i < wanted.Count; i++)
+            {
+                if (arrived[i] == null)
                 {
                     // Stop at the first gap rather than skip it: playing on past a missing
-                    // hour would show two observations as if they were an hour apart.
-                    Error = $"The observation for {Label(frame.time)} could not be loaded; " +
+                    // observation would show the two either side as if they were one step apart.
+                    Error = $"The observation for {Label(wanted[i].time)} could not be loaded; " +
                             "showing only the ones before it.";
                     break;
                 }
-                frames.Add(observation);
-                labels.Add(Label(frame.time));
-                stamps.Add(frame.time);
-                times.Add(observedAt);
+                frames.Add(arrived[i]);
+                labels.Add(Label(wanted[i].time));
+                stamps.Add(wanted[i].time);
+                times.Add(wantedTimes[i]);
             }
 
             if (frames.Count == 0)
@@ -263,13 +272,12 @@ namespace MyAtras
                     Debug.LogWarning("MyAtras: the wind manifest could not be read: " + e.Message);
                 }
             }
-            foreach (string stamp in stamps)
+            var windUrls = stamps.ConvertAll(stamp =>
+                windFiles.TryGetValue(stamp, out string file) ? root + "data/wind/" + file : null);
+            var windsArrived = new Texture2D[windUrls.Count];
+            yield return Textures(windUrls, TextureWrapMode.Repeat, windsArrived);
+            foreach (Texture2D wind in windsArrived)
             {
-                Texture2D wind = null;
-                if (windFiles.TryGetValue(stamp, out string file))
-                {
-                    yield return Texture(root + "data/wind/" + file, TextureWrapMode.Repeat, texture => wind = texture);
-                }
                 winds.Add(wind);
                 if (wind != null) WindsLoaded++;
             }
@@ -299,13 +307,16 @@ namespace MyAtras
                     Debug.LogWarning("MyAtras: the motion manifest could not be read: " + e.Message);
                 }
             }
+            var motionUrls = new List<string>();
             for (int k = 0; k + 1 < stamps.Count; k++)
             {
-                Texture2D measured = null;
-                if (motionFiles.TryGetValue(stamps[k] + ">" + stamps[k + 1], out string file))
-                {
-                    yield return Texture(root + "data/motion/" + file, TextureWrapMode.Repeat, texture => measured = texture);
-                }
+                motionUrls.Add(motionFiles.TryGetValue(stamps[k] + ">" + stamps[k + 1], out string file)
+                    ? root + "data/motion/" + file : null);
+            }
+            var motionsArrived = new Texture2D[motionUrls.Count];
+            yield return Textures(motionUrls, TextureWrapMode.Repeat, motionsArrived);
+            foreach (Texture2D measured in motionsArrived)
+            {
                 motions.Add(measured);
                 if (measured != null) MotionsLoaded++;
             }
@@ -343,6 +354,54 @@ namespace MyAtras
                 else
                 {
                     Debug.LogWarning($"MyAtras: {url} could not be read ({request.error})");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Loads several textures at once, at most <paramref name="concurrency"/> in flight.
+        /// Three days of hourly observations with their winds and motions are over two
+        /// hundred files; one after another, the wait on a phone would be mostly round
+        /// trips. results[i] stays null where urls[i] is null or could not be read.
+        /// </summary>
+        static IEnumerator Textures(List<string> urls, TextureWrapMode wrapU, Texture2D[] results,
+                                    Action onEach = null, int concurrency = 8)
+        {
+            var active = new List<KeyValuePair<int, UnityWebRequest>>();
+            int next = 0;
+            while (next < urls.Count || active.Count > 0)
+            {
+                while (active.Count < concurrency && next < urls.Count)
+                {
+                    if (urls[next] != null)
+                    {
+                        UnityWebRequest request = UnityWebRequestTexture.GetTexture(urls[next], true);
+                        request.SendWebRequest();
+                        active.Add(new KeyValuePair<int, UnityWebRequest>(next, request));
+                    }
+                    next++;
+                }
+                if (active.Count == 0) continue;
+                yield return null;
+                for (int i = active.Count - 1; i >= 0; i--)
+                {
+                    UnityWebRequest request = active[i].Value;
+                    if (!request.isDone) continue;
+                    if (request.result == UnityWebRequest.Result.Success)
+                    {
+                        Texture2D texture = DownloadHandlerTexture.GetContent(request);
+                        texture.wrapModeU = wrapU;
+                        texture.wrapModeV = TextureWrapMode.Clamp;
+                        texture.filterMode = FilterMode.Bilinear;
+                        results[active[i].Key] = texture;
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"MyAtras: {request.url} could not be read ({request.error})");
+                    }
+                    onEach?.Invoke();
+                    request.Dispose();
+                    active.RemoveAt(i);
                 }
             }
         }

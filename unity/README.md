@@ -136,6 +136,12 @@ of what changes in three hours is cloud forming, dissolving and changing shape, 
 carrying cannot show. That remainder is what appears as clouds sliding a little and
 being pulled back at each observation.
 
+Those figures are for observations three hours apart. The bundled set is now hourly:
+the change from one observation to the next is about half as large (0.102 against
+0.189 not moving at all), and what remains after carrying by the measured motion -
+what shows as pulling back - falls from 0.128 to 0.077 a step. Hourly, the wind
+explains 14.3% of the change and the measured motion 25.2%.
+
 Carried by the motion measured from the observations themselves instead, the difference
 falls by 32.4% - twice what the wind achieves - measured on the same frames the motion
 was estimated from. That is the right measure for joining two observations, which is
@@ -144,12 +150,14 @@ what the atmosphere does: a median of 12 m/s, 38 m/s at the 99th percentile, wes
 in mid-latitudes and weakly easterly in the tropics.
 
 「実観測だけ」 on the page shows the observations alone, with the timing of the
-JavaScript version: one observation every 0.65 s, the newest held twice as long, and a
+JavaScript version: the chosen hours of the atmosphere per second (4.5 unless changed,
+so an hourly observation every 0.22 s), the newest held twice as long, and a
 dissolve of 0.12-0.38 s between an observation and the one after it. Each observation
 goes through the brightness threshold on its own and only the drawn layers are mixed,
 in both. Starting over from the newest to the oldest jumps back across the whole
 sequence and is neither dissolved nor carried. If an observation fails to load,
-playback stops at the gap rather than skipping it, and the page says how many of them
+playback stops at the gap rather than skipping it (the files are loaded eight at a
+time, then kept in order up to the first that failed), and the page says how many of them
 could be loaded.
 
 Not yet ported: the visible-light product, the grayscale observation toggle, the

@@ -202,14 +202,30 @@ s.test('the last frame is held longer before looping', async () => {
   clearInterval(controller.timer);
 });
 
-s.test('the speed control changes the interval', async () => {
+// The speed is how much of the atmosphere's time passes in a second, so the same setting
+// looks the same whether the observations are an hour apart or three.
+s.test('the speed is hours of the atmosphere per second, whatever the spacing', async () => {
   const { playback, controller } = setup();
-  assert.strictEqual(playback.interval, 650);
+  await playback.prepare(true);
+  clearTimeout(playback.timer);
+  const gap = (W.parseTime(TIMES[1]) - W.parseTime(TIMES[0])) / 3600000;
+  assert.strictEqual(playback.hoursPerSecond, 4.5, 'standard: four and a half hours a second');
+  assert.ok(Math.abs(playback.interval - gap / 4.5 * 1000) < 1e-6,
+    `${playback.interval} ms per observation ${gap} h apart`);
   const select = env.document.getElementById('weatherPlaybackSpeed');
-  select.value = '300';
+  select.value = '9';
   select.onchange({ target: select });
-  assert.strictEqual(playback.interval, 300);
+  assert.ok(Math.abs(playback.interval - gap / 9 * 1000) < 1e-6, 'twice as fast');
+  playback.stop();
   clearInterval(controller.timer);
+});
+
+s.test('three-hourly observations at the same speed are three times further apart in time', () => {
+  const { playback } = setup();
+  playback.frames = ['20260918.000000', '20260918.030000'];
+  const threeHourly = playback.interval;
+  playback.frames = ['20260918.000000', '20260918.010000'];
+  assert.ok(Math.abs(threeHourly - 3 * playback.interval) < 1e-6);
 });
 
 s.test('pausing stops the timer and reports the position', async () => {

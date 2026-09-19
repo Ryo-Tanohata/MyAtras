@@ -15,7 +15,7 @@
 <div class="intro"><span class="eyebrow">EARTH / CLOUDS IN MOTION</span><h1>雲の流れを、<br>地球の上で。</h1><p>観測時刻を進めて、雲の変化を見る。</p></div>
 <div class="stage"><canvas id="globe" tabindex="0" aria-label="地球。ドラッグで回転、ピンチまたはホイールで拡大縮小"></canvas><div id="status" role="status">地球を読み込んでいます…</div><div class="caption"><span class="line"></span><span>EARTH<small id="surfaceLabel">赤外線の観測を風で動かした模型</small></span></div><div class="instructions">ドラッグで回転 <span>·</span> ピンチで拡大</div></div>
 <aside>
-<section class="weather-controls" aria-label="気象データ"><span class="eyebrow">SATELLITE OBSERVATIONS</span><h2>雲の流れ</h2><p>異なる観測時刻の雲を、地球上で連続再生します。</p><div class="display-modes" role="group" aria-label="雲の動かし方"><button data-motion="model" class="selected" aria-pressed="true">風で流す模型</button><button data-motion="observed" aria-pressed="false">実観測だけ</button></div><p id="motionNote" class="weather-note">模型です。実観測を出発点に、雲を動かして観測と観測の間をつないでいます。動きは、前後2つの観測画像を見比べて雲の模様がどちらへどれだけずれたかを推定したものです。推定できない所（雲が少ない所など）はSSECの観測風で、それも届かない所は貿易風・偏西風などの典型的な大気の流れで補っています。観測ごとに次の実観測へ合わせ直すので雲の配置は観測から離れませんが、間の動きは推定で、観測ではありません。</p><button id="weatherPlay" aria-pressed="false" disabled>▶ 雲の流れを再生</button><p id="weatherPlaybackStatus" role="status">観測を準備中…</p><label for="weatherPlaybackSpeed">再生の速さ</label><select id="weatherPlaybackSpeed"><option value="1200">ゆっくり</option><option value="650" selected>標準</option><option value="300">速い</option></select><label class="toggle">観測の切り替わりをなめらかに（実観測だけのとき）<input type="checkbox" id="smoothObservations" checked><span></span></label><p class="weather-note">切り替わりの間は、前の観測と次の観測を重ねて溶け込ませます。どちらも実観測で、中間の時刻の観測を作り出してはいません。日時は溶け込み先の観測を指します。溶け込むのは次の観測へ進むときだけで、先頭へ戻るときや時刻を選んだときはすぐに切り替えます。</p><p class="weather-note">通常は、観測の明るさ0.38–0.82を白い雲の濃さに変換し、青い地表参考画像に重ねます。未校正の簡易合成で、検証された雲判定ではありません。冷たい地表を雲として含み、暖かい低層雲を見落とします。参考画像は雲のない地表で、雪氷は固定です。観測範囲外（緯度±85.05°より外）は参考画像のままです。</p><p id="weatherStatus" role="status" aria-live="polite">保存した観測画像を読み込み中…</p><time id="observationTime">観測日時を確認中</time><label for="weatherTime">表示中の観測時刻</label><input type="range" id="weatherTime" min="0" max="0" value="0" disabled><p class="weather-note">観測を時刻順に再生し、末尾で先頭へ戻ります。赤外線は白黒の観測です。未来館と同じカラー合成ではありません。合成時刻を日本時間で表示。画像の透かしとロゴはそのまま表示します。</p><a class="weather-source" href="https://realearth.ssec.wisc.edu/" target="_blank" rel="noreferrer">Source: SSEC RealEarth, UW-Madison</a></section>
+<section class="weather-controls" aria-label="気象データ"><span class="eyebrow">SATELLITE OBSERVATIONS</span><h2>雲の流れ</h2><p>異なる観測時刻の雲を、地球上で連続再生します。</p><div class="display-modes" role="group" aria-label="雲の動かし方"><button data-motion="model" class="selected" aria-pressed="true">風で流す模型</button><button data-motion="observed" aria-pressed="false">実観測だけ</button></div><p id="motionNote" class="weather-note">模型です。実観測を出発点に、雲を動かして観測と観測の間をつないでいます。動きは、前後2つの観測画像を見比べて雲の模様がどちらへどれだけずれたかを推定したものです。推定できない所（雲が少ない所など）はSSECの観測風で、それも届かない所は貿易風・偏西風などの典型的な大気の流れで補っています。観測ごとに次の実観測へ合わせ直すので雲の配置は観測から離れませんが、間の動きは推定で、観測ではありません。</p><button id="weatherPlay" aria-pressed="false" disabled>▶ 雲の流れを再生</button><p id="weatherPlaybackStatus" role="status">観測を準備中…</p><label for="weatherPlaybackSpeed">再生の速さ</label><select id="weatherPlaybackSpeed"><option value="1.5">ゆっくり（1秒で1.5時間）</option><option value="4.5" selected>標準（1秒で4.5時間）</option><option value="9">速い（1秒で9時間）</option></select><label class="toggle">観測の切り替わりをなめらかに（実観測だけのとき）<input type="checkbox" id="smoothObservations" checked><span></span></label><p class="weather-note">切り替わりの間は、前の観測と次の観測を重ねて溶け込ませます。どちらも実観測で、中間の時刻の観測を作り出してはいません。日時は溶け込み先の観測を指します。溶け込むのは次の観測へ進むときだけで、先頭へ戻るときや時刻を選んだときはすぐに切り替えます。</p><p class="weather-note">通常は、観測の明るさ0.38–0.82を白い雲の濃さに変換し、青い地表参考画像に重ねます。未校正の簡易合成で、検証された雲判定ではありません。冷たい地表を雲として含み、暖かい低層雲を見落とします。参考画像は雲のない地表で、雪氷は固定です。観測範囲外（緯度±85.05°より外）は参考画像のままです。</p><p id="weatherStatus" role="status" aria-live="polite">保存した観測画像を読み込み中…</p><time id="observationTime">観測日時を確認中</time><label for="weatherTime">表示中の観測時刻</label><input type="range" id="weatherTime" min="0" max="0" value="0" disabled><p class="weather-note">観測を時刻順に再生し、末尾で先頭へ戻ります。赤外線は白黒の観測です。未来館と同じカラー合成ではありません。合成時刻を日本時間で表示。画像の透かしとロゴはそのまま表示します。</p><a class="weather-source" href="https://realearth.ssec.wisc.edu/" target="_blank" rel="noreferrer">Source: SSEC RealEarth, UW-Madison</a></section>
 <span class="eyebrow">VIEW SETTINGS</span><h2>地球の見え方</h2>
 <label class="toggle">観測時刻の昼と夜<input type="checkbox" id="sunlight" checked><span></span></label>
 <p id="sunPoint" class="weather-note" role="status">太陽の位置を計算中…</p>
@@ -33,7 +33,7 @@
 </aside>
 </main>
 <footer><span>日本科学未来館の展示「ジオ・コスモス」に着想を得た個人制作です。同館とは関係がありません。</span><details><summary>この展示について</summary><p>SSEC RealEarthの全球衛星合成画像（赤外線）を球面に投影します。予報ではなく観測画像です。画像中の透かし・ロゴは保持します。観測には遅れや欠測があります。地表の参考画像は雲のない地表で、現在の観測ではありません。描画はUnityで行い、観測は同じサイトのJavaScript版と同じファイルを読み込みます。</p><p>地球画像：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_2048.jpg" target="_blank" rel="noreferrer">NASA Visible Earth (Blue Marble)</a> · 夜の街明かり：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg" target="_blank" rel="noreferrer">NASA Earth Observatory (Black Marble 2016)</a> · 星：<a href="https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50" target="_blank" rel="noreferrer">Bright Star Catalogue, 5th Revised Ed. (Hoffleit &amp; Warren 1991, CDS V/50)</a> · 夜の海岸線：<a href="https://www.naturalearthdata.com/" target="_blank" rel="noreferrer">Natural Earth</a> · 観測風：<a href="https://www.ssec.wisc.edu/realearth/terms-of-use/" target="_blank" rel="noreferrer">SSEC RealEarth（AMV）</a> · <a href="https://www.miraikan.jst.go.jp/" target="_blank" rel="noreferrer">日本科学未来館</a></p></details></footer>
-<script src="Build/d99d979fda4331313fc9e36e4b7d7923.loader.js"></script>
+<script src="Build/f614f511093cd638c246e260e08c62a8.loader.js"></script>
 <script>
 (function () {
   'use strict';
@@ -56,6 +56,15 @@
 
   function degrees(value, positive, negative) {
     return (value >= 0 ? positive : negative) + Math.abs(value).toFixed(1) + '°';
+  }
+
+  // The speed is hours of the atmosphere per second. The player wants milliseconds per
+  // observation, which depends on how far apart the observations are.
+  function stepMs() {
+    var times = (state && state.times) || [];
+    var a = parseStamp(times[0]), b = parseStamp(times[1]);
+    var hours = a && b && b > a ? (b - a) / 3600000 : 1;
+    return hours * 1000 / Math.max(+$('weatherPlaybackSpeed').value || 4.5, 0.01);
   }
 
   function send(method, value) {
@@ -85,7 +94,7 @@
       // The globe ignores settings until its observations are loaded, so hand over the
       // controls as the page shows them once it is ready.
       configured = true;
-      send('SetIntervalMs', +$('weatherPlaybackSpeed').value);
+      send('SetIntervalMs', stepMs());
       send('SetDissolve', $('smoothObservations').checked ? 1 : 0);
       send('SetModel', motion === 'model' ? 1 : 0);
       send('SetSunlight', $('sunlight').checked ? 1 : 0);
@@ -150,7 +159,7 @@
   };
 
   $('weatherPlay').onclick = function () { if (state) send('SetPlaying', state.playing ? 0 : 1); };
-  $('weatherPlaybackSpeed').onchange = function (e) { send('SetIntervalMs', +e.target.value); };
+  $('weatherPlaybackSpeed').onchange = function () { send('SetIntervalMs', stepMs()); };
   $('smoothObservations').onchange = function (e) { send('SetDissolve', e.target.checked ? 1 : 0); };
   // How the clouds get from one observation to the next: carried by the wind (the
   // model, the default) or the observations alone.
@@ -191,9 +200,9 @@
   });
 
   createUnityInstance($('globe'), {
-    dataUrl: 'Build/65ab2ceef20b68d7d8c732775b68df20.data.unityweb',
-    frameworkUrl: 'Build/350a208cd1edf899dc6cbf16a8389912.framework.js.unityweb',
-    codeUrl: 'Build/a91a4a1095d3b569329cb394d82c2753.wasm.unityweb',
+    dataUrl: 'Build/8bfb8ab87bc020564fa37a0de064d766.data.unityweb',
+    frameworkUrl: 'Build/605929b2d5dcd8e04ec3e4f8caf01fef.framework.js.unityweb',
+    codeUrl: 'Build/5aca3e0ec13b3dfc1fe4185723fb40ca.wasm.unityweb',
     streamingAssetsUrl: 'StreamingAssets',
     companyName: "MyAtras",
     productName: "MyAtras",

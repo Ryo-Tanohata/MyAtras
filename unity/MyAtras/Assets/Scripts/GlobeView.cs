@@ -327,7 +327,7 @@ namespace MyAtras
         {
             if (loader == null) return;
             long key = (loaded ? 1L : loadFinished ? 2L : 0L)
-                       | (long)loader.Frames.Count << 2
+                       | (long)(loaded ? loader.Frames.Count : loader.Progress) << 2
                        | (long)(loaded ? playback.Current : 0) << 10
                        | (loaded && playback.Playing ? 1L : 0L) << 18
                        | (!loaded || playback.Dissolve ? 1L : 0L) << 19
@@ -345,7 +345,7 @@ namespace MyAtras
             State state = new State
             {
                 state = loaded ? "ready" : loadFinished ? "error" : "loading",
-                loadedCount = loader.Frames.Count,
+                loadedCount = loaded ? loader.Frames.Count : loader.Progress,
                 expected = loader.Expected,
                 index = loaded ? playback.Current : 0,
                 time = loaded ? loader.Stamps[playback.Current] : "",

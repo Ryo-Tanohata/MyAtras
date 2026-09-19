@@ -7,7 +7,8 @@ name: Publish site
 # refreshed on a schedule.
 #
 # A fetch publishes what it downloaded without committing it, unless `commit` is
-# asked for: a day of hourly frames is about 5 MB and images do not diff, so keeping
+# asked for: three days of hourly frames with their winds and motion are about 19 MB
+# and images do not diff, so keeping
 # every refresh would dwarf a repository whose source is a few megabytes. `commit`
 # makes the fetched set the bundled one, which is how the site keeps showing a
 # refresh once the run is over. Either way records/published-observations.json says
@@ -35,10 +36,10 @@ on:
         default: true
       frames:
         description: 'How many observations to publish'
-        default: '24'
+        default: '72'
       every:
         description: 'Minutes between them'
-        default: '180'
+        default: '60'
       span:
         description: 'Hours back SSEC is asked to list (it keeps about a week of images, three days of wind)'
         default: '72'
@@ -94,8 +95,8 @@ jobs:
         continue-on-error: true
         run: |
           node scripts/fetch-observations.cjs \
-            --frames "${{ inputs.frames || '24' }}" \
-            --every "${{ inputs.every || '180' }}" \
+            --frames "${{ inputs.frames || '72' }}" \
+            --every "${{ inputs.every || '60' }}" \
             --span "${{ inputs.span || '72' }}" \
             ${{ inputs.winds && '--winds' || '' }} | tee fetch.log
 
