@@ -109,14 +109,15 @@ the same colour there. North of 85.05° there is no observation, so the cloud-fr
 reference shows dark Arctic ocean, while cold surface just inside the limit comes
 through the brightness threshold as white.
 
-Playback of all thirteen stored observations follows the JavaScript version's timing
+Playback of all the stored observations follows the JavaScript version's timing
 (`ObservationPlayback.cs`): one observation every 0.65 s, the newest held twice as long,
-and a dissolve of 0.12-0.38 s between an observation and the one an hour after it. Each
+and a dissolve of 0.12-0.38 s between an observation and the one after it. Each
 observation goes through the brightness threshold on its own and only the drawn layers
 are mixed, so nothing in between two observed times is ever shown as observed. Starting
-over from the newest to the oldest is a twelve-hour jump and is not dissolved. If an
+over from the newest to the oldest jumps back across the whole sequence and is not
+dissolved. If an
 observation fails to load, playback stops at the gap rather than skipping it, and the
-page says how many of the thirteen could be loaded.
+page says how many of them could be loaded.
 
 Not yet ported: the visible-light product, the grayscale observation toggle, the
 day/night mode, the wind model and fetching the latest observations. The page says so
@@ -137,7 +138,8 @@ terminator sweeps about 180 degrees while the clouds move.
   near the equinoxes, which is where the bundled observations sit.
 - `Assets/Editor/SolarPositionCheck.cs` checks it and exits 1 on failure: the 2026 March
   and September equinoxes (declination 0.002 and 0.003) and June solstice (23.435), the
-  thirteen observation times against the same formulas evaluated in Python, and the
+  thirteen observation times first bundled (2026-09-16), held in the check itself, against
+  the same formulas evaluated in Python, and the
   direction vector against the frame the shader samples in. Run it with
   `-executeMethod MyAtras.SolarPositionCheck.Run`.
 - The shader compares each point with that direction. The day side is drawn exactly as

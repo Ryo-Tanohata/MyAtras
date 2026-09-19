@@ -108,6 +108,18 @@ jobs:
             console.log(`${m.length} frames, ${m[0].time} to ${m.at(-1).time}`);
           ' | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # The suites ran above against the bundled observations; this runs them against
+      # the ones just fetched, before anything is published or committed. A fetched set
+      # the suites reject is neither - the first `commit` run bundled 24 observations
+      # that four playback tests, written for thirteen, then failed on.
+      - name: Test suites against the fetched observations
+        if: steps.fetch.outcome == 'success'
+        run: |
+          for suite in tests/*.test.cjs; do
+            echo "--- $suite"
+            node "$suite" || exit 1
+          done
+
       # Re-checks every frame against the SHA-256 recorded for it and fails the build
       # on a mismatch, so a frame that arrived corrupted never reaches the site.
       - name: Build the standalone export

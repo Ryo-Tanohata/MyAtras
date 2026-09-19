@@ -36,7 +36,7 @@ function setup() {
   env.responses.set('api/image', { image: true });
   env.document.getElementById('weatherProduct').value = 'globalir';
   env.document.getElementById('autoWeather').checked = false;
-  env.document.getElementById('weatherFrames').value = '13';
+  env.document.getElementById('weatherFrames').value = '24';
   env.reset();
   const shown = [];
   const continuing = [];
@@ -56,7 +56,7 @@ function stepOnce(playback) {
   return playback.controller.current.time;
 }
 
-// How many observations to play is the viewer's choice: the thirteen that ship with
+// How many observations to play is the viewer's choice: the ones that ship with
 // the page, or more of what SSEC still lists, fetched on a refresh. Nothing is
 // invented to fill a larger choice - only times the server listed are played.
 s.test('playback takes the chosen number of listed observations', async () => {
@@ -66,11 +66,11 @@ s.test('playback takes the chosen number of listed observations', async () => {
     .sort();
   controller.times.globalir = listed;
 
-  env.document.getElementById('weatherFrames').value = '25';
+  env.document.getElementById('weatherFrames').value = '12';
   env.document.getElementById('weatherFrames').dispatch('change');
   await playback.prepare();
-  assert.strictEqual(playback.frames.length, 25, 'twenty-five of the listed times');
-  assert.deepStrictEqual(playback.frames, listed.slice(-25), 'the newest ones, in order');
+  assert.strictEqual(playback.frames.length, 12, 'twelve of the listed times');
+  assert.deepStrictEqual(playback.frames, listed.slice(-12), 'the newest ones, in order');
   playback.stop();
 });
 
@@ -78,7 +78,7 @@ s.test('a smaller choice plays fewer, and never more than are listed', async () 
   const { playback, controller } = setup();
   controller.times.globalir = ['20260916.190000', '20260916.200000', '20260916.210000'];
 
-  env.document.getElementById('weatherFrames').value = '49';
+  env.document.getElementById('weatherFrames').value = '24';
   env.document.getElementById('weatherFrames').dispatch('change');
   await playback.prepare();
   assert.strictEqual(playback.frames.length, 3, 'asking for more than exist plays what exists');
@@ -88,10 +88,10 @@ s.test('a smaller choice plays fewer, and never more than are listed', async () 
 s.test('changing the number stops playback rather than mixing two lengths', () => {
   const { playback } = setup();
   playback.playing = true;
-  env.document.getElementById('weatherFrames').value = '25';
+  env.document.getElementById('weatherFrames').value = '12';
   env.document.getElementById('weatherFrames').dispatch('change');
   assert.ok(!playback.playing);
-  assert.strictEqual(playback.frameCount, 25);
+  assert.strictEqual(playback.frameCount, 12);
 });
 
 s.test('the bundled sequence is distinct observations in order, evenly spaced', () => {
@@ -127,8 +127,8 @@ s.test('every bundled frame is the one its manifest entry describes', () => {
   }
 });
 
-// The globe dissolves only between an observation and the one an hour after it.
-// Starting over from the newest to the oldest is a jump of twelve hours, so the
+// The globe dissolves only between an observation and the one after it. Starting
+// over from the newest to the oldest jumps back across the whole sequence, so the
 // playback must not present it as a continuation.
 s.test('only a step to the next observation counts as continuing', async () => {
   const { playback, continuing } = setup();
@@ -136,11 +136,12 @@ s.test('only a step to the next observation counts as continuing', async () => {
   clearTimeout(playback.timer);
   continuing.length = 0;
   playback.index = 0;
-  for (let i = 0; i < 14; i++) stepOnce(playback);
+  const n = TIMES.length;
+  for (let i = 0; i <= n; i++) stepOnce(playback);
   assert.strictEqual(continuing[0], false, 'the first observation follows nothing');
-  assert.deepStrictEqual(continuing.slice(1, 13), Array(12).fill(true),
-    'each of the next twelve is one hour after the last');
-  assert.strictEqual(continuing[13], false, 'going back to the oldest is not a continuation');
+  assert.deepStrictEqual(continuing.slice(1, n), Array(n - 1).fill(true),
+    'each of the rest follows the one before it');
+  assert.strictEqual(continuing[n], false, 'going back to the oldest is not a continuation');
   assert.strictEqual(playback.continuing, false, 'and the flag is only true while handing over');
 });
 
@@ -149,8 +150,8 @@ s.test('playback loads every bundled frame once, then replays from cache', async
   await playback.prepare(true);
   clearTimeout(playback.timer);
   assert.deepStrictEqual(playback.frames, TIMES);
-  assert.strictEqual(env.loads.length, 13, 'each observation fetched exactly once');
-  assert.strictEqual(controller.cache.size, 13);
+  assert.strictEqual(env.loads.length, TIMES.length, 'each observation fetched exactly once');
+  assert.strictEqual(controller.cache.size, TIMES.length);
   env.reset();
   await playback.prepare(true);
   clearTimeout(playback.timer);
@@ -166,12 +167,12 @@ s.test('each step shows a different observation and the loop returns to the firs
   assert.strictEqual(controller.current.time, TIMES[0], 'starts at the earliest observation');
   const seen = [controller.current.time];
   const stamps = [env.document.getElementById('observationTime').textContent];
-  for (let i = 0; i < 12; i++) {
+  for (let i = 1; i < TIMES.length; i++) {
     seen.push(stepOnce(playback));
     stamps.push(env.document.getElementById('observationTime').textContent);
   }
-  assert.deepStrictEqual(seen, TIMES, 'all 13 observations are shown in order');
-  assert.strictEqual(new Set(stamps).size, 13, 'the displayed timestamp changes every frame');
+  assert.deepStrictEqual(seen, TIMES, 'every bundled observation is shown, in order');
+  assert.strictEqual(new Set(stamps).size, TIMES.length, 'the displayed timestamp changes every frame');
   assert.ok(stamps[0].includes('日本時間'), 'timestamps are labelled Japan time');
   assert.strictEqual(stepOnce(playback), TIMES[0], 'playback loops back to the first observation');
   playback.stop();
@@ -185,17 +186,18 @@ s.test('the last frame is held longer before looping', async () => {
   const delays = [];
   const realSetTimeout = global.setTimeout;
   global.setTimeout = (fn, ms) => { delays.push(ms); return realSetTimeout(() => {}, 0); };
+  const n = TIMES.length;
   try {
-    for (let i = 0; i < 13; i++) playback.step();
+    for (let i = 0; i < n; i++) playback.step();
   } finally {
     global.setTimeout = realSetTimeout;
   }
-  // prepare() already showed the first frame, so these 13 steps cover frames 1..12
+  // prepare() already showed the first frame, so these n steps cover frames 1..n-1
   // and then the loop back to frame 0.
-  assert.strictEqual(delays.length, 13);
+  assert.strictEqual(delays.length, n);
   assert.strictEqual(delays[0], playback.interval, 'ordinary frames use the chosen interval');
-  assert.strictEqual(delays[11], playback.interval * 2, 'the final observation is held twice as long');
-  assert.strictEqual(delays[12], playback.interval, 'the restarted loop runs at normal speed');
+  assert.strictEqual(delays[n - 2], playback.interval * 2, 'the final observation is held twice as long');
+  assert.strictEqual(delays[n - 1], playback.interval, 'the restarted loop runs at normal speed');
   playback.stop();
   clearInterval(controller.timer);
 });
