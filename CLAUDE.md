@@ -3,7 +3,7 @@
 ## 目的とユーザーの希望
 日本科学未来館のジオ・コスモスのように、青い海と白い雲の地球をブラウザ（特にAndroid Chrome）で操作して、実際の雲の流れを見たい。静止画像を単に回す演出ではなく、SSECの異なる観測時刻を再生することが主目的。
 
-GitHubへの公開コード登録はユーザーが了承済み。GitHub Pagesでの公開も了承済みで、`.github/workflows/pages.yml` が main への push ごと、および毎日21:00 UTC（06:00 JST）に `dist/` を公開する。毎日の公開では、まずテストを通してから `scripts/fetch-observations.cjs --frames 24 --every 60` で直近24時間の観測をランナー上で取得し、それを載せて公開する（ランナーはSSECに到達できる。取得に失敗したら同梱の観測をそのまま公開し、その旨をサマリに出す）。取得した画像はcommitしない（1日約5MBで画像は差分が効かない）。代わりに `records/published-observations.json` に公開した観測の時刻・SHA-256・取得元を記録してcommitする。公開先は https://ryo-tanohata.github.io/MyAtras/ で、ユーザーはこのURLをAndroid Chromeで開いて確認する。公式の未来館製品と表示しない。展示名「ジオ・コスモス」をサイト名や見出しに使わず、着想元として本文で触れるだけにする（画面上の名称は MYATRAS）。
+GitHubへの公開コード登録はユーザーが了承済み。GitHub Pagesでの公開も了承済みで、`.github/workflows/pages.yml` が main への push ごと、`dist/` を公開する。観測の更新は自動では行わず、ワークフローを手動起動したときだけ `scripts/fetch-observations.cjs` で取得する（`fetch`・`frames`・`every` を指定。ランナーはSSECに到達できるが、エージェントのコンテナとスマホは到達できない）。取得に失敗したら同梱の観測をそのまま公開する。既定では取得物をcommitせず公開だけするので、実行が終われば同梱の観測に戻る。`commit` を真にすると取得した24枚を同梱として確定させる（約5MB）。いずれの場合も `records/published-observations.json` に公開した観測の時刻・SHA-256・取得元を記録する。毎日取得しないのは、1日分＝地球一周分で当初の目的を満たすため。公開先は https://ryo-tanohata.github.io/MyAtras/ で、ユーザーはこのURLをAndroid Chromeで開いて確認する。公式の未来館製品と表示しない。展示名「ジオ・コスモス」をサイト名や見出しに使わず、着想元として本文で触れるだけにする（画面上の名称は MYATRAS）。
 
 ## 起動
 フレームワークやnpmインストールは不要。Python 3で `python -m http.server 8000 --directory dist` を実行し、ブラウザで http://localhost:8000 を開く。

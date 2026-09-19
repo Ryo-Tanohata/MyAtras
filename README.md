@@ -69,17 +69,18 @@ Altitude is estimated from pressure under a standard-atmosphere approximation. D
 ## Published site
 
 `.github/workflows/pages.yml` publishes `dist/` to GitHub Pages at
-https://ryo-tanohata.github.io/MyAtras/ - on every push to `main`, and once a day at
-21:00 UTC. Each publish runs the test suites against the bundled observations, then
-fetches the newest day of them from SSEC (24 frames an hour apart by default; the
-workflow can be started by hand with other numbers), rebuilds the standalone export,
-opens the site in headless Chromium, and only then deploys.
+https://ryo-tanohata.github.io/MyAtras/ on every push to `main`. Each publish runs the
+test suites, rebuilds the standalone export, opens the site in headless Chromium, and
+only then deploys.
 
-The fetch is best effort: if SSEC cannot be reached, or serves an observation under a
-time it will not confirm, the bundled observations are published instead and the run
-says so. The fetched images are not committed - a day of frames is about 5 MB and
-images do not diff - but `records/published-observations.json` is, so the history says
-which observations the site was showing on a given day, with the SHA-256 of each. A Unity WebGL build of the same globe is
+Observations are refreshed only when the workflow is started by hand, with `fetch`,
+`frames` and `every` - a GitHub runner can reach SSEC, which the agent containers and
+a phone cannot. The fetch is best effort: if SSEC cannot be reached, or serves an
+observation under a time it will not confirm, the bundled observations are published
+instead and the run says so. `commit` makes the fetched set the bundled one, which is
+how a refresh outlives its run; without it the download is published but not kept.
+`records/published-observations.json` records what was published either way, with the
+SHA-256 and source URL of each frame. A Unity WebGL build of the same globe is
 published from `dist/unity/` at https://ryo-tanohata.github.io/MyAtras/unity/ . It adds
 what the JavaScript globe does not have: sunlight from where the sun actually was at
 each observation's time, NASA Black Marble city lights on the night side, an

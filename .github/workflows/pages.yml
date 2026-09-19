@@ -1,18 +1,20 @@
 name: Publish site
 
-# Serves dist/ on GitHub Pages, and does it once a day as well as on every push, so
-# the globe keeps showing recent weather without anyone at a desk. A GitHub runner
-# can reach SSEC, which neither the agent containers nor a phone can, so the newest
-# day of observations is fetched here, just before the site is built from it.
+# Serves dist/ on GitHub Pages on every push, and fetches observations only when
+# started by hand. A GitHub runner can reach SSEC, which neither the agent containers
+# nor a phone can, so this is where a refresh happens - but a day of observations is
+# a full turn of the Earth, which is what the globe set out to show, so it is not
+# refreshed on a schedule.
 #
-# The fetched images are not committed. A day of hourly frames is about 5 MB and
-# images do not diff, so committing them daily would add well over a gigabyte a year
-# to a repository whose source is a few megabytes. What is committed is the record of
-# what was published - records/published-observations.json, a few kilobytes - so the
-# history still says which observations the site was showing on a given day, with the
-# SHA-256 of each one. dist/weather/ keeps its own bundled observations: the copy that
-# works offline, that a fresh clone can check, and that is published when SSEC cannot
-# be reached.
+# A fetch publishes what it downloaded without committing it, unless `commit` is
+# asked for: a day of hourly frames is about 5 MB and images do not diff, so keeping
+# every refresh would dwarf a repository whose source is a few megabytes. `commit`
+# makes the fetched set the bundled one, which is how the site keeps showing a
+# refresh once the run is over. Either way records/published-observations.json says
+# what was published, with the SHA-256 and source URL of each frame.
+#
+# dist/weather/ is what a push publishes: the copy that works offline, that a fresh
+# clone can check, and that is published when a fetch cannot be made.
 #
 # The standalone single-file build is produced here rather than committed, so the
 # published copy is always rebuilt from the same observations the site serves.
@@ -22,18 +24,25 @@ on:
     branches: [main]
     # The record this workflow writes must not start it again.
     paths-ignore: ['records/**']
-  schedule:
-    # 21:00 UTC is 06:00 in Japan. GitHub runs scheduled jobs late when it is busy,
-    # and stops scheduling them on a repository left untouched for 60 days.
-    - cron: '0 21 * * *'
+  # No schedule. A day of observations is a full turn of the Earth, which is what
+  # this set out to show, so it is fetched when someone asks for it rather than
+  # every morning for ever.
   workflow_dispatch:
     inputs:
+      fetch:
+        description: 'Fetch the newest observations from SSEC'
+        type: boolean
+        default: true
       frames:
         description: 'How many observations to publish'
         default: '24'
       every:
         description: 'Minutes between them'
         default: '60'
+      commit:
+        description: 'Commit the fetched observations, making them the bundled set'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -68,11 +77,13 @@ jobs:
             node "$suite" || exit 1
           done
 
-      # Best effort on purpose. SSEC being unreachable, or serving an observation
-      # under a time it will not confirm, must not take the site down: the bundled
-      # observations are then published instead, and the step says so.
+      # Only when asked, and best effort even then. SSEC being unreachable, or
+      # serving an observation under a time it will not confirm, must not take the
+      # site down: the bundled observations are published instead and the step says
+      # so. A push publishes what is committed, without touching the network.
       - name: Fetch the newest observations
         id: fetch
+        if: inputs.fetch
         continue-on-error: true
         run: |
           node scripts/fetch-observations.cjs \
@@ -81,7 +92,9 @@ jobs:
 
       - name: Say which observations are being published
         run: |
-          if [ "${{ steps.fetch.outcome }}" = "success" ]; then
+          if [ "${{ steps.fetch.outcome }}" = "skipped" ]; then
+            echo "Publishing the observations bundled in the repository." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.fetch.outcome }}" = "success" ]; then
             echo "Publishing the observations fetched just now." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "SSEC could not be reached; publishing the bundled observations." >> "$GITHUB_STEP_SUMMARY"
@@ -124,6 +137,8 @@ jobs:
 
       - name: Record what was published
         if: steps.fetch.outcome == 'success'
+        env:
+          COMMIT_OBSERVATIONS: ${{ inputs.commit }}
         run: |
           # Traced, because a step that quietly decides there is nothing to record
           # looks exactly like one that recorded something.
@@ -150,12 +165,22 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           ls -l records/
           git add -f records/published-observations.json
+          # Asked for explicitly: the fetched frames become the bundled set, so the
+          # site keeps showing them when nothing is fetching any more. About 5 MB,
+          # which is why it is not what a fetch does by default.
+          if [ "$COMMIT_OBSERVATIONS" = "true" ]; then
+            git add -A dist/weather
+          fi
           git status --short
           if git diff --cached --quiet; then
             echo "::warning::Nothing staged for the record, which should not happen."
             exit 0
           fi
-          git commit -m "Record the observations published on $(date -u +%Y-%m-%d)"
+          if [ "$COMMIT_OBSERVATIONS" = "true" ]; then
+            git commit -m "Bundle the observations published on $(date -u +%Y-%m-%d)"
+          else
+            git commit -m "Record the observations published on $(date -u +%Y-%m-%d)"
+          fi
           # Someone may have pushed while this ran. The record is not worth failing a
           # publish that already succeeded, so try once and say plainly if it fails.
           if git pull --rebase origin main && git push origin HEAD:main; then
