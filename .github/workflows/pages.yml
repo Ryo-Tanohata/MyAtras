@@ -125,6 +125,9 @@ jobs:
       - name: Record what was published
         if: steps.fetch.outcome == 'success'
         run: |
+          # Traced, because a step that quietly decides there is nothing to record
+          # looks exactly like one that recorded something.
+          set -x
           mkdir -p records
           node -e '
             const fs = require("fs");
@@ -145,16 +148,21 @@ jobs:
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add records/published-observations.json
+          ls -l records/
+          git add -f records/published-observations.json
+          git status --short
           if git diff --cached --quiet; then
-            echo "The same observations as last time; nothing to record."
+            echo "::warning::Nothing staged for the record, which should not happen."
             exit 0
           fi
           git commit -m "Record the observations published on $(date -u +%Y-%m-%d)"
           # Someone may have pushed while this ran. The record is not worth failing a
-          # publish that already succeeded, so try once and leave it for tomorrow.
-          git pull --rebase --quiet origin main && git push origin HEAD:main || \
-            echo "Could not push the record; the publish itself succeeded."
+          # publish that already succeeded, so try once and say plainly if it fails.
+          if git pull --rebase origin main && git push origin HEAD:main; then
+            echo "Recorded."
+          else
+            echo "::warning::Could not push the record; the publish itself succeeded."
+          fi
 
       - name: Keep the screenshots and the log
         if: always()
@@ -165,4 +173,7 @@ jobs:
             .check-shots/
             fetch.log
             records/published-observations.json
+          # .check-shots starts with a dot, and the upload skips hidden files unless
+          # told otherwise - which is why the first run's artifact held no screenshots.
+          include-hidden-files: true
           if-no-files-found: ignore
