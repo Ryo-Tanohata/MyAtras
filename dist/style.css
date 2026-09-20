@@ -16,3 +16,29 @@ main{min-height:1040px;height:auto}.stage{height:820px;align-self:start;position
 .weather-controls details.notes>summary{font-size:13px;color:#93a7b7;cursor:pointer;min-height:36px;display:flex;align-items:center}
 .weather-controls details.notes>summary::marker{color:#6d8496}
 .weather-controls details.notes .weather-note:first-of-type{margin-top:4px}
+
+/* A switch keeps its label and its switch on one line: the label takes the room
+   that is left and wraps inside it, instead of squeezing the switch to nothing.
+   Written when 「台風の中心を重ねる（観測画像からの推定）」 wrapped around its own
+   switch on a phone. */
+.toggle{gap:14px}
+.toggle span{flex:none}
+
+/* Phones: the settings panel reads straight down, one control to a row, with each
+   explanation directly under the control it belongs to.
+   It used to be a two-column grid, written when the panel was a few short switches.
+   With the switches it has now, a note landed beside an unrelated switch, long
+   labels wrapped to three lines in a half-width cell, and 「初期の視点に戻す」 became
+   a tall box - the panel had stopped being readable. */
+@media(max-width:900px){
+  aside{grid-template-columns:1fr;gap:0}
+  /* The range used to be told to sit in the second column; with one column that
+     would conjure a second one back. */
+  aside>input[type=range]{grid-column:1;margin:0 0 12px}
+  aside>.toggle{min-height:56px;margin:0}
+  aside>.weather-note{margin:8px 0 14px;font-size:13px;line-height:1.7;color:#8fa4b5}
+  aside>.rangehead{margin:18px 0 8px}
+  aside>.zoomrow{margin:18px 0 0}
+  aside>.reset{margin-top:12px}
+  aside>.eyebrow{margin-top:8px}
+}

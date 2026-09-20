@@ -595,6 +595,37 @@ async function checkUnityBuild(page) {
     `${(rotated * 100).toFixed(1)}% of pixels differ`);
 }
 
+// -------------------------------------------------- the panel on a phone
+
+// The settings panel used to be laid out in two columns on a narrow screen. With
+// the switches it carries now, an explanation landed beside an unrelated switch and
+// a long label wrapped around its own switch, which is what a phone actually showed.
+// Both are geometry, so both can be measured rather than eyeballed.
+async function checkPanelLayout(page) {
+  const panel = JSON.parse(await page.js(`(() => {
+    const aside = document.querySelector('aside');
+    if (!aside) return JSON.stringify({ missing: true });
+    const width = aside.getBoundingClientRect().width;
+    const narrow = [], tall = [];
+    for (const el of aside.children) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) continue;
+      const name = el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') +
+        ' ' + (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 24);
+      if (r.width < width * 0.92) narrow.push(name + ' (' + Math.round(r.width) + 'px of ' + Math.round(width) + ')');
+      // Two lines of a 14px label plus the padding a row carries; a label that has
+      // wrapped around its switch is taller than this.
+      if (el.classList.contains('toggle') && r.height > 76) tall.push(name + ' (' + Math.round(r.height) + 'px)');
+    }
+    return JSON.stringify({ width: Math.round(width), narrow, tall });
+  })()`));
+  if (panel.missing) { check(false, 'the settings panel is on the page'); return; }
+  check(panel.narrow.length === 0, 'the settings panel gives each control its own row',
+    panel.narrow.slice(0, 2).join('; '));
+  check(panel.tall.length === 0, 'no switch label wraps around its switch',
+    panel.tall.slice(0, 2).join('; '));
+}
+
 // ---------------------------------------------------------------- main
 
 async function main() {
@@ -627,6 +658,10 @@ async function main() {
       if (UNITY) await checkUnityBuild(page);
       else await checkJavaScriptGlobe(page);
     }
+
+    // Only on a phone: on a wide screen the panel is a narrow column beside the
+    // globe, where these are not the questions.
+    if (MOBILE && version) await checkPanelLayout(page);
 
     const problems = consoleProblems(page.events);
     check(problems.length === 0, 'no console errors from the site',
