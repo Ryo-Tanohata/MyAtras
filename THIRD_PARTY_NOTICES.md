@@ -60,6 +60,25 @@ computed from, and is rebuilt whenever those are replaced.
   (`scripts/find-storms.cjs`): the centre of the cold cloud, hour by hour. Not a
   storm position in the sense a forecaster means, and not a forecast.
 
+`dist/data/tendency.json` is listed above under NOAA NCEI: it is not measured from the
+observations but from the record of past storms, and it changes only as decades pass, so
+it is built by hand rather than by the publish workflow.
+
+## NOAA NCEI — the record of past storms
+
+`dist/data/tendency.json` is derived from IBTrACS v04r01, the International Best Track
+Archive for Climate Stewardship, which gathers the best track records of every regional
+agency into one file. Nothing of the archive itself is bundled: what ships is a grid of
+the median heading and pace of the storms that passed through each cell, and how widely
+they differed, computed by `scripts/build-tendency.cjs` from 4,759 tropical cyclones and
+225,747 six-hourly legs since 1980. The archive's own SHA-256 is recorded in the file.
+
+- Source: https://www.ncei.noaa.gov/products/international-best-track-archive
+- File used: `ibtracs.since1980.list.v04r01.csv` (137 MB, not bundled)
+- Knapp, K. R., M. C. Kruk, D. H. Levinson, H. J. Diamond, and C. J. Neumann, 2010:
+  The International Best Track Archive for Climate Stewardship (IBTrACS).
+  *Bull. Amer. Meteor. Soc.*, 91, 363-376.
+
 ## NASA — ground reference texture
 
 `dist/assets/earth.jpg` is NASA's Blue Marble *Land Surface, Shallow Water, and

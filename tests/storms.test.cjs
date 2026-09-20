@@ -9,7 +9,7 @@
 // globe bare rather than throwing or inventing something.
 const assert = require('assert');
 const { suite } = require('./harness.cjs');
-const { StormTrack } = require('../dist/storms.js');
+const { StormTrack, StormOutlook } = require('../dist/storms.js');
 
 const AT = (time, lat, lon, circ = 2.4) => ({ time, lat, lon, circ });
 
@@ -129,6 +129,58 @@ s.test('the bundled storms are the ones the page will draw', async () => {
     for (const p of storm.points) {
       assert.strictEqual(t.at(p.time).length > 0, true, `${p.time} is drawable`);
     }
+  }
+});
+
+// The outlook is the one thing here that goes past what was observed, so what it may not
+// do matters more than what it does.
+async function outlook(grid){
+  delete globalThis.GEO_TENDENCY;
+  if (grid !== undefined) globalThis.GEO_TENDENCY = grid;
+  const o = new StormOutlook();
+  await o.load();
+  delete globalThis.GEO_TENDENCY;
+  return o;
+}
+
+s.test('only the last observation of a track is marked as the last', async () => {
+  const t = await track(ONE);
+  const times = ['20260917.050000', '20260917.060000', '20260917.070000', '20260917.080000'];
+  const flags = times.map(x => t.at(x)[0].last);
+  assert.deepStrictEqual(flags, [false, false, false, true]);
+});
+
+s.test('the outlook turns with the record, west in the tropics and north-east beyond', async () => {
+  const o = await outlook(require('../dist/data/tendency.json'));
+  const tropics = o.ahead(12.5, 132.5, 24);
+  const first = tropics.middle[0];
+  assert.ok(first.lon < 132.5, `heads west from the tropics, went to ${first.lon.toFixed(1)}`);
+  const turning = o.ahead(29.2, 137.5, 48);
+  const end = turning.middle[turning.middle.length - 1];
+  assert.ok(end.lat > 34 && end.lon > 137.5,
+    `recurves north-east near Japan, ended ${end.lat.toFixed(1)}N ${end.lon.toFixed(1)}E`);
+});
+
+// The fan is the honest part. Through the turn past storms disagreed far more than they
+// did in the tropics, and the drawing has to show that.
+s.test('the fan is wider through the turn than in the tropics', async () => {
+  const o = await outlook(require('../dist/data/tendency.json'));
+  assert.ok(o.ahead(29.2, 137.5).spread > o.ahead(12.5, 132.5).spread);
+});
+
+s.test('the outlook stops where the record does', async () => {
+  const o = await outlook(require('../dist/data/tendency.json'));
+  assert.strictEqual(o.ahead(0, 0), null, 'the Gulf of Guinea has no cyclones to average');
+  assert.strictEqual(o.ahead(75, 20), null, 'and neither does the Arctic');
+  const far = o.ahead(40, 150, 240);
+  assert.ok(far.middle.every(p => Math.abs(p.lat) <= 70), 'and it does not run to the pole');
+});
+
+s.test('no grid means no outlook, not a guess', async () => {
+  for (const value of [null, {}, { cells: null }]) {
+    const o = await outlook(value);
+    assert.strictEqual(o.grid, null, `nothing from ${JSON.stringify(value)}`);
+    assert.strictEqual(o.ahead(29.2, 137.5), null);
   }
 });
 

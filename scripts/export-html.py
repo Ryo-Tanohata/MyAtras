@@ -104,6 +104,13 @@ def storms():
     return script("window.GEO_STORMS=%s;" % literal(data))
 
 
+def tendency():
+    data = json.loads((DIST / "data/tendency.json").read_text(encoding="utf-8"))
+    print("  tendency %d cells from %d past storms"
+          % (len(data["cells"]), data["source"]["storms"]))
+    return script("window.GEO_TENDENCY=%s;" % literal(data))
+
+
 def main():
     html = (DIST / "index.html").read_text(encoding="utf-8")
     print("inlining observations")
@@ -111,6 +118,7 @@ def main():
     html = html.replace("<!--bundle:sequence-->", sequence())
     html = html.replace("<!--bundle:amv-->", amv())
     html = html.replace("<!--bundle:storms-->", storms())
+    html = html.replace("<!--bundle:tendency-->", tendency())
     html = STYLE_TAG.sub(
         lambda m: "<style>" + (DIST / m.group(1)).read_text(encoding="utf-8") + "</style>",
         html,

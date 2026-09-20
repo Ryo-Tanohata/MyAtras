@@ -403,6 +403,64 @@ async function checkJavaScriptGlobe(page) {
   })()`);
   check(honest === 'ok', 'no mark for a time the storm was not found in', honest);
 
+  // What storms have typically done next, drawn only once the observations run out. Sought
+  // to the storm's own last observation, which is the only place it may appear.
+  const toLast = await page.js(`(() => {
+    const w = window.geoWeather, t = window.geoStorms;
+    const product = document.getElementById('weatherProduct').value;
+    const times = (w.times && w.times[product]) || [];
+    const wanted = t.storms.map(s => s.points[s.points.length - 1].time);
+    const i = times.findIndex(x => wanted.indexOf(x && x.time ? x.time : x) >= 0);
+    if (i < 0) return 'no observation is the last of a storm';
+    const slider = document.getElementById('weatherTime');
+    slider.value = String(i);
+    slider.dispatchEvent(new Event('change', { bubbles: true }));
+    return 'ok';
+  })()`);
+  check(toLast === 'ok', "the storm's last observation can be shown", toLast);
+  await sleep(1800);
+  const beforeOutlook = await page.shot('07-before-the-outlook');
+  await page.js(`(() => { const box = document.getElementById('showOutlook');
+    box.checked = true; box.dispatchEvent(new Event('change')); })()`);
+  await sleep(2500);
+  const withOutlook = await page.shot('08-with-the-outlook');
+  const violet = image => {
+    let n = 0;
+    for (let i = 0; i < image.data.length; i += image.channels) {
+      const r = image.data[i], g = image.data[i + 1], b = image.data[i + 2];
+      if (b > 140 && b - g > 25 && r > g && b > r && r < 230) n++;
+    }
+    return n;
+  };
+  const wasViolet = violet(beforeOutlook), nowViolet = violet(withOutlook);
+  check(nowViolet > wasViolet + 30, 'the outlook is drawn ahead of the last observation',
+    `${nowViolet} violet pixels with it, ${wasViolet} without`);
+
+  const said = await page.js("(document.getElementById('stormStatus') || {}).textContent || ''");
+  check(/予報ではありません/.test(said) && /過去/.test(said),
+    'the outlook says it is not a forecast', said.slice(-52));
+
+  // And nowhere else. An hour the globe has an observation for must not be overdrawn with
+  // a guess about it.
+  const onlyAtTheEnd = await page.js(`(() => {
+    const w = window.geoWeather, t = window.geoStorms;
+    const product = document.getElementById('weatherProduct').value;
+    const times = (w.times && w.times[product]) || [];
+    const i = times.findIndex(x => t.at(x && x.time ? x.time : x).some(f => !f.last));
+    if (i < 0) return 'no mid-track observation to try';
+    const slider = document.getElementById('weatherTime');
+    slider.value = String(i); slider.dispatchEvent(new Event('change', { bubbles: true }));
+    return 'ok';
+  })()`);
+  await sleep(1800);
+  const midTrack = await page.shot('09-outlook-mid-track');
+  check(onlyAtTheEnd === 'ok' && violet(midTrack) <= wasViolet + 30,
+    'no outlook over an observation the globe already has',
+    `${violet(midTrack)} violet pixels mid-track against ${wasViolet} with it off`);
+  await page.js(`(() => { const box = document.getElementById('showOutlook');
+    box.checked = false; box.dispatchEvent(new Event('change')); })()`);
+  await sleep(400);
+
   const before = await page.shot('03-before-drag');
   await page.drag(200, 420, 320, 470);
   await sleep(1500);

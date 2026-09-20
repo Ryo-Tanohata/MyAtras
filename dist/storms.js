@@ -42,33 +42,88 @@ class StormTrack{
   for(const storm of this.storms){
    const i=storm.points.findIndex(p=>p.at===when);
    if(i<0)continue;
-   out.push({centre:storm.points[i],trail:storm.points.slice(0,i+1)});
+   out.push({centre:storm.points[i],trail:storm.points.slice(0,i+1),last:i===storm.points.length-1});
   }
   return out;
+ }
+}
+
+// Where a storm would go next if it behaved like the ones before it. Built from
+// dist/data/tendency.json: the median heading and pace of 4,759 past cyclones, cell by
+// cell, with how widely they differed. It knows nothing of this storm or of this week's
+// weather, so it is drawn only past the last observation, never over one, and the page
+// says what it is. The spread is drawn too: through the turn near Japan barely half of
+// past storms ran within 45 degrees of the middle, and a line without a fan around it
+// would claim a certainty that the record does not support.
+class StormOutlook{
+ constructor(){this.grid=null;this.tried=false;}
+ async load(){
+  if(this.tried)return this.grid;
+  this.tried=true;
+  try{this.grid=root.GEO_TENDENCY||(root.GeoData?await root.GeoData.tendency():null);}catch(error){this.grid=null;}
+  if(this.grid&&!this.grid.cells)this.grid=null;
+  return this.grid;
+ }
+ at(lat,lon){
+  if(!this.grid)return null;
+  const row=Math.floor((lat+90)/this.grid.cell);
+  const col=Math.floor(((((lon+180)%360)+360)%360)/this.grid.cell);
+  const c=this.grid.cells[row+','+col];
+  return c?{bearing:c[0],speed:c[1],band50:[c[2],c[3]],band80:[c[4],c[5]]}:null;
+ }
+ /// One path forward, held `offset` degrees off whatever the local tendency is, so an
+ /// edge of the fan turns with the middle instead of running off straight.
+ path(lat,lon,hours,offset){
+  const out=[],STEP=3;
+  for(let h=STEP;h<=hours;h+=STEP){
+   const t=this.at(lat,lon); if(!t)break;
+   const b=(t.bearing+offset)*RAD, d=t.speed*STEP;
+   lat+=d*Math.cos(b)/111.195;
+   lon+=d*Math.sin(b)/(111.195*Math.max(.2,Math.cos(lat*RAD)));
+   if(Math.abs(lat)>70)break;
+   out.push({lat,lon,hours:h});
+  }
+  return out;
+ }
+ /// The middle and the edges of the half of past storms that stayed closest to it.
+ ahead(lat,lon,hours=48){
+  const t=this.at(lat,lon); if(!t)return null;
+  return {middle:this.path(lat,lon,hours,0),
+    left:this.path(lat,lon,hours,t.band50[0]),
+    right:this.path(lat,lon,hours,t.band50[1]),
+    spread:t.band50[1]-t.band50[0]};
  }
 }
 
 // Drawn with the same camera the globe uses, so a centre lands on the place in the
 // picture it was measured from. Points only: line width is not dependable across drivers.
 class StormRenderer{
- constructor(gl,track){
-  this.gl=gl;this.track=track;this.buffer=gl.createBuffer();this.data=new Float32Array(0);
+ constructor(gl,track,outlook){
+  this.gl=gl;this.track=track;this.outlook=outlook||null;this.buffer=gl.createBuffer();this.data=new Float32Array(0);
   this.maxPoint=gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1];
   const vs=`precision highp float;
   attribute vec3 centre;attribute vec2 style;
   uniform vec2 resolution;uniform float yaw,pitch,zoom,maxPoint;
   varying float kind;varying float shade;
   vec3 toView(vec3 q){float cy=cos(yaw),sy=sin(yaw),cp=cos(pitch),sp=sin(pitch);float x=q.x*cy-q.z*sy;float z=q.x*sy+q.z*cy;return vec3(x,q.y*cp-z*sp,q.y*sp+z*cp);}
-  void main(){vec3 c=toView(centre);kind=style.x;shade=style.y;float s=min(resolution.x,resolution.y)*zoom*.77;gl_Position=vec4(c.xy*s/resolution,0.,1.);gl_PointSize=min(maxPoint,(kind>.5?.052:.017)*s);}`;
-  // A ring for where the storm is now, a soft dot for where it has been. Amber, because
-  // the globe is white cloud on blue sea and neither reads as a mark.
+  void main(){vec3 c=toView(centre);kind=style.x;shade=style.y;float s=min(resolution.x,resolution.y)*zoom*.77;
+   float size=kind>2.5?.011:(kind>1.5?.015:(kind>.5?.052:.017));
+   gl_Position=vec4(c.xy*s/resolution,0.,1.);gl_PointSize=min(maxPoint,size*s);}`;
+  // A ring for where the storm is now, a soft dot for where it has been - amber, because
+  // the globe is white cloud on blue sea and neither reads as a mark. What is only
+  // expected, never observed, is a different colour entirely: nothing about the outlook
+  // should read as part of the same statement as the ring.
   const fs=`precision highp float;
   varying float kind;varying float shade;
+  const vec3 SEEN=vec3(1.,.72,.26);
+  const vec3 AHEAD=vec3(.74,.64,.98);
   void main(){vec2 d=gl_PointCoord-vec2(.5);float r=length(d)*2.;float alpha;
-   if(kind>.5){float ring=1.-smoothstep(.0,.28,abs(r-.72));alpha=ring*.95;}
+   if(kind>2.5){alpha=(1.-smoothstep(.2,1.,r))*.42*shade;}
+   else if(kind>1.5){alpha=(1.-smoothstep(.2,1.,r))*.70*shade;}
+   else if(kind>.5){float ring=1.-smoothstep(.0,.28,abs(r-.72));alpha=ring*.95;}
    else{alpha=(1.-smoothstep(.25,1.,r))*.75*shade;}
    if(alpha<.01)discard;
-   gl_FragColor=vec4(vec3(1.,.72,.26)*(kind>.5?1.:.92),alpha);}`;
+   gl_FragColor=vec4(kind>1.5?AHEAD:SEEN*(kind>.5?1.:.92),alpha);}`;
   const compile=(type,code)=>{const s=gl.createShader(type);gl.shaderSource(s,code);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;};
   this.program=gl.createProgram();gl.attachShader(this.program,compile(gl.VERTEX_SHADER,vs));gl.attachShader(this.program,compile(gl.FRAGMENT_SHADER,fs));gl.linkProgram(this.program);
   if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(this.program));
@@ -77,10 +132,10 @@ class StormRenderer{
  }
  /// The visible marks for one observation time: trail dots fading with age, then the ring.
  /// A point on the far side of the globe is dropped rather than drawn through the Earth.
- marks(time,yaw,pitch){
+ marks(time,yaw,pitch,outlookOn){
   const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
   const out=[];
-  for(const {centre,trail} of this.track.at(time)){
+  for(const {centre,trail,last} of this.track.at(time)){
    const put=(p,kind,shade)=>{
     const lat=p.lat*RAD,lon=p.lon*RAD,r=1.004;
     const x=r*Math.cos(lat)*Math.sin(lon),y=r*Math.sin(lat),z=r*Math.cos(lat)*Math.cos(lon);
@@ -93,13 +148,31 @@ class StormRenderer{
     put(trail[i],0,.25+.75*(i/Math.max(1,n-1)));
    }
    put(centre,1,1);
+   // Only once the observations have run out. Drawing this over an hour the globe is
+   // about to show would be putting a guess where an observation already is.
+   if(outlookOn&&last&&this.outlook&&this.outlook.grid){
+    const ahead=this.cached(centre);
+    if(ahead){
+     for(const p of ahead.middle) put(p,2,1-.45*(p.hours/48));
+     for(const edge of [ahead.left,ahead.right])
+      for(const p of edge){ if(p.hours%6===0) put(p,3,1-.4*(p.hours/48)); }
+    }
+   }
   }
   return out;
  }
- draw({width,height,yaw,pitch,zoom,time,enabled}){
+ /// The outlook changes only when the observation does, so it is worked out once per
+ /// observation rather than once per frame.
+ cached(centre){
+  if(!this.memo||this.memo.time!==centre.time){
+   this.memo={time:centre.time,ahead:this.outlook.ahead(centre.lat,centre.lon,48)};
+  }
+  return this.memo.ahead;
+ }
+ draw({width,height,yaw,pitch,zoom,time,enabled,outlook}){
   const gl=this.gl;
   if(!enabled||!this.track.loaded)return 0;
-  const marks=this.marks(time,yaw,pitch);
+  const marks=this.marks(time,yaw,pitch,outlook);
   if(!marks.length)return 0;
   if(this.data.length<marks.length)this.data=new Float32Array(marks.length);
   this.data.set(marks);
@@ -118,6 +191,6 @@ class StormRenderer{
   return n;
  }
 }
-root.StormTrack=StormTrack;root.StormRenderer=StormRenderer;
-if(typeof module!=='undefined')module.exports={StormTrack,StormRenderer};
+root.StormTrack=StormTrack;root.StormRenderer=StormRenderer;root.StormOutlook=StormOutlook;
+if(typeof module!=='undefined')module.exports={StormTrack,StormRenderer,StormOutlook};
 })(typeof window==='undefined'?globalThis:window);
