@@ -8,6 +8,7 @@
 //   node scripts/fetch-observations.cjs --frames 25 --every 30   # 12 hours, twice as fine
 //   node scripts/fetch-observations.cjs --wind           # also rebuild dist/data/amv.json
 //   node scripts/fetch-observations.cjs --out /tmp/try   # write somewhere else
+//   node scripts/fetch-observations.cjs --region         # also a close-up of Japan
 //
 //   # Three days, one observation every three hours, with the wind at each of them:
 //   node scripts/fetch-observations.cjs --span 72 --frames 24 --every 180 --winds
@@ -25,6 +26,16 @@
 // loads all of them before playback starts, so more frames means a longer wait on a
 // phone and a larger repository.
 //
+// --region additionally stores a crop of the same observations over one part of the
+// world at the resolution SSEC actually holds, which is what the page shows once it
+// is zoomed in past the whole globe. The global frames are 512 px for the entire
+// Earth - about 63 km to a pixel at Japan - so zoomed in they are squares. The crop
+// is the same product, the same times and the same server; only the bounds and the
+// pixel count differ, and it carries its own manifest with each file's URL and
+// SHA-256. --region-bounds (south,west,north,east), --region-width and
+// --region-frames set it; the defaults are Japan, 1280 px across, and the newest 12
+// observations. About 2 km to a pixel, which is as fine as the infrared band gets.
+//
 // Run it where SSEC is reachable - the agent containers used for this repository
 // cannot reach realearth.ssec.wisc.edu - then commit dist/weather/ (and dist/data/
 // with --wind). Pushing to main republishes the site with those observations.
@@ -38,6 +49,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+const RegionBox = require('../dist/region-box.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const ARGS = process.argv.slice(2);
@@ -61,15 +73,23 @@ const WIND_OUT = path.resolve(ROOT, opt('--wind-out',
 const BOUNDS = '-85.05112878,-180,85.05112878,180';
 const SEQUENCE_SIZE = 512;   // the frames playback cycles through
 const SNAPSHOT_SIZE = 1024;  // the single observation the globe opens with
+
+// The close-up. Japan whole by default, from south of Yonaguni to north of Wakkanai,
+// which is the view dist/app.js opens on.
+const REGION = flag('--region');
+const REGION_NAME = opt('--region-name', 'japan');
+const REGION_BOUNDS = opt('--region-bounds', '24,122,46,148');
+const REGION_WIDTH = Number(opt('--region-width', 1280));
+const REGION_FRAMES = Number(opt('--region-frames', 12));
 const PRODUCTS = ['globalir', 'globalvis'];
 const WIND_PRODUCTS = ['AMV-LLlow', 'AMV-LLmid'];
 
-function imageURL(product, time, size) {
+function imageURL(product, time, size, box) {
   const params = new URLSearchParams({
     products: product + '_' + time.replace('.', '_'),
-    bounds: BOUNDS,
-    width: String(size),
-    height: String(size),
+    bounds: box ? `${box.south},${box.west},${box.north},${box.east}` : BOUNDS,
+    width: String(box ? box.width : size),
+    height: String(box ? box.height : size),
     format: 'png',
   });
   return BASE + 'image?' + params;
@@ -94,8 +114,8 @@ async function times(product) {
 const digits = value => String(value).replace(/\D/g, '');
 
 /// Downloads one observation and returns what the manifest needs to record.
-async function download(product, time, size, destination) {
-  const source = imageURL(product, time, size);
+async function download(product, time, size, destination, box) {
+  const source = imageURL(product, time, size, box);
   const response = await fetch(source);
   if (!response.ok) throw new Error(`${product} ${time} answered ${response.status}`);
 
@@ -204,6 +224,60 @@ async function sequence() {
     removed,
     times: entries.map(e => e.time),
   };
+}
+
+/// The close-up: the same observations, the same product and the same server, over a
+/// box instead of the whole world. Only the newest REGION_FRAMES of the sequence's
+/// times are taken, because a crop is several times the bytes of a global frame and
+/// the page loads them only when someone zooms in.
+async function region(frameTimes) {
+  const [south, west, north, east] = REGION_BOUNDS.split(',').map(Number);
+  if (![south, west, north, east].every(Number.isFinite)) {
+    throw new Error('--region-bounds wants south,west,north,east in degrees');
+  }
+  const b = RegionBox.box({ south, west, north, east, width: REGION_WIDTH });
+  const wanted = frameTimes.slice(-Math.max(1, REGION_FRAMES));
+  console.log(`  close-up ${REGION_NAME}: ${b.width}x${b.height} px over ` +
+    `${south}..${north}N ${west}..${east}E, ` +
+    `${RegionBox.kmPerPixel(b, (south + north) / 2).toFixed(1)} km per pixel at its middle`);
+
+  const directory = path.join(OUT, 'region');
+  const entries = [];
+  for (const time of wanted) {
+    const file = `${REGION_NAME}_globalir_${time.replace('.', '_')}.png`;
+    const stored = await download('globalir', time, 0, path.join(directory, file), b);
+    entries.push({ time, file, source: stored.source, sha256: stored.sha256, bytes: stored.bytes });
+    process.stdout.write(`  region globalir ${time}  ${stored.bytes} bytes\n`);
+  }
+
+  const removed = prune(directory, new Set(entries.map(e => e.file)));
+  fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify({
+    name: REGION_NAME,
+    product: 'globalir',
+    bounds: { south, west, north, east },
+    width: b.width,
+    height: b.height,
+    kmPerPixel: Number(RegionBox.kmPerPixel(b, (south + north) / 2).toFixed(2)),
+    frames: entries,
+  }, null, 1) + '\n');
+  const megabytes = entries.reduce((sum, e) => sum + e.bytes, 0) / (1024 * 1024);
+  return { count: entries.length, megabytes, removed, kmPerPixel: RegionBox.kmPerPixel(b, (south + north) / 2) };
+}
+
+/// A crop belongs to the observations it was cut from. A run that replaces those and
+/// does not ask for a new crop leaves none behind: the directory is emptied and the
+/// manifest says so, which is also what stops the page asking for a file that is not
+/// there.
+function noRegion() {
+  const directory = path.join(OUT, 'region');
+  const removed = prune(directory, new Set());
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify({
+    frames: [],
+    note: 'No close-up is bundled. scripts/fetch-observations.cjs --region cuts one ' +
+      'from the same observations; the page offers its switch only when this list is not empty.',
+  }, null, 1) + '\n');
+  return removed;
 }
 
 async function snapshot() {
@@ -359,12 +433,17 @@ async function main() {
   console.log(`writing to   ${path.relative(ROOT, OUT) || OUT}`);
 
   const frames = await sequence();
+  const closeUp = REGION ? await region(frames.times) : (noRegion(), null);
   const snapshots = await snapshot();
   const windTime = WIND ? await wind() : null;
   const windSet = WINDS ? await winds(frames.times) : null;
 
   console.log('\nstored');
   console.log(`  ${frames.count} frames  ${frames.first} → ${frames.last}  (${frames.span})`);
+  if (closeUp) {
+    console.log(`  close-up   ${closeUp.count} frames, ${closeUp.megabytes.toFixed(1)} MB, ` +
+      `${closeUp.kmPerPixel.toFixed(1)} km per pixel`);
+  }
   console.log(`  snapshots  ${Object.entries(snapshots.times).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   if (windTime) console.log(`  observed wind  ${windTime}`);
   if (windSet) {

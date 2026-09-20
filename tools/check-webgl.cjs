@@ -461,6 +461,8 @@ async function checkJavaScriptGlobe(page) {
     box.checked = false; box.dispatchEvent(new Event('change')); })()`);
   await sleep(400);
 
+  await checkCloseUp(page);
+
   const before = await page.shot('03-before-drag');
   await page.drag(200, 420, 320, 470);
   await sleep(1500);
@@ -601,6 +603,121 @@ async function checkUnityBuild(page) {
   const rotated = png.changed(paused, after);
   check(rotated >= 0.02, 'a touch drag rotates the globe',
     `${(rotated * 100).toFixed(1)}% of pixels differ`);
+}
+
+// -------------------------------------------------- the close-up
+
+// The close-up layer (dist/weather/region/): the same observations cropped to one part
+// of the world at the resolution SSEC holds. It is optional - a build without one
+// hides the switch - so this reports rather than fails when none is bundled.
+//
+// What is measured is placement. The crop carries the same clouds the global frame
+// already has, so switching it on must change the picture (it is being drawn) but
+// only a little (it lands on the same clouds). A crop mapped to the wrong place
+// would paint different clouds over Japan and blow past the upper bound;
+// tests/make-region-fixture.cjs --shift builds exactly that, to check this would
+// notice.
+async function checkCloseUp(page) {
+  const offered = await page.js(
+    "(() => { const l = document.getElementById('detailToggle'); return !!l && !l.hidden; })()");
+  if (!offered) {
+    console.log('  --   no close-up is bundled with this build; its checks are skipped');
+    return;
+  }
+
+  // Sit on an observation the crop covers: it holds fewer times than the globe does,
+  // and the globe keeps its global frame for the rest.
+  const sought = await page.js(`(() => {
+    const w = window.geoWeather, d = window.geoDetail;
+    if (!w || !d) return 'no close-up object';
+    const product = document.getElementById('weatherProduct').value;
+    const times = (w.times && w.times[product]) || [];
+    const covered = new Set(d.times);
+    let index = -1;
+    for (let i = 0; i < times.length; i++) {
+      const time = times[i] && times[i].time ? times[i].time : times[i];
+      if (covered.has(time)) index = i;
+    }
+    if (index < 0) return 'no bundled observation has a crop';
+    const slider = document.getElementById('weatherTime');
+    slider.value = String(index);
+    slider.dispatchEvent(new Event('change', { bubbles: true }));
+    return 'ok';
+  })()`);
+  check(sought === 'ok', 'an observation the close-up covers can be shown', sought);
+  if (sought !== 'ok') return;
+  await sleep(1800);
+
+  const coarse = await page.shot('10-without-the-close-up');
+  await page.js("(() => { const box = document.getElementById('detail');" +
+    " box.checked = true; box.dispatchEvent(new Event('change')); return box.checked; })()");
+  try {
+    await page.waitFor('window.geoDetail && !window.geoDetail.loading && window.geoDetail.ready > 0',
+      60000, 'the close-up frames never finished loading');
+  } catch (error) {
+    check(false, 'the close-up loads', error.message);
+    return;
+  }
+  await sleep(900);
+  const close = await page.shot('11-with-the-close-up');
+
+  const moved = png.changed(globeRegionImage(coarse), globeRegionImage(close));
+  check(moved > 0.002, 'the close-up is drawn over the observation',
+    `${(moved * 100).toFixed(1)}% of pixels differ`);
+
+  // Placement, measured where sharpness cannot reach it: the mean brightness of each
+  // cell of a coarse grid. Finer cloud inside a cell barely moves its mean; cloud
+  // painted in the wrong place moves it a lot. Measured against this repository's own
+  // stand-in (tests/make-region-fixture.cjs): 0.005 placed right, 0.051 two degrees
+  // off, 0.133 six degrees off - so the bound below fails a crop 180 km out of place.
+  const drift = blockDrift(globeRegionImage(coarse), globeRegionImage(close));
+  check(drift < 0.02, 'the close-up lands where the coarse observation put the clouds',
+    `mean cell brightness moved by ${(drift * 100).toFixed(1)}% of full scale`);
+
+  const note = await page.js("(document.getElementById('detailNote') || {}).textContent || ''");
+  check(/km\/画素/.test(note), 'the page says how fine the close-up is', note.slice(0, 80));
+
+  await page.js("(() => { const box = document.getElementById('detail');" +
+    " box.checked = false; box.dispatchEvent(new Event('change')); })()");
+  await sleep(500);
+}
+
+/// Mean difference in cell brightness over a coarse grid, 0 to 1. Blind to detail
+/// inside a cell, which is the point: it answers where the clouds are, not how sharp.
+function blockDrift(a, b, cells = 16) {
+  let total = 0;
+  for (let cy = 0; cy < cells; cy++) {
+    for (let cx = 0; cx < cells; cx++) {
+      const x0 = Math.floor(a.width * cx / cells), x1 = Math.floor(a.width * (cx + 1) / cells);
+      const y0 = Math.floor(a.height * cy / cells), y1 = Math.floor(a.height * (cy + 1) / cells);
+      let sa = 0, sb = 0, n = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * a.width + x) * a.channels, j = (y * b.width + x) * b.channels;
+          sa += a.data[i] + a.data[i + 1] + a.data[i + 2];
+          sb += b.data[j] + b.data[j + 1] + b.data[j + 2];
+          n++;
+        }
+      }
+      if (n) total += Math.abs(sa - sb) / (n * 3 * 255);
+    }
+  }
+  return total / (cells * cells);
+}
+
+// The middle band of a frame, as an image rather than a summary, for comparing two
+// renders pixel by pixel.
+function globeRegionImage(image) {
+  const left = Math.round(image.width * 0.1), right = Math.round(image.width * 0.9);
+  const top = Math.round(image.height * 0.2), bottom = Math.round(image.height * 0.6);
+  const width = right - left, height = bottom - top;
+  const data = Buffer.alloc(width * height * image.channels);
+  for (let y = 0; y < height; y++) {
+    image.data.copy(data, y * width * image.channels,
+      ((top + y) * image.width + left) * image.channels,
+      ((top + y) * image.width + right) * image.channels);
+  }
+  return { width, height, channels: image.channels, data };
 }
 
 // -------------------------------------------------- the panel on a phone

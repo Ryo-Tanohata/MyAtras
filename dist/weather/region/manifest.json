@@ -1,0 +1,4 @@
+{
+ "frames": [],
+ "note": "No close-up is bundled. scripts/fetch-observations.cjs --region cuts one from the same observations; the page offers its switch only when this list is not empty."
+}
