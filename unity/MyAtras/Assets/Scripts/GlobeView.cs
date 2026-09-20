@@ -42,13 +42,30 @@ namespace MyAtras
         const float HomePitch = 0.620f;
         const float HomeZoom = 5f;
 
+        // The opening: the whole globe, one turn eastward, settling on Japan. The turn is
+        // over by three quarters of the way through and the dive starts a little before
+        // that, so what turns is the whole globe and the close view is the arrival;
+        // turning while already zoomed in is a blur across the surface. The same shape as
+        // dist/app.js, and like it the first touch of the globe ends it where it is.
+        const float IntroSeconds = 11f;
+        const float IntroZoom = 0.85f;
+        const float IntroPitch = 0.22f;
+        const float IntroTurnBy = 0.75f;
+        const float IntroDiveFrom = 0.55f;
+        const float Turn = 2f * Mathf.PI;
+
         // Transparent: the page's background shows through the canvas, as it does
         // around the JavaScript globe.
         static readonly Color Background = new Color(0f, 0f, 0f, 0f);
 
-        float yaw = HomeYaw;
-        float pitch = HomePitch;
-        float zoom = HomeZoom;
+        float yaw = HomeYaw - Turn;
+        float pitch = IntroPitch;
+        float zoom = IntroZoom;
+        // -1 until the flight begins, which is when the first observation is on the globe
+        // so that it flies over clouds; after four seconds regardless, in case the
+        // observations are slow. Done once it has landed or the viewer has taken over.
+        float introStarted = -1f;
+        bool introDone;
 
         Material material;
         ObservationLoader loader;
@@ -179,9 +196,11 @@ namespace MyAtras
             if (loaded) playback.Tick(Time.unscaledTime);
             AdjustQuality();
             Report();
+            FlyIn();
 
             if (Input.touchCount >= 2)
             {
+                EndIntro();
                 Pinch(Input.GetTouch(0).position, Input.GetTouch(1).position,
                     Input.GetTouch(1).phase == TouchPhase.Began);
                 return;
@@ -191,11 +210,15 @@ namespace MyAtras
             if (Input.touchCount == 1)
             {
                 Touch touch = Input.GetTouch(0);
-                if (touch.phase == TouchPhase.Moved) Rotate(touch.deltaPosition.x, -touch.deltaPosition.y);
+                if (touch.phase == TouchPhase.Moved)
+                {
+                    EndIntro();
+                    Rotate(touch.deltaPosition.x, -touch.deltaPosition.y);
+                }
                 return;
             }
 
-            if (Input.GetMouseButtonDown(0)) lastPointer = Input.mousePosition;
+            if (Input.GetMouseButtonDown(0)) { EndIntro(); lastPointer = Input.mousePosition; }
             if (Input.GetMouseButton(0))
             {
                 Vector2 now = Input.mousePosition;
@@ -204,7 +227,37 @@ namespace MyAtras
             }
 
             float wheel = Input.mouseScrollDelta.y;
-            if (!Mathf.Approximately(wheel, 0f)) SetZoom(zoom * Mathf.Exp(wheel * 0.1f));
+            if (!Mathf.Approximately(wheel, 0f)) { EndIntro(); SetZoom(zoom * Mathf.Exp(wheel * 0.1f)); }
+        }
+
+        /// <summary>The opening flight, one step of it per frame.</summary>
+        void FlyIn()
+        {
+            if (introDone) return;
+            if (introStarted < 0f)
+            {
+                if (!loaded && Time.unscaledTime < 4f) return;
+                introStarted = Time.unscaledTime;
+            }
+            float k = Mathf.Clamp01((Time.unscaledTime - introStarted) / IntroSeconds);
+            float turned = Smooth(k / IntroTurnBy);
+            float closed = Smooth((k - IntroDiveFrom) / (1f - IntroDiveFrom));
+            yaw = HomeYaw - Turn * (1f - turned);
+            pitch = Mathf.Lerp(IntroPitch, HomePitch, closed);
+            zoom = IntroZoom * Mathf.Pow(HomeZoom / IntroZoom, closed);
+            if (k >= 1f) introDone = true;
+        }
+
+        static float Smooth(float x)
+        {
+            float c = Mathf.Clamp01(x);
+            return c * c * (3f - 2f * c);
+        }
+
+        /// <summary>Leaves the globe where the flight had got to; it never runs again.</summary>
+        void EndIntro()
+        {
+            introDone = true;
         }
 
         /// <summary>
@@ -251,8 +304,21 @@ namespace MyAtras
 
         // ------------------------------------------------ called by the page (SendMessage)
 
+        /// <summary>
+        /// Called by the page when the viewer has asked for reduced motion: the globe goes
+        /// straight to where the flight would have landed. The page sends it once at
+        /// startup, from the WebGL template - which is why the template carries the call
+        /// and the built page does not until it is rebuilt with this script.
+        /// </summary>
+        public void SkipIntro(int unused)
+        {
+            EndIntro();
+            ResetView();
+        }
+
         public void ResetView()
         {
+            EndIntro();
             yaw = HomeYaw;
             pitch = HomePitch;
             zoom = HomeZoom;
@@ -265,6 +331,7 @@ namespace MyAtras
         /// </summary>
         public void ZoomBy(float delta)
         {
+            EndIntro();
             SetZoom(zoom * (1f + delta));
         }
 

@@ -314,7 +314,28 @@ async function checkJavaScriptGlobe(page) {
   check(true, 'observation shown',
     await page.js("document.getElementById('observationTime').textContent.trim()"));
 
+  // The opening flight: the whole globe, one turn, then Japan filling the frame.
+  // Measured at the side of the canvas, where the page's own background shows past a
+  // whole globe and nothing shows past the close view. Counting distinct colours
+  // rather than brightness, because the arriving view can be night ocean.
+  const opening = await page.shot('00-opening');
+  const besideStrip = image => png.region(image,
+    Math.round(image.width * 0.05), Math.round(image.height * 0.30),
+    Math.round(image.width * 0.11), Math.round(image.height * 0.45));
+  const wide = besideStrip(opening);
+  const flying = await page.js("!!(window.geoIntro && window.geoIntro.running)");
+  check(flying, 'the globe opens on a flight rather than where it lands');
+  // Every later check wants the view it settles on, and a moving camera would
+  // contaminate the pixel comparisons, so the rest of the flight is skipped here.
+  await page.js("window.geoIntro && window.geoIntro.skip()");
+  await sleep(500);
+
   const first = await page.shot('01-load');
+  const arrived = besideStrip(first);
+  check(wide.colours < 30 && arrived.colours > 60,
+    'it starts on the whole globe and ends with the close view filling the frame',
+    `${wide.colours} colours beside the globe at the start, ${arrived.colours} at the end`);
+
   const drawn = globeRegion(first);
   check(drawn.colours >= DRAWN_COLOURS, 'the globe is drawn, not a blank frame',
     `${drawn.colours} colours, mean brightness ${drawn.mean.toFixed(1)}`);

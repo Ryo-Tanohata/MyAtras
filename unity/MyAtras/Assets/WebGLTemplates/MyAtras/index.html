@@ -276,6 +276,13 @@
   }).then(function (created) {
     instance = created;
     window.myatrasUnity = created;
+    // The globe opens with a flight: the whole Earth, one turn, then Japan. Anyone who
+    // has asked their device for reduced motion is put straight where it lands.
+    // GlobeView.SkipIntro only exists in builds made from this template's own script,
+    // which is why dist/unity/index.html carries this line only after a rebuild.
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      send('SkipIntro', 1);
+    }
   }).catch(function (message) {
     console.error(message);
     $('status').hidden = false;
