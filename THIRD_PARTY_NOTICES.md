@@ -16,9 +16,14 @@ documented public HTTP API.
 
 | File | Product | Observed (UTC) |
 | --- | --- | --- |
-| `dist/weather/sequence/globalir_20260916_*.png` | `globalir` | 2026-09-16 09:00 – 21:00, hourly (13 frames) |
-| `dist/weather/snapshot/globalir_20260916_170000.png` | `globalir` | 2026-09-16 17:00 |
-| `dist/weather/snapshot/globalvis_20260916_170000.png` | `globalvis` | 2026-09-16 17:00 |
+| `dist/weather/sequence/globalir_*.png` | `globalir` | 2026-09-17 05:00 – 2026-09-20 04:00 UTC, hourly (72 frames) |
+| `dist/weather/snapshot/globalir_20260920_040000.png` | `globalir` | 2026-09-20 04:00 UTC |
+| `dist/weather/snapshot/globalvis_20260920_040000.png` | `globalvis` | 2026-09-20 04:00 UTC |
+
+The times above are a summary and go out of date the moment the observations are
+refreshed. `dist/weather/sequence/manifest.json` and `dist/weather/snapshot.json`
+are the authority: each bundled file is listed there with the request URL it came
+from and its SHA-256, and `scripts/export-html.py` re-checks those digests.
 
 The image files are stored exactly as the API returned them. Each one records the
 request it came from and its SHA-256 in `dist/weather/sequence/manifest.json` or
@@ -29,12 +34,31 @@ computed in the shader at draw time; it never alters the stored image.
 
 ### Atmospheric motion vectors
 
-`dist/data/amv.json` holds 3,333 representative vectors selected from the
-`AMV-LLlow` and `AMV-LLmid` products at 2026-09-16 19:00 UTC, with the selection
+`dist/data/amv.json` holds 3,292 representative vectors selected from the
+`AMV-LLlow` and `AMV-LLmid` products at 2026-09-18 16:00 UTC, with the selection
 counts recorded alongside them. Source responses:
 
-- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_190000
-- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_190000
+- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260918_160000
+- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260918_160000
+
+`dist/data/wind/` holds the same two products gridded at each of the bundled
+observation times, 71 of the 72 - SSEC had not published the vectors for the newest
+observation when it was fetched. Every grid records its source URLs, its vector
+counts and its SHA-256 in `dist/data/wind/manifest.json`.
+
+### Work derived from the observations
+
+These are computed here from the bundled SSEC files and are not themselves
+third-party material, but they exist only because of that data and are listed so
+the provenance is complete. Each one records the SHA-256 of the observations it was
+computed from, and is rebuilt whenever those are replaced.
+
+- `dist/data/motion/` — 71 fields, how the cloud pattern moved between each pair of
+  consecutive observations (`scripts/build-motion.cjs`). An estimate, not an
+  observation.
+- `dist/data/storms.json` — the tropical cyclones found in the sequence
+  (`scripts/find-storms.cjs`): the centre of the cold cloud, hour by hour. Not a
+  storm position in the sense a forecaster means, and not a forecast.
 
 ## NASA — ground reference texture
 

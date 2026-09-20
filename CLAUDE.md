@@ -31,7 +31,7 @@ GitHubへの公開コード登録はユーザーが了承済み。GitHub Pages�
 - `scripts/export-html.py`: 単体HTML生成。埋め込み時にSHA256を再照合し、不一致ならビルドを止める。
 - `scripts/build-amv.cjs`: 取得したAMV GeoJSONから `dist/data/amv.json` を作る。
 - `scripts/find-storms.cjs`: 同梱観測から熱帯低気圧を見つけ `dist/data/storms.json` に書く。外部データを使わない。まだどの画面も読んでいない。
-- `scripts/fetch-observations.cjs`: 同梱観測を最新に入れ替える。時系列・両製品のスナップショット・`--wind` で観測風。枚数は `--frames N`（既定13）、間隔は `--every M`（分）。SSECが出している間隔を実行時に表示するので、細かい観測があるかを見てから決められる。1枚約200KBで、ページは全枚数を読み込んでから再生を始める。画像の `RE-Time` ヘッダと要求時刻が一致しなければ停止し、別時刻として保存しない。古いフレームは削除。**SSECに到達できる機械で実行**（エージェントのコンテナからは403で不可）。実行後は `python scripts/export-html.py` と `node tools/check-webgl.cjs` を通して `dist/` をcommit。
+- `scripts/fetch-observations.cjs`: 同梱観測を最新に入れ替える。時系列・両製品のスナップショット・`--wind` で観測風。枚数は `--frames N`（既定13）、間隔は `--every M`（分）。SSECが出している間隔を実行時に表示するので、細かい観測があるかを見てから決められる。1枚約200KBで、ページは全枚数を読み込んでから再生を始める。画像の `RE-Time` ヘッダと要求時刻が一致しなければ停止し、別時刻として保存しない。古いフレームは削除。**SSECに到達できる機械で実行**（エージェントのコンテナからは403で不可）。実行後は `node scripts/build-motion.cjs`・`node scripts/find-storms.cjs` で派生データを作り直し、`python scripts/export-html.py` と `node tools/check-webgl.cjs` を通して `dist/` をcommit。**`THIRD_PARTY_NOTICES.md` の同梱一覧（枚数・期間・AMVの本数と時刻）も更新する** — 2026-09-21まで13枚・09-16のまま放置されていた。
 - `tests/harness.cjs`: テスト用の最小DOMと通信スタブ。観測の中身は偽装しない。
 
 ## Unity版の方針
