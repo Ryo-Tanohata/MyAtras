@@ -499,11 +499,19 @@ async function checkUnityBuild(page) {
   // Beside the globe the page's own dark background should show through the canvas,
   // as it does around the JavaScript globe. If Unity's end-of-frame alpha clear comes
   // back, the canvas turns opaque and the halo colour fills it (mean brightness ~130).
-  const beside = png.region(first,
-    Math.round(first.width * 0.05), Math.round(first.height * 0.36),
-    Math.round(first.width * 0.09), Math.round(first.height * 0.40));
+  // The view opens on Japan and fills the canvas, so it has to be pulled back out
+  // first; the zoom button clamps at the far end, so pressing it often is enough.
+  await page.js("(() => { const out = document.getElementById('out');" +
+    " for (let i = 0; i < 20; i++) out.click(); return 1; })()");
+  await sleep(600);
+  const pulledBack = await page.shot('unity-01b-pulled-back');
+  const beside = png.region(pulledBack,
+    Math.round(pulledBack.width * 0.05), Math.round(pulledBack.height * 0.36),
+    Math.round(pulledBack.width * 0.09), Math.round(pulledBack.height * 0.40));
   check(beside.mean < 40, 'the page shows through around the globe',
     `mean brightness ${beside.mean.toFixed(1)} beside the globe`);
+  await page.js("document.getElementById('reset').click()");
+  await sleep(400);
 
   const seen = new Set([await page.js("document.getElementById('observationTime').textContent.trim()")]);
   const deadline = Date.now() + 40000;

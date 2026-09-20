@@ -29,15 +29,26 @@ namespace MyAtras
         const float DragSpeed = 0.006f;
         const float PitchLimit = 1.4f;
         const float ZoomMin = 0.65f;
-        const float ZoomMax = 1.7f;
+        // Far enough in to fill the frame with one country; the observations are 512 px
+        // for the whole globe, so past this the clouds are squares rather than clouds.
+        const float ZoomMax = 8f;
+
+        // The opening view: Japan whole, from Yonaguni to Wakkanai, with sea around it.
+        // HomeYaw is the longitude at the middle of the screen in radians (136 degrees
+        // east), HomePitch the latitude (35.5 north), and HomeZoom keeps the islands
+        // inside the frame on a phone held upright as well as on a wide screen. The same
+        // three numbers open dist/app.js, so both versions start on the same view.
+        const float HomeYaw = 2.374f;
+        const float HomePitch = 0.620f;
+        const float HomeZoom = 5f;
 
         // Transparent: the page's background shows through the canvas, as it does
         // around the JavaScript globe.
         static readonly Color Background = new Color(0f, 0f, 0f, 0f);
 
-        float yaw = 2.35f;
-        float pitch = 0.20f;
-        float zoom = 1f;
+        float yaw = HomeYaw;
+        float pitch = HomePitch;
+        float zoom = HomeZoom;
 
         Material material;
         ObservationLoader loader;
@@ -242,15 +253,19 @@ namespace MyAtras
 
         public void ResetView()
         {
-            yaw = 2.35f;
-            pitch = 0.20f;
-            zoom = 1f;
+            yaw = HomeYaw;
+            pitch = HomePitch;
+            zoom = HomeZoom;
         }
 
-        /// <summary>The page's zoom buttons step by 0.12, as in dist/app.js.</summary>
+        /// <summary>
+        /// The page's zoom buttons send +/-0.12. The step is a share of the zoom now, not
+        /// an amount added to it: a flat 0.12 was a sixth of the old range and would be a
+        /// sixtieth of this one, so a button press would barely move.
+        /// </summary>
         public void ZoomBy(float delta)
         {
-            SetZoom(zoom + delta);
+            SetZoom(zoom * (1f + delta));
         }
 
         public void SetPlaying(int playing)
