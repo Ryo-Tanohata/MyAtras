@@ -125,6 +125,12 @@ jobs:
         if: steps.fetch.outcome == 'success'
         run: node scripts/build-motion.cjs
 
+      # Likewise: a storm belongs to the observations it was found in, and a test refuses
+      # storms.json if it names frames that are no longer bundled. Also no network.
+      - name: Find the storms in the fetched observations
+        if: steps.fetch.outcome == 'success'
+        run: node scripts/find-storms.cjs
+
       # The suites ran above against the bundled observations; this runs them against
       # the ones just fetched, before anything is published or committed. A fetched set
       # the suites reject is neither - the first `commit` run bundled 24 observations
