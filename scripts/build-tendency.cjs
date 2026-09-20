@@ -48,6 +48,7 @@ const FROM_SEASON = 1980;     // the steady satellite era, so early tracks do no
 const MAX_GAP_HOURS = 6.5;    // best tracks are six-hourly; a longer gap is a broken track
 const CELL = 2.5;             // degrees a grid cell spans
 const MIN_STEPS = 150;        // how many storm-hours a cell needs before it says anything
+const STRIDE = 8;             // numbers per cell in the flat list below
 const REACHES = [3, 5, 8, 12];// degrees: widened until that many are found
 const KM_PER_DEGREE = 111.195;
 
@@ -152,18 +153,19 @@ function build(csvPath, outPath) {
     if (!index.has(key)) index.set(key, []);
     index.get(key).push(leg);
   }
-  const cells = {};
+  // One flat list of numbers rather than a map keyed by cell, because Unity's JsonUtility
+  // reads a float array and will not read a map at all, and both pages should be looking
+  // at the same file rather than at two shapes of the same thing.
+  const cells = [];
   for (let row = 0; row < 180 / CELL; row++) {
     for (let colIndex = 0; colIndex < 360 / CELL; colIndex++) {
       const lat = -90 + (row + 0.5) * CELL, lon = -180 + (colIndex + 0.5) * CELL;
       if (Math.abs(lat) > 60) continue;      // cyclones are tropical; beyond this there are none
       const t = around(index, lat, lon);
       if (!t) continue;
-      cells[`${row},${colIndex}`] = [
-        +t.bearing.toFixed(1), +t.speed.toFixed(1),
+      cells.push(row, colIndex, +t.bearing.toFixed(1), +t.speed.toFixed(1),
         Math.round(t.band50[0]), Math.round(t.band50[1]),
-        Math.round(t.band80[0]), Math.round(t.band80[1]), t.n,
-      ];
+        Math.round(t.band80[0]), Math.round(t.band80[1]));
     }
   }
   const out = {
@@ -178,7 +180,8 @@ function build(csvPath, outPath) {
       storms, legs: all.length,
     },
     cell: CELL,
-    fields: ['bearing', 'speedKmH', 'band50Low', 'band50High', 'band80Low', 'band80High', 'legs'],
+    stride: STRIDE,
+    fields: ['row', 'col', 'bearing', 'speedKmH', 'band50Low', 'band50High', 'band80Low', 'band80High'],
     cells,
   };
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
@@ -186,16 +189,26 @@ function build(csvPath, outPath) {
   return out;
 }
 
+/// The flat list read back as a lookup. Built once; the pages do the same on their side.
+function index(grid) {
+  const map = new Map();
+  const stride = grid.stride || STRIDE;
+  for (let i = 0; i + stride <= grid.cells.length; i += stride) {
+    map.set(`${grid.cells[i]},${grid.cells[i + 1]}`, {
+      bearing: grid.cells[i + 2], speed: grid.cells[i + 3],
+      band50: [grid.cells[i + 4], grid.cells[i + 5]],
+      band80: [grid.cells[i + 6], grid.cells[i + 7]],
+    });
+  }
+  return map;
+}
+
 /// The tendency at a point, for a grid already built. Returns null off the edge of it.
 function tendencyAt(grid, lat, lon) {
+  if (!grid._index) Object.defineProperty(grid, '_index', { value: index(grid) });
   const row = Math.floor((lat + 90) / grid.cell);
   const col = Math.floor((((lon + 180) % 360 + 360) % 360) / grid.cell);
-  const cell = grid.cells[`${row},${col}`];
-  if (!cell) return null;
-  return {
-    bearing: cell[0], speed: cell[1],
-    band50: [cell[2], cell[3]], band80: [cell[4], cell[5]], legs: cell[6],
-  };
+  return grid._index.get(`${row},${col}`) || null;
 }
 
 if (require.main === module) {
@@ -209,14 +222,14 @@ if (require.main === module) {
   const outPath = path.resolve(opt('--out', path.join(ROOT, 'dist', 'data', 'tendency.json')));
   const out = build(path.resolve(tracks), outPath);
   console.log(`${out.source.storms} storms, ${out.source.legs} legs since ${FROM_SEASON}`);
-  console.log(`${Object.keys(out.cells).length} cells of ${CELL} degrees`);
+  console.log(`${out.cells.length / STRIDE} cells of ${CELL} degrees`);
   for (const [name, lat, lon] of [['日本の南', 27.5, 137.5], ['フィリピンの東', 12.5, 132.5],
     ['カリブ海', 17.5, -72.5], ['日本の東', 37.5, 147.5]]) {
     const t = tendencyAt(out, lat, lon);
     console.log(`  ${name.padEnd(12)} ${t ? `${t.bearing.toFixed(0)}° ${t.speed.toFixed(1)} km/h `
-      + `(ばらつき ${t.band50[0]}〜+${t.band50[1]}°, ${t.legs}区間)` : '記録なし'}`);
+      + `(ばらつき ${t.band50[0]}〜+${t.band50[1]}°)` : '記録なし'}`);
   }
   console.log(`wrote ${path.relative(ROOT, outPath)} (${(fs.statSync(outPath).size / 1024).toFixed(0)} KB)`);
 }
 
-module.exports = { build, legs, around, tendencyAt, medianBearing, turn, CELL, FROM_SEASON, MIN_STEPS };
+module.exports = { build, legs, around, tendencyAt, index, medianBearing, turn, CELL, STRIDE, FROM_SEASON, MIN_STEPS };

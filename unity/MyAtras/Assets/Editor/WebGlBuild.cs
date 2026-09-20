@@ -27,7 +27,9 @@ namespace MyAtras
     public static class WebGlBuild
     {
         const string ScenePath = "Assets/Scenes/Main.unity";
-        const string ShaderName = "MyAtras/EarthComposite";
+        // Every shader the build must keep. Nothing references them through a material
+        // asset, so each one has to be named here or it is stripped.
+        static readonly string[] ShaderNames = { "MyAtras/EarthComposite", "MyAtras/StormMarks" };
         const string OutputArgument = "-outputPath";
 
         [MenuItem("MyAtras/Build Web (WebGL) to dist-unity")]
@@ -130,10 +132,15 @@ namespace MyAtras
         /// </summary>
         static void EnsureShaderIncluded()
         {
-            Shader shader = Shader.Find(ShaderName);
+            foreach (string name in ShaderNames) EnsureOneShaderIncluded(name);
+        }
+
+        static void EnsureOneShaderIncluded(string shaderName)
+        {
+            Shader shader = Shader.Find(shaderName);
             if (shader == null)
             {
-                Debug.LogError($"MyAtras: the shader \"{ShaderName}\" is missing from the project.");
+                Debug.LogError($"MyAtras: the shader \"{shaderName}\" is missing from the project.");
                 return;
             }
 
@@ -162,7 +169,7 @@ namespace MyAtras
             list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = shader;
             settings.ApplyModifiedProperties();
             AssetDatabase.SaveAssets();
-            Debug.Log($"MyAtras: added {ShaderName} to the always-included shaders.");
+            Debug.Log($"MyAtras: added {shaderName} to the always-included shaders.");
         }
 
         /// <summary>

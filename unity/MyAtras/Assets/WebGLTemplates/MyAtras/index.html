@@ -24,6 +24,9 @@
 
 <label class="toggle">観測風の流れ<input type="checkbox" id="flow" checked><span></span></label>
 <p id="flowNote" class="weather-note">観測風を読み込み中…</p>
+<label class="toggle">台風の中心を重ねる（観測画像からの推定）<input type="checkbox" id="storms"><span></span></label>
+<label class="toggle">この先の見込みを重ねる（過去の台風の平均）<input type="checkbox" id="outlook"><span></span></label>
+<p id="stormNote" class="weather-note" hidden></p>
 <label class="toggle">星空<input type="checkbox" id="stars" checked><span></span></label>
 <p id="starNote" class="weather-note">背景の星は実在の星です。</p>
 <div class="zoomrow"><button id="out" aria-label="縮小">−</button><span>ズーム</span><button id="in" aria-label="拡大">＋</button></div>
@@ -125,6 +128,33 @@
       $('weatherTime').disabled = false;
       $('status').hidden = true;
     }
+      if (s.storms !== undefined) $('storms').checked = s.storms;
+      if (s.outlook !== undefined) $('outlook').checked = s.outlook;
+      if (!s.storms) {
+        $('stormNote').hidden = true;
+      } else {
+        var line;
+        if (!s.stormFound) {
+          line = '\u3053\u306e\u89b3\u6e2c\u6642\u523b\u3067\u306f\u53f0\u98a8\u3092\u691c\u51fa\u3057\u3066\u3044\u307e\u305b\u3093\u3002';
+        } else {
+          line = '\u63a8\u5b9a\u4e2d\u5fc3 ' + Math.abs(s.stormLat).toFixed(1) + '\u00b0'
+            + (s.stormLat < 0 ? 'S' : 'N') + ' ' + Math.abs(s.stormLon).toFixed(1) + '\u00b0'
+            + (s.stormLon < 0 ? 'W' : 'E')
+            + ' \u00b7 \u89b3\u6e2c\u753b\u50cf\u304b\u3089\u306e\u63a8\u5b9a\u3067\u3059\u3002'
+            + '\u6c17\u8c61\u5e81\u306e\u767a\u8868\u3067\u3082\u4e88\u5831\u3067\u3082\u3042\u308a\u307e\u305b\u3093\u3002';
+          if (s.outlook) {
+            line += !s.outlookReady
+              ? ' \u898b\u8fbc\u307f\u3092\u8aad\u307f\u8fbc\u307f\u4e2d\u2026'
+              : s.stormLast
+              ? ' \u7d2b\u306f\u89b3\u6e2c\u304c\u5c3d\u304d\u305f\u5148 48 \u6642\u9593\u306e\u898b\u8fbc\u307f\u3067\u3001'
+                + '\u904e\u53bb 4,759 \u500b\u306e\u53f0\u98a8\u306e\u5e73\u5747\u3067\u3059\u3002'
+                + '\u3053\u306e\u53f0\u98a8\u306e\u4e88\u5831\u3067\u306f\u3042\u308a\u307e\u305b\u3093\u3002'
+              : ' \u898b\u8fbc\u307f\u306f\u6700\u5f8c\u306e\u89b3\u6e2c\u6642\u523b\u3067\u306e\u307f\u8868\u793a\u3057\u307e\u3059\u3002';
+          }
+        }
+        $('stormNote').textContent = line;
+        $('stormNote').hidden = false;
+      }
 
     var date = parseStamp(s.time);
     if (date) {
@@ -194,6 +224,11 @@
   $('stars').onchange = function (e) { send('SetStars', e.target.checked ? 1 : 0); };
   $('cloudRelief').onchange = function (e) { send('SetCloudRelief', e.target.checked ? 1 : 0); };
   $('flow').onchange = function (e) { send('SetFlow', e.target.checked ? 1 : 0); };
+  $('storms').onchange = function (e) { send('SetStorms', e.target.checked ? 1 : 0); };
+  $('outlook').onchange = function (e) {
+    if (e.target.checked) $('storms').checked = true;
+    send('SetOutlook', e.target.checked ? 1 : 0);
+  };
   $('weatherTime').oninput = function (e) { send('ShowObservation', +e.target.value); };
   $('in').onclick = function () { send('ZoomBy', 0.12); };
   $('out').onclick = function () { send('ZoomBy', -0.12); };

@@ -527,6 +527,64 @@ async function checkUnityBuild(page) {
   const pausedLine = await page.js("document.getElementById('weatherPlaybackStatus').textContent.trim()");
   check(held === still && /一時停止/.test(pausedLine), 'the page pauses the player', pausedLine);
 
+  // The same two marks the JavaScript globe draws, from the same two files. Unity draws
+  // them over its own finished picture, so this checks the colours arrive on screen rather
+  // than that the page asked for them.
+  const seekLast = await page.js(`(() => {
+    const slider = document.getElementById('weatherTime');
+    if (!slider || !(+slider.max > 0)) return 'no observation slider';
+    slider.value = slider.max;
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    return 'ok';
+  })()`);
+  check(seekLast === 'ok', 'the last observation can be shown', seekLast);
+  await sleep(2000);
+  const unmarkedU = await page.shot('unity-05-without-the-storm');
+  await page.js(`(() => { const box = document.getElementById('storms');
+    box.checked = true; box.dispatchEvent(new Event('change')); })()`);
+  await sleep(2000);
+  const markedU = await page.shot('unity-06-with-the-storm');
+  const count = (image, test) => {
+    let n = 0;
+    for (let i = 0; i < image.data.length; i += image.channels) {
+      if (test(image.data[i], image.data[i + 1], image.data[i + 2])) n++;
+    }
+    return n;
+  };
+  const amberTest = (r, g, b) => r > 190 && g > 110 && g < 205 && b < 120 && r - b > 90;
+  const violetTest = (r, g, b) => b > 140 && b - g > 25 && r > g && b > r && r < 230;
+  check(count(markedU, amberTest) > count(unmarkedU, amberTest) + 40, 'the storm mark is drawn',
+    `${count(markedU, amberTest)} amber pixels with it, ${count(unmarkedU, amberTest)} without`);
+
+  await page.js(`(() => { const box = document.getElementById('outlook');
+    box.checked = true; box.dispatchEvent(new Event('change')); })()`);
+  await sleep(3500);
+  const outlookU = await page.shot('unity-07-with-the-outlook');
+  check(count(outlookU, violetTest) > count(markedU, violetTest) + 30,
+    'the outlook is drawn ahead of the last observation',
+    `${count(outlookU, violetTest)} violet pixels with it, ${count(markedU, violetTest)} without`);
+
+  const noteU = await page.js("(document.getElementById('stormNote') || {}).textContent || ''");
+  check(/推定中心/.test(noteU) && /予報ではありません/.test(noteU),
+    'the marks say what they are', noteU.slice(-52));
+
+  // And nowhere else: an hour the globe has an observation for is not overdrawn with a
+  // guess about it.
+  await page.js(`(() => {
+    const slider = document.getElementById('weatherTime');
+    slider.value = String(Math.max(0, Math.round(+slider.max / 2)));
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await sleep(2000);
+  const midU = await page.shot('unity-08-outlook-mid-track');
+  check(count(midU, violetTest) <= count(markedU, violetTest) + 30,
+    'no outlook over an observation the globe already has',
+    `${count(midU, violetTest)} violet pixels mid-track against ${count(markedU, violetTest)} with it off`);
+  await page.js(`(() => { for (const id of ['storms', 'outlook']) {
+    const box = document.getElementById(id); box.checked = false;
+    box.dispatchEvent(new Event('change')); } })()`);
+  await sleep(600);
+
   // Paused, so the only thing a drag can change is the view.
   const paused = await page.shot('unity-03-paused');
   await page.drag(200, 420, 320, 470);

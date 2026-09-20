@@ -61,15 +61,25 @@ class StormOutlook{
   if(this.tried)return this.grid;
   this.tried=true;
   try{this.grid=root.GEO_TENDENCY||(root.GeoData?await root.GeoData.tendency():null);}catch(error){this.grid=null;}
-  if(this.grid&&!this.grid.cells)this.grid=null;
+  if(this.grid&&!Array.isArray(this.grid.cells))this.grid=null;
+  this.lookup=null;
   return this.grid;
+ }
+ /// The flat list read back as a lookup, once. Flat because Unity's JsonUtility reads a
+ /// number array and will not read a map, and both versions read the same file.
+ index(){
+  const stride=this.grid.stride||8, cells=this.grid.cells, map=new Map();
+  for(let i=0;i+stride<=cells.length;i+=stride)
+   map.set(cells[i]+','+cells[i+1],{bearing:cells[i+2],speed:cells[i+3],
+     band50:[cells[i+4],cells[i+5]],band80:[cells[i+6],cells[i+7]]});
+  this.lookup=map;
  }
  at(lat,lon){
   if(!this.grid)return null;
+  if(!this.lookup)this.index();
   const row=Math.floor((lat+90)/this.grid.cell);
   const col=Math.floor(((((lon+180)%360)+360)%360)/this.grid.cell);
-  const c=this.grid.cells[row+','+col];
-  return c?{bearing:c[0],speed:c[1],band50:[c[2],c[3]],band80:[c[4],c[5]]}:null;
+  return this.lookup.get(row+','+col)||null;
  }
  /// One path forward, held `offset` degrees off whatever the local tendency is, so an
  /// edge of the fan turns with the middle instead of running off straight.
@@ -107,7 +117,7 @@ class StormRenderer{
   varying float kind;varying float shade;
   vec3 toView(vec3 q){float cy=cos(yaw),sy=sin(yaw),cp=cos(pitch),sp=sin(pitch);float x=q.x*cy-q.z*sy;float z=q.x*sy+q.z*cy;return vec3(x,q.y*cp-z*sp,q.y*sp+z*cp);}
   void main(){vec3 c=toView(centre);kind=style.x;shade=style.y;float s=min(resolution.x,resolution.y)*zoom*.77;
-   float size=kind>2.5?.011:(kind>1.5?.015:(kind>.5?.052:.017));
+   float size=kind>1.5?.022:(kind>.5?.052:.016);
    gl_Position=vec4(c.xy*s/resolution,0.,1.);gl_PointSize=min(maxPoint,size*s);}`;
   // A ring for where the storm is now, a soft dot for where it has been - amber, because
   // the globe is white cloud on blue sea and neither reads as a mark. What is only
@@ -117,11 +127,14 @@ class StormRenderer{
   varying float kind;varying float shade;
   const vec3 SEEN=vec3(1.,.72,.26);
   const vec3 AHEAD=vec3(.74,.64,.98);
-  void main(){vec2 d=gl_PointCoord-vec2(.5);float r=length(d)*2.;float alpha;
-   if(kind>2.5){alpha=(1.-smoothstep(.2,1.,r))*.42*shade;}
-   else if(kind>1.5){alpha=(1.-smoothstep(.2,1.,r))*.70*shade;}
+  void main(){
+   // The fan is an area, and areas are not points: it arrives as triangles, where
+   // gl_PointCoord means nothing.
+   if(kind>3.5){gl_FragColor=vec4(AHEAD,.16*shade);return;}
+   vec2 d=gl_PointCoord-vec2(.5);float r=length(d)*2.;float alpha;
+   if(kind>1.5){float ring=1.-smoothstep(.0,.42,abs(r-.62));alpha=ring*.85*shade;}
    else if(kind>.5){float ring=1.-smoothstep(.0,.28,abs(r-.72));alpha=ring*.95;}
-   else{alpha=(1.-smoothstep(.25,1.,r))*.75*shade;}
+   else{alpha=(1.-smoothstep(.35,1.,r))*.85*shade;}
    if(alpha<.01)discard;
    gl_FragColor=vec4(kind>1.5?AHEAD:SEEN*(kind>.5?1.:.92),alpha);}`;
   const compile=(type,code)=>{const s=gl.createShader(type);gl.shaderSource(s,code);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;};
@@ -134,7 +147,7 @@ class StormRenderer{
  /// A point on the far side of the globe is dropped rather than drawn through the Earth.
  marks(time,yaw,pitch,outlookOn){
   const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
-  const out=[];
+  const out=[],fan=[];
   for(const {centre,trail,last} of this.track.at(time)){
    const put=(p,kind,shade)=>{
     const lat=p.lat*RAD,lon=p.lon*RAD,r=1.004;
@@ -142,24 +155,46 @@ class StormRenderer{
     if(y*sp+(x*sy+z*cy)*cp<.02)return;                 // behind the globe
     out.push(x,y,z,kind,shade);
    };
+   // What was observed is drawn unbroken and filled: every hour of it, so it reads as a
+   // line rather than as a suggestion.
    const n=trail.length;
-   for(let i=0;i<n-1;i++){
-    if((n-1-i)%2)continue;                             // every other hour: a dotted trail
-    put(trail[i],0,.25+.75*(i/Math.max(1,n-1)));
-   }
+   for(let i=0;i<n-1;i++) put(trail[i],0,.3+.7*(i/Math.max(1,n-1)));
    put(centre,1,1);
    // Only once the observations have run out. Drawing this over an hour the globe is
    // about to show would be putting a guess where an observation already is.
+   //
+   // And drawn so that nothing about it can be mistaken for the line behind it: a cool
+   // colour instead of a warm one, hollow instead of filled, broken every six hours
+   // instead of continuous, and with the fan of what past storms actually did drawn as an
+   // area around it. Colour alone would not do - it is read as importance, not as the
+   // difference between something seen and something expected, and some readers cannot
+   // separate the two hues at all.
    if(outlookOn&&last&&this.outlook&&this.outlook.grid){
     const ahead=this.cached(centre);
     if(ahead){
-     for(const p of ahead.middle) put(p,2,1-.45*(p.hours/48));
-     for(const edge of [ahead.left,ahead.right])
-      for(const p of edge){ if(p.hours%6===0) put(p,3,1-.4*(p.hours/48)); }
+     for(const p of ahead.middle){ if(p.hours%6===0) put(p,2,1-.4*(p.hours/48)); }
+     this.fanOf(ahead,fan,sy,cy,sp,cp);
     }
    }
   }
-  return out;
+  return {points:out,fan};
+ }
+ /// The half of past storms that stayed nearest the middle, as an area rather than two
+ /// edges: a band has a width, and a width is what tells a range from a track.
+ fanOf(ahead,fan,sy,cy,sp,cp){
+  const xyz=p=>{const lat=p.lat*RAD,lon=p.lon*RAD,r=1.003;
+   return [r*Math.cos(lat)*Math.sin(lon),r*Math.sin(lat),r*Math.cos(lat)*Math.cos(lon)];};
+  const front=q=>q[1]*sp+(q[0]*sy+q[2]*cy)*cp>=.02;
+  const n=Math.min(ahead.left.length,ahead.right.length);
+  let prevL=null,prevR=null;
+  for(let i=0;i<n;i++){
+   const l=xyz(ahead.left[i]),r=xyz(ahead.right[i]);
+   if(prevL&&front(l)&&front(r)&&front(prevL)&&front(prevR)){
+    const shade=1-.5*(ahead.left[i].hours/48);
+    for(const q of [prevL,prevR,l, prevR,r,l]) fan.push(q[0],q[1],q[2],4,shade);
+   }
+   prevL=l;prevR=r;
+  }
  }
  /// The outlook changes only when the observation does, so it is worked out once per
  /// observation rather than once per frame.
@@ -172,23 +207,27 @@ class StormRenderer{
  draw({width,height,yaw,pitch,zoom,time,enabled,outlook}){
   const gl=this.gl;
   if(!enabled||!this.track.loaded)return 0;
-  const marks=this.marks(time,yaw,pitch,outlook);
-  if(!marks.length)return 0;
-  if(this.data.length<marks.length)this.data=new Float32Array(marks.length);
-  this.data.set(marks);
-  const n=marks.length/5;
+  const {points,fan}=this.marks(time,yaw,pitch,outlook);
+  if(!points.length&&!fan.length)return 0;
   gl.useProgram(this.program);
-  gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);
-  gl.bufferData(gl.ARRAY_BUFFER,this.data.subarray(0,marks.length),gl.DYNAMIC_DRAW);
-  const sizes=[3,2],offsets=[0,12];
-  for(let i=0;i<2;i++){gl.enableVertexAttribArray(this.attributes[i]);gl.vertexAttribPointer(this.attributes[i],sizes[i],gl.FLOAT,false,20,offsets[i]);}
   gl.uniform2f(this.uniforms.resolution,width,height);
   for(const [k,v] of Object.entries({yaw,pitch,zoom,maxPoint:this.maxPoint}))gl.uniform1f(this.uniforms[k],v);
   gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
-  gl.drawArrays(gl.POINTS,0,n);
+  const send=(values,mode)=>{
+   if(!values.length)return 0;
+   if(this.data.length<values.length)this.data=new Float32Array(values.length);
+   this.data.set(values);
+   gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);
+   gl.bufferData(gl.ARRAY_BUFFER,this.data.subarray(0,values.length),gl.DYNAMIC_DRAW);
+   const sizes=[3,2],offsets=[0,12];
+   for(let i=0;i<2;i++){gl.enableVertexAttribArray(this.attributes[i]);gl.vertexAttribPointer(this.attributes[i],sizes[i],gl.FLOAT,false,20,offsets[i]);}
+   gl.drawArrays(mode,0,values.length/5);
+   return values.length/5;
+  };
+  const drawn=send(fan,gl.TRIANGLES)+send(points,gl.POINTS);   // the area first, marks over it
   gl.disable(gl.BLEND);
   for(const a of this.attributes)gl.disableVertexAttribArray(a);
-  return n;
+  return drawn;
  }
 }
 root.StormTrack=StormTrack;root.StormRenderer=StormRenderer;root.StormOutlook=StormOutlook;

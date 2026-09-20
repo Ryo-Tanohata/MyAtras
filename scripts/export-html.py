@@ -107,7 +107,7 @@ def storms():
 def tendency():
     data = json.loads((DIST / "data/tendency.json").read_text(encoding="utf-8"))
     print("  tendency %d cells from %d past storms"
-          % (len(data["cells"]), data["source"]["storms"]))
+          % (len(data["cells"]) // data["stride"], data["source"]["storms"]))
     return script("window.GEO_TENDENCY=%s;" % literal(data))
 
 

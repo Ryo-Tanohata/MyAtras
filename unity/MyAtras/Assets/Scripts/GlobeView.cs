@@ -54,6 +54,12 @@ namespace MyAtras
         Vector2 lastPointer;
         float lastPinchDistance;
         long lastReportKey = -1;
+        // The storms found in the observations, and where storms have gone before. Both off
+        // until the page asks: the marks are a second statement about the picture, and the
+        // outlook is a third and weaker one.
+        StormMarks stormMarks;
+        bool stormsOn;
+        bool outlookOn;
         // Automatic quality: the share of the screen's pixels the globe is drawn at.
         float renderScale = 1f;
         float frameTime = 1f / 60f;
@@ -93,6 +99,14 @@ namespace MyAtras
             public int windTexels;   // one-degree texels with observed wind
             public float sunLat;     // subsolar point at the observation time, degrees
             public float sunLon;     // east positive
+            public bool storms;      // the marks are switched on
+            public bool outlook;     // and so is what past storms did next
+            public bool stormFound;  // a storm was found in the observation on screen
+            public float stormLat;   // where its centre was measured, degrees
+            public float stormLon;   // east positive
+            public bool stormLast;   // whether this is its last observation, the only place
+                                     // the outlook may be drawn
+            public bool outlookReady;
             public int renderPercent; // the resolution the globe is drawn at, % of the screen
             public string error;
         }
@@ -116,6 +130,7 @@ namespace MyAtras
             material.SetTexture("_AirDepth", AirDepthTable.Build());
 
             loader = new ObservationLoader();
+            stormMarks = new StormMarks();
             StartCoroutine(LoadRoutine());
         }
 
@@ -143,6 +158,9 @@ namespace MyAtras
             material.SetFloat("_WeatherActive", 1f);
             playback = new ObservationPlayback(loader.Times, Time.unscaledTime) { Model = model };
             loaded = true;
+            // After the globe is up: nothing about a storm is worth delaying the picture the
+            // observations are already drawing.
+            yield return stormMarks.Load(ObservationLoader.SiteRoot());
         }
 
         void Update()
@@ -278,6 +296,34 @@ namespace MyAtras
             cloudRelief = on != 0;
         }
 
+        /// <summary>The storms found in the observations, from the page's switch.</summary>
+        public void SetStorms(int on)
+        {
+            stormsOn = on != 0;
+            Report();
+        }
+
+        /// <summary>
+        /// What storms have typically done next. The grid is 116 KB and most visits never
+        /// ask for it, so it is fetched the first time someone does.
+        /// </summary>
+        public void SetOutlook(int on)
+        {
+            outlookOn = on != 0;
+            if (outlookOn)
+            {
+                stormsOn = true;
+                if (stormMarks != null && !stormMarks.HasGrid) StartCoroutine(LoadOutlookRoutine());
+            }
+            Report();
+        }
+
+        IEnumerator LoadOutlookRoutine()
+        {
+            yield return stormMarks.LoadOutlook(ObservationLoader.SiteRoot());
+            Report();
+        }
+
         public void SetFlow(int on)
         {
             flow = on != 0;
@@ -353,7 +399,10 @@ namespace MyAtras
                        | (loader.Error != null ? 1L : 0L) << 24
                        | (long)Mathf.RoundToInt(renderScale * 20f) << 25
                        | (model ? 1L : 0L) << 31
-                       | (loaded && playback.Overlaid ? 1L : 0L) << 32;
+                       | (loaded && playback.Overlaid ? 1L : 0L) << 32
+                       | (stormsOn ? 1L : 0L) << 33
+                       | (outlookOn ? 1L : 0L) << 34
+                       | (stormMarks != null && stormMarks.HasGrid ? 1L : 0L) << 35;
             if (key == lastReportKey) return;
             lastReportKey = key;
             if (loaded && stampArray == null) stampArray = ToArray(loader.Stamps);
@@ -391,6 +440,17 @@ namespace MyAtras
                 Vector2 subsolar = SolarPosition.Subsolar(loader.Times[shownIndex]);
                 state.sunLat = Mathf.Round(subsolar.x * 10f) / 10f;
                 state.sunLon = Mathf.Round(subsolar.y * 10f) / 10f;
+                state.storms = stormsOn;
+                state.outlook = outlookOn;
+                state.outlookReady = stormMarks != null && stormMarks.HasGrid;
+                if (stormMarks != null && stormMarks.CentreAt(loader.Times[shownIndex],
+                        out float sLat, out float sLon, out bool sLast))
+                {
+                    state.stormFound = true;
+                    state.stormLat = Mathf.Round(sLat * 10f) / 10f;
+                    state.stormLon = Mathf.Round(sLon * 10f) / 10f;
+                    state.stormLast = sLast;
+                }
             }
 #if UNITY_WEBGL && !UNITY_EDITOR
             MyAtrasReport(JsonUtility.ToJson(state));
@@ -487,17 +547,34 @@ namespace MyAtras
             if (renderScale > 0.99f)
             {
                 Graphics.Blit(source, destination, material);
-                return;
             }
-            // Drawn smaller and scaled up with bilinear filtering. The shader works in
-            // proportions of the screen, so the globe is the same size either way.
-            RenderTexture reduced = RenderTexture.GetTemporary(
-                Mathf.Max(1, Mathf.RoundToInt(source.width * renderScale)),
-                Mathf.Max(1, Mathf.RoundToInt(source.height * renderScale)), 0, source.format);
-            reduced.filterMode = FilterMode.Bilinear;
-            Graphics.Blit(source, reduced, material);
-            Graphics.Blit(reduced, destination);
-            RenderTexture.ReleaseTemporary(reduced);
+            else
+            {
+                // Drawn smaller and scaled up with bilinear filtering. The shader works in
+                // proportions of the screen, so the globe is the same size either way.
+                RenderTexture reduced = RenderTexture.GetTemporary(
+                    Mathf.Max(1, Mathf.RoundToInt(source.width * renderScale)),
+                    Mathf.Max(1, Mathf.RoundToInt(source.height * renderScale)), 0, source.format);
+                reduced.filterMode = FilterMode.Bilinear;
+                Graphics.Blit(source, reduced, material);
+                Graphics.Blit(reduced, destination);
+                RenderTexture.ReleaseTemporary(reduced);
+            }
+            DrawStormMarks(destination, source.width, source.height);
+        }
+
+        /// <summary>
+        /// The marks go over the finished globe at full size. The globe itself may be drawn
+        /// smaller when frames are slow; a ring a few pixels across should not be.
+        /// </summary>
+        void DrawStormMarks(RenderTexture destination, int width, int height)
+        {
+            if (stormMarks == null || !stormsOn || !loaded) return;
+            RenderTexture previous = RenderTexture.active;
+            RenderTexture.active = destination;
+            stormMarks.Draw(loader.Times[playback.Shown(Time.unscaledTime)], yaw, pitch, zoom,
+                width, height, stormsOn, outlookOn);
+            RenderTexture.active = previous;
         }
 
 #if UNITY_EDITOR

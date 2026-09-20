@@ -327,7 +327,7 @@ namespace MyAtras
         /// dist/unity/; in the editor it is dist/ in the working tree, so the same files
         /// are read either way.
         /// </summary>
-        static string SiteRoot()
+        public static string SiteRoot()
         {
 #if UNITY_WEBGL && !UNITY_EDITOR
             string page = Application.absoluteURL;

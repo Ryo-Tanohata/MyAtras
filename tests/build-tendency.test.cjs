@@ -96,8 +96,8 @@ s.test('a cell without enough storms says nothing rather than guessing', () => {
     const file = path.join(dir, 'tracks.csv');
     fs.writeFileSync(file, csv(westward('A', 2000, 'TS', 120)));
     const out = tendency.build(file, path.join(dir, 'out.json'));
-    assert.strictEqual(Object.keys(out.cells).length, 0,
-      `one storm is not a tendency, got ${Object.keys(out.cells).length} cells`);
+    assert.strictEqual(out.cells.length, 0,
+      `one storm is not a tendency, got ${out.cells.length / tendency.STRIDE} cells`);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

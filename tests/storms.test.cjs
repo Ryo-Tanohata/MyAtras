@@ -177,7 +177,7 @@ s.test('the outlook stops where the record does', async () => {
 });
 
 s.test('no grid means no outlook, not a guess', async () => {
-  for (const value of [null, {}, { cells: null }]) {
+  for (const value of [null, {}, { cells: null }, { cells: {} }]) {
     const o = await outlook(value);
     assert.strictEqual(o.grid, null, `nothing from ${JSON.stringify(value)}`);
     assert.strictEqual(o.ahead(29.2, 137.5), null);
