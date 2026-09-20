@@ -349,6 +349,60 @@ async function checkJavaScriptGlobe(page) {
   check(moved >= 0.005, 'the picture changes with the observation',
     `${(moved * 100).toFixed(1)}% of pixels differ`);
 
+  // The storm found in the bundled observations, drawn where it was measured. Sought to
+  // an observation the storm was actually found in: three of these seventy-two have no
+  // detection, and landing on one of those would fail a working globe. Counted by its own
+  // amber rather than by pixels changing, so a stray repaint cannot pass for the mark.
+  const sought = await page.js(`(() => {
+    const w = window.geoWeather, t = window.geoStorms;
+    if (!w || !t || !t.loaded) return 'no storms loaded';
+    const product = document.getElementById('weatherProduct').value;
+    const times = (w.times && w.times[product]) || [];
+    const i = times.findIndex(x => t.at(x && x.time ? x.time : x).length > 0);
+    if (i < 0) return 'no observation has a storm';
+    const slider = document.getElementById('weatherTime');
+    slider.value = String(i);
+    slider.dispatchEvent(new Event('change', { bubbles: true }));
+    return 'ok';
+  })()`);
+  check(sought === 'ok', 'an observation with a storm can be shown', sought);
+  await sleep(1800);
+
+  const toggle = on => page.js(`(() => { const box = document.getElementById('showStorms');
+    box.checked = ${on}; box.dispatchEvent(new Event('change')); return box.checked; })()`);
+  await toggle(false);
+  await sleep(500);
+  const unmarked = await page.shot('05-without-the-storm');
+  await toggle(true);
+  await sleep(700);
+  const marked = await page.shot('06-with-the-storm');
+  const amber = image => {
+    let n = 0;
+    for (let i = 0; i < image.data.length; i += image.channels) {
+      const r = image.data[i], g = image.data[i + 1], b = image.data[i + 2];
+      if (r > 190 && g > 110 && g < 205 && b < 120 && r - b > 90) n++;
+    }
+    return n;
+  };
+  const wasAmber = amber(unmarked), nowAmber = amber(marked);
+  check(nowAmber > wasAmber + 40, 'the storm mark is drawn',
+    `${nowAmber} amber pixels with it, ${wasAmber} without`);
+
+  const line = await page.js("(document.getElementById('stormStatus') || {}).textContent || ''");
+  check(/推定中心/.test(line) && /予報でもありません/.test(line),
+    'the mark says what it is', line.slice(0, 80));
+
+  // Nothing is drawn for a time with no observation, and nothing is carried past the last
+  // one: a time the storm was not found in leaves the globe unmarked rather than guessing.
+  const honest = await page.js(`(() => {
+    const t = window.geoStorms;
+    if (!t) return 'no track';
+    const points = t.storms.flatMap(s => s.points.length);
+    return t.at('20991231.235959').length === 0 && points.length > 0
+      ? 'ok' : 'a time with no observation was marked';
+  })()`);
+  check(honest === 'ok', 'no mark for a time the storm was not found in', honest);
+
   const before = await page.shot('03-before-drag');
   await page.drag(200, 420, 320, 470);
   await sleep(1500);
@@ -356,6 +410,7 @@ async function checkJavaScriptGlobe(page) {
   const rotated = png.changed(before, after);
   check(rotated >= 0.02, 'a touch drag rotates the globe',
     `${(rotated * 100).toFixed(1)}% of pixels differ`);
+
 }
 
 async function checkUnityBuild(page) {

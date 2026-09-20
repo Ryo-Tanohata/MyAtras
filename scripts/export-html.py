@@ -98,12 +98,19 @@ def amv():
     return script("window.GEO_AMV_SNAPSHOT=%s;" % literal(data))
 
 
+def storms():
+    data = json.loads((DIST / "data/storms.json").read_text(encoding="utf-8"))
+    print("  storms   %d found in %d observations" % (len(data["storms"]), len(data["frames"])))
+    return script("window.GEO_STORMS=%s;" % literal(data))
+
+
 def main():
     html = (DIST / "index.html").read_text(encoding="utf-8")
     print("inlining observations")
     html = html.replace("<!--bundle:earth-->", earth_and_snapshot())
     html = html.replace("<!--bundle:sequence-->", sequence())
     html = html.replace("<!--bundle:amv-->", amv())
+    html = html.replace("<!--bundle:storms-->", storms())
     html = STYLE_TAG.sub(
         lambda m: "<style>" + (DIST / m.group(1)).read_text(encoding="utf-8") + "</style>",
         html,
