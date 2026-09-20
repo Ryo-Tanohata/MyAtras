@@ -3,374 +3,6 @@
  "method": "scripts/wind-grid.cjs: 1-degree grid; within 2.5 degrees the vectors there, further out spread from within 9 degrees by a 3-degree Gaussian",
  "winds": [
   {
-   "time": "20260916.060000",
-   "file": "wind_20260916_060000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_060000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_060000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2347,
-    "AMV-LLmid": 922
-   },
-   "sha256": "85d744bf94162370893dd50133c3f5dbfbff0dc0c33b3c8ad93c323a8b7341dc",
-   "bytes": 47175,
-   "nearTexels": 17773,
-   "spreadTexels": 28897
-  },
-  {
-   "time": "20260916.070000",
-   "file": "wind_20260916_070000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_070000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_070000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2336,
-    "AMV-LLmid": 964
-   },
-   "sha256": "674f412b223aefea243d69cb0016cb774a5bfed5e29f4eb3e72ee04b078e4c8c",
-   "bytes": 46457,
-   "nearTexels": 17606,
-   "spreadTexels": 28509
-  },
-  {
-   "time": "20260916.080000",
-   "file": "wind_20260916_080000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_080000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_080000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2310,
-    "AMV-LLmid": 977
-   },
-   "sha256": "0e97e21890873845c449202404c2bfd0012a848b93b1d07a5963cbd3569410a4",
-   "bytes": 46786,
-   "nearTexels": 17487,
-   "spreadTexels": 28523
-  },
-  {
-   "time": "20260916.090000",
-   "file": "wind_20260916_090000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_090000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_090000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2372,
-    "AMV-LLmid": 1009
-   },
-   "sha256": "00a66e2a65b3d86b730c0f521e55f98d9660953d9d075cffd024ccfebe29b85f",
-   "bytes": 46411,
-   "nearTexels": 17451,
-   "spreadTexels": 28619
-  },
-  {
-   "time": "20260916.100000",
-   "file": "wind_20260916_100000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_100000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_100000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2343,
-    "AMV-LLmid": 990
-   },
-   "sha256": "ff8f87a1b79dde5c16dbe1a231b3b6feda365d4906eea0130c9413b38c018c78",
-   "bytes": 45846,
-   "nearTexels": 17300,
-   "spreadTexels": 28029
-  },
-  {
-   "time": "20260916.110000",
-   "file": "wind_20260916_110000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_110000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_110000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2391,
-    "AMV-LLmid": 973
-   },
-   "sha256": "91a84da7b8c44c1990aa843b5db80f1fe9041a28aba5ceff54c1d4b152f0b5cf",
-   "bytes": 46230,
-   "nearTexels": 17562,
-   "spreadTexels": 28373
-  },
-  {
-   "time": "20260916.120000",
-   "file": "wind_20260916_120000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_120000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_120000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2393,
-    "AMV-LLmid": 993
-   },
-   "sha256": "bec3cf64c9266f83a245333bce9b56f47d623e06eabff5611044403d6ed5a26a",
-   "bytes": 45737,
-   "nearTexels": 17566,
-   "spreadTexels": 28034
-  },
-  {
-   "time": "20260916.130000",
-   "file": "wind_20260916_130000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_130000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_130000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2390,
-    "AMV-LLmid": 967
-   },
-   "sha256": "d98237b5660ed2b2549dd959723ec123565078e4def73f5f2ce8899df7259d50",
-   "bytes": 45514,
-   "nearTexels": 17431,
-   "spreadTexels": 27622
-  },
-  {
-   "time": "20260916.140000",
-   "file": "wind_20260916_140000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_140000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_140000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2153,
-    "AMV-LLmid": 847
-   },
-   "sha256": "33fc3b01061ae563375c87e56ccc15f6ca1adee4b5056743aa46d770f7e2cf40",
-   "bytes": 39383,
-   "nearTexels": 15285,
-   "spreadTexels": 24306
-  },
-  {
-   "time": "20260916.150000",
-   "file": "wind_20260916_150000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_150000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_150000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2220,
-    "AMV-LLmid": 864
-   },
-   "sha256": "74c9da04c3fc0d194fcfcb25d81c10acffb71c559f8f8279d417fe317b466003",
-   "bytes": 43886,
-   "nearTexels": 16281,
-   "spreadTexels": 26700
-  },
-  {
-   "time": "20260916.160000",
-   "file": "wind_20260916_160000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_160000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_160000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2439,
-    "AMV-LLmid": 985
-   },
-   "sha256": "6c2134d28b56f101a199b890a5ea6fe2acd4f07b47956549d228b2c14a6a4926",
-   "bytes": 45712,
-   "nearTexels": 17857,
-   "spreadTexels": 28173
-  },
-  {
-   "time": "20260916.170000",
-   "file": "wind_20260916_170000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_170000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_170000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2411,
-    "AMV-LLmid": 955
-   },
-   "sha256": "8c8e9cfb1d94b035e802f94eb6c479c2b584d3bf3a512adf23b60afb728db916",
-   "bytes": 45339,
-   "nearTexels": 17640,
-   "spreadTexels": 28018
-  },
-  {
-   "time": "20260916.180000",
-   "file": "wind_20260916_180000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_180000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_180000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2413,
-    "AMV-LLmid": 938
-   },
-   "sha256": "2b98fad43fb1b2e090f4cf296da9f7bc309efb4d187c8733f1c71777863d05de",
-   "bytes": 45312,
-   "nearTexels": 17756,
-   "spreadTexels": 28219
-  },
-  {
-   "time": "20260916.190000",
-   "file": "wind_20260916_190000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_190000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_190000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2399,
-    "AMV-LLmid": 934
-   },
-   "sha256": "7581eeea19bfe43e0525750274934a07d194255c0649b3f478a56532f93f2dba",
-   "bytes": 46162,
-   "nearTexels": 17954,
-   "spreadTexels": 28583
-  },
-  {
-   "time": "20260916.200000",
-   "file": "wind_20260916_200000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_200000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_200000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2363,
-    "AMV-LLmid": 952
-   },
-   "sha256": "a2586f85d0e9b4795b86917d0ccfa4f8882a4116c741ace97b2a26493ab74835",
-   "bytes": 45257,
-   "nearTexels": 17908,
-   "spreadTexels": 28116
-  },
-  {
-   "time": "20260916.210000",
-   "file": "wind_20260916_210000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_210000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_210000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2321,
-    "AMV-LLmid": 908
-   },
-   "sha256": "ca5a0e9b8cf141f1a1f9942771739509fe69b80117324c2e461140cf05b95990",
-   "bytes": 46506,
-   "nearTexels": 17700,
-   "spreadTexels": 28450
-  },
-  {
-   "time": "20260916.220000",
-   "file": "wind_20260916_220000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_220000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_220000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2316,
-    "AMV-LLmid": 942
-   },
-   "sha256": "f55076dc9c0aff193edf2518cf9aeb1bb4064886dde7be65a6b7ca3bed799750",
-   "bytes": 46518,
-   "nearTexels": 17824,
-   "spreadTexels": 28663
-  },
-  {
-   "time": "20260916.230000",
-   "file": "wind_20260916_230000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260916_230000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260916_230000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2222,
-    "AMV-LLmid": 877
-   },
-   "sha256": "fef5974713cf313fb9b516d410ab736c9c27f6c84433ef42e72ab383caeb50c5",
-   "bytes": 47250,
-   "nearTexels": 17427,
-   "spreadTexels": 28782
-  },
-  {
-   "time": "20260917.000000",
-   "file": "wind_20260917_000000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260917_000000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260917_000000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2249,
-    "AMV-LLmid": 874
-   },
-   "sha256": "73a7d29ca977da8ee738a36cfe59f990bf1624a474bf7e991f002c3c2bd709a5",
-   "bytes": 47263,
-   "nearTexels": 17550,
-   "spreadTexels": 28763
-  },
-  {
-   "time": "20260917.010000",
-   "file": "wind_20260917_010000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260917_010000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260917_010000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2203,
-    "AMV-LLmid": 867
-   },
-   "sha256": "5ecc09c9791fb220af60790400d27aa14b19d8001ea3dcea68e6273f191369ed",
-   "bytes": 47407,
-   "nearTexels": 17246,
-   "spreadTexels": 28914
-  },
-  {
-   "time": "20260917.020000",
-   "file": "wind_20260917_020000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260917_020000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260917_020000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2209,
-    "AMV-LLmid": 879
-   },
-   "sha256": "288e8d002c1504c0a3e8998bb3bd841d096077262ebcffde786fe88a4c9c0178",
-   "bytes": 47449,
-   "nearTexels": 17084,
-   "spreadTexels": 28982
-  },
-  {
-   "time": "20260917.030000",
-   "file": "wind_20260917_030000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260917_030000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260917_030000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2217,
-    "AMV-LLmid": 877
-   },
-   "sha256": "9e63c9381fc37e80da0eeb83c037610eccf6dee039b7ddb19ae7c72e0fb1c03a",
-   "bytes": 48095,
-   "nearTexels": 16998,
-   "spreadTexels": 29055
-  },
-  {
-   "time": "20260917.040000",
-   "file": "wind_20260917_040000.png",
-   "sources": {
-    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260917_040000",
-    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260917_040000"
-   },
-   "vectors": {
-    "AMV-LLlow": 2176,
-    "AMV-LLmid": 903
-   },
-   "sha256": "7ed7a036f0e80987107740a78120d497b93ebe3202cdff83606520597a37d24e",
-   "bytes": 47725,
-   "nearTexels": 17071,
-   "spreadTexels": 28945
-  },
-  {
    "time": "20260917.050000",
    "file": "wind_20260917_050000.png",
    "sources": {
@@ -1137,7 +769,377 @@
    "bytes": 49472,
    "nearTexels": 17032,
    "spreadTexels": 29190
+  },
+  {
+   "time": "20260919.050000",
+   "file": "wind_20260919_050000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_050000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_050000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2088,
+    "AMV-LLmid": 1016
+   },
+   "sha256": "6963811389c4e23302964de0f57a9c80691e051bf02607fb4d9abb01beb0e024",
+   "bytes": 49194,
+   "nearTexels": 17015,
+   "spreadTexels": 29103
+  },
+  {
+   "time": "20260919.060000",
+   "file": "wind_20260919_060000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_060000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_060000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2142,
+    "AMV-LLmid": 946
+   },
+   "sha256": "dbedcc5344d3e09173877236c0f6db40632617a7265fbfb88559460e7113880e",
+   "bytes": 49320,
+   "nearTexels": 16859,
+   "spreadTexels": 29276
+  },
+  {
+   "time": "20260919.070000",
+   "file": "wind_20260919_070000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_070000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_070000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2102,
+    "AMV-LLmid": 1028
+   },
+   "sha256": "bb3e0e58fa44d6a187a867f8736718a31f8e0181ac20b2edc981c45a6d3cbc97",
+   "bytes": 49315,
+   "nearTexels": 16858,
+   "spreadTexels": 29133
+  },
+  {
+   "time": "20260919.080000",
+   "file": "wind_20260919_080000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_080000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_080000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2088,
+    "AMV-LLmid": 994
+   },
+   "sha256": "3711549dc54e30798f1e4f2af0cfc3e3d041061ffd87acc4aff72e1745920f99",
+   "bytes": 49214,
+   "nearTexels": 16689,
+   "spreadTexels": 29157
+  },
+  {
+   "time": "20260919.090000",
+   "file": "wind_20260919_090000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_090000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_090000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2124,
+    "AMV-LLmid": 977
+   },
+   "sha256": "4b99d17619e08153c01fc149b11a955c06859358b32cd32af0d18ce2fd092ba6",
+   "bytes": 49250,
+   "nearTexels": 16681,
+   "spreadTexels": 29036
+  },
+  {
+   "time": "20260919.100000",
+   "file": "wind_20260919_100000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_100000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_100000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2088,
+    "AMV-LLmid": 997
+   },
+   "sha256": "c3e726b20c0d1a7d43e56f194ee4b22419cc7b298cd1e45d639986448a4aaa2b",
+   "bytes": 48839,
+   "nearTexels": 16457,
+   "spreadTexels": 28818
+  },
+  {
+   "time": "20260919.110000",
+   "file": "wind_20260919_110000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_110000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_110000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2147,
+    "AMV-LLmid": 953
+   },
+   "sha256": "9a5f9c825bc3f8e465dfab40d18f124a30b1fbe981fee2357f532fdc60383a75",
+   "bytes": 48649,
+   "nearTexels": 16297,
+   "spreadTexels": 28875
+  },
+  {
+   "time": "20260919.120000",
+   "file": "wind_20260919_120000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_120000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_120000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2173,
+    "AMV-LLmid": 957
+   },
+   "sha256": "a52e25b25cb56935141b3d50751b26744397df3303479a6824639e38a483f68c",
+   "bytes": 48271,
+   "nearTexels": 16625,
+   "spreadTexels": 28684
+  },
+  {
+   "time": "20260919.130000",
+   "file": "wind_20260919_130000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_130000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_130000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2191,
+    "AMV-LLmid": 1008
+   },
+   "sha256": "ccf4983aa22550c5f4fa15a0563ec89f0ab936fbbb2bd91a1231d23741406508",
+   "bytes": 48115,
+   "nearTexels": 16668,
+   "spreadTexels": 28536
+  },
+  {
+   "time": "20260919.140000",
+   "file": "wind_20260919_140000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_140000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_140000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2004,
+    "AMV-LLmid": 817
+   },
+   "sha256": "3453847d4bd5bf492bd95072285c09eab3f66bf7f7730795ceb00b078c15929e",
+   "bytes": 38964,
+   "nearTexels": 14227,
+   "spreadTexels": 22914
+  },
+  {
+   "time": "20260919.150000",
+   "file": "wind_20260919_150000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_150000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_150000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2097,
+    "AMV-LLmid": 807
+   },
+   "sha256": "59b699e77167ad51dbf00f657473b50531c0ab6871c5500e40787c7339f7f456",
+   "bytes": 45002,
+   "nearTexels": 15295,
+   "spreadTexels": 26996
+  },
+  {
+   "time": "20260919.160000",
+   "file": "wind_20260919_160000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_160000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_160000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2195,
+    "AMV-LLmid": 910
+   },
+   "sha256": "78ba690ac5e9d3df7144e7e782f972209851705f0724b8449eee56303434600f",
+   "bytes": 46888,
+   "nearTexels": 16335,
+   "spreadTexels": 28220
+  },
+  {
+   "time": "20260919.170000",
+   "file": "wind_20260919_170000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_170000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_170000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2285,
+    "AMV-LLmid": 939
+   },
+   "sha256": "8b7cc79737d5a4f53dc83435c57721a909985b0d88afabd375b191caff20797d",
+   "bytes": 47814,
+   "nearTexels": 16919,
+   "spreadTexels": 28290
+  },
+  {
+   "time": "20260919.180000",
+   "file": "wind_20260919_180000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_180000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_180000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2263,
+    "AMV-LLmid": 992
+   },
+   "sha256": "c7113c9d2d502a3dad4aabaadc403b97b84619bbc2d0bba68fed2efedba355d9",
+   "bytes": 47969,
+   "nearTexels": 17001,
+   "spreadTexels": 28647
+  },
+  {
+   "time": "20260919.190000",
+   "file": "wind_20260919_190000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_190000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_190000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2250,
+    "AMV-LLmid": 991
+   },
+   "sha256": "27e8d65f7657fc6d7430c7daf5cff3a38cfb6a75b56c00327c96a76506acc68a",
+   "bytes": 48155,
+   "nearTexels": 17247,
+   "spreadTexels": 28728
+  },
+  {
+   "time": "20260919.200000",
+   "file": "wind_20260919_200000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_200000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_200000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2196,
+    "AMV-LLmid": 964
+   },
+   "sha256": "086b4c825fdc8996ccc156849d77ac220ab85b5dabd021f1a2121c6ff8b72d88",
+   "bytes": 48815,
+   "nearTexels": 16958,
+   "spreadTexels": 28826
+  },
+  {
+   "time": "20260919.210000",
+   "file": "wind_20260919_210000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_210000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_210000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2210,
+    "AMV-LLmid": 851
+   },
+   "sha256": "f2956785072ac30b4f5233869b84719e6f4a4f5d8f687ad9d209860d1fe8bf96",
+   "bytes": 49013,
+   "nearTexels": 16840,
+   "spreadTexels": 28895
+  },
+  {
+   "time": "20260919.220000",
+   "file": "wind_20260919_220000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_220000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_220000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2194,
+    "AMV-LLmid": 851
+   },
+   "sha256": "ba1a5f4616e114eb56dc6e856bd7a67ed13a3406f628ed90358624bda296140f",
+   "bytes": 47395,
+   "nearTexels": 16541,
+   "spreadTexels": 27907
+  },
+  {
+   "time": "20260919.230000",
+   "file": "wind_20260919_230000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260919_230000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260919_230000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2207,
+    "AMV-LLmid": 876
+   },
+   "sha256": "447e0d70e2e7a03fb3e8e4d58c641e13663b9ff55e11bb1d59dbebc8cb5d5e7a",
+   "bytes": 48031,
+   "nearTexels": 16517,
+   "spreadTexels": 28673
+  },
+  {
+   "time": "20260920.000000",
+   "file": "wind_20260920_000000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260920_000000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260920_000000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2162,
+    "AMV-LLmid": 851
+   },
+   "sha256": "af097f7a4fd76d5d82c96caf388d5033f3983da97e7c343596104eb1c6a7dac7",
+   "bytes": 48415,
+   "nearTexels": 16672,
+   "spreadTexels": 28622
+  },
+  {
+   "time": "20260920.010000",
+   "file": "wind_20260920_010000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260920_010000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260920_010000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2122,
+    "AMV-LLmid": 846
+   },
+   "sha256": "b1cf6c43f1f12125c037e5d04ba19064e29dba766c97077235b742bd86f0cda9",
+   "bytes": 47727,
+   "nearTexels": 16546,
+   "spreadTexels": 28359
+  },
+  {
+   "time": "20260920.020000",
+   "file": "wind_20260920_020000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260920_020000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260920_020000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2179,
+    "AMV-LLmid": 883
+   },
+   "sha256": "e9f2b8b468f2b59c51129f00f74467c56689089e74933315f0255dbf0078a2ed",
+   "bytes": 47607,
+   "nearTexels": 16580,
+   "spreadTexels": 28313
+  },
+  {
+   "time": "20260920.030000",
+   "file": "wind_20260920_030000.png",
+   "sources": {
+    "AMV-LLlow": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260920_030000",
+    "AMV-LLmid": "https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260920_030000"
+   },
+   "vectors": {
+    "AMV-LLlow": 2160,
+    "AMV-LLmid": 879
+   },
+   "sha256": "7f6c9d893124503276334699e7be0bbcf06c364d5477e93dc17354bf6e086618",
+   "bytes": 47195,
+   "nearTexels": 16427,
+   "spreadTexels": 28058
   }
  ],
- "missing": []
+ "missing": [
+  "20260920.040000"
+ ]
 }
