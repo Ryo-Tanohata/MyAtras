@@ -36,7 +36,7 @@
 </aside>
 </main>
 <footer><span>日本科学未来館の展示「ジオ・コスモス」に着想を得た個人制作です。同館とは関係がありません。</span><details><summary>この展示について</summary><p>SSEC RealEarthの全球衛星合成画像（赤外線）を球面に投影します。予報ではなく観測画像です。画像中の透かし・ロゴは保持します。観測には遅れや欠測があります。地表の参考画像は雲のない地表で、現在の観測ではありません。描画はUnityで行い、観測は同じサイトのJavaScript版と同じファイルを読み込みます。</p><p>地球画像：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_2048.jpg" target="_blank" rel="noreferrer">NASA Visible Earth (Blue Marble)</a> · 夜の街明かり：<a href="https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg" target="_blank" rel="noreferrer">NASA Earth Observatory (Black Marble 2016)</a> · 星：<a href="https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50" target="_blank" rel="noreferrer">Bright Star Catalogue, 5th Revised Ed. (Hoffleit &amp; Warren 1991, CDS V/50)</a> · 夜の海岸線：<a href="https://www.naturalearthdata.com/" target="_blank" rel="noreferrer">Natural Earth</a> · 観測風：<a href="https://www.ssec.wisc.edu/realearth/terms-of-use/" target="_blank" rel="noreferrer">SSEC RealEarth（AMV）</a> · <a href="https://www.miraikan.jst.go.jp/" target="_blank" rel="noreferrer">日本科学未来館</a></p></details></footer>
-<script src="Build/27b623d7d159da2eefca3e2d37701aa2.loader.js"></script>
+<script src="Build/78d6f067d2d370c83a9355a92d3303ed.loader.js"></script>
 <script>
 (function () {
   'use strict';
@@ -255,9 +255,9 @@
   });
 
   createUnityInstance($('globe'), {
-    dataUrl: 'Build/a0ad88eb5be473c4c7388a2c66d2cdb3.data.unityweb',
-    frameworkUrl: 'Build/d5a37d9464f9c8ac3bb4fe267b4ebd9a.framework.js.unityweb',
-    codeUrl: 'Build/a80b0f2935869e720d8bed0e9538a429.wasm.unityweb',
+    dataUrl: 'Build/87facc7ad6b0ae9db537e55659502576.data.unityweb',
+    frameworkUrl: 'Build/90aa60c0acaaee04849c47108249a61a.framework.js.unityweb',
+    codeUrl: 'Build/3e32da473ade886508145ecf5db3d022.wasm.unityweb',
     streamingAssetsUrl: 'StreamingAssets',
     companyName: "MyAtras",
     productName: "MyAtras",
@@ -271,6 +271,13 @@
   }).then(function (created) {
     instance = created;
     window.myatrasUnity = created;
+    // The globe opens with a flight: the whole Earth, one turn, then Japan. Anyone who
+    // has asked their device for reduced motion is put straight where it lands.
+    // GlobeView.SkipIntro only exists in builds made from this template's own script,
+    // which is why dist/unity/index.html carries this line only after a rebuild.
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      send('SkipIntro', 1);
+    }
   }).catch(function (message) {
     console.error(message);
     $('status').hidden = false;
