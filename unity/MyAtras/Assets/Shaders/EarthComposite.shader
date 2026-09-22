@@ -16,6 +16,8 @@ Shader "MyAtras/EarthComposite"
         _Earth ("Ground reference", 2D) = "white" {}
         _Weather ("Observation", 2D) = "black" {}
         _WeatherPrev ("Previous observation", 2D) = "black" {}
+        _Detail ("Close-up of the observation", 2D) = "black" {}
+        _DetailPrev ("Close-up of the previous observation", 2D) = "black" {}
         _Night ("City lights", 2D) = "black" {}
         _StarMap ("Stars", 2D) = "black" {}
         _Land ("Land and coastline", 2D) = "black" {}
@@ -56,6 +58,17 @@ Shader "MyAtras/EarthComposite"
             // 0 shows the previous observation, 1 the current one; see ObservationPlayback.
             float _Fade;
             float2 _Watermark;
+
+            // The close-up: the same observation over one box at the resolution SSEC
+            // holds. _DetailBox is that box in the coordinates the global frames are
+            // sampled in - u across the world's longitudes, Mercator y from the top -
+            // and the two flags say whether each of the two observations on screen has
+            // a crop of its own. An hour with none keeps its global frame.
+            sampler2D _Detail;
+            sampler2D _DetailPrev;
+            float _DetailOn, _DetailPrevOn;
+            float4 _DetailBox;
+            float2 _DetailWatermark;
             // Sunlight at the observation's own time (SolarPosition.cs): _Sun is the
             // subsolar direction in the same frame as q below, so dot(q, _Sun) is the sine
             // of the sun's elevation at that point. Only this Unity build draws it.
@@ -199,30 +212,65 @@ Shader "MyAtras/EarthComposite"
                 return tex2Dlod(image, float4(lonLat.x / 360.0 + 0.5, 1.0 - my, 0.0, 0.0));
             }
 
+            // Where the close-up covers this point, in its own 0..1 coordinates, with a
+            // feather over the last two per cent of the box so the two resolutions of one
+            // observation meet without a line. close is 0 outside it.
+            float2 CloseUpAt(float u, float my, out float close)
+            {
+                float2 du = float2((u - _DetailBox.x) / max(_DetailBox.y - _DetailBox.x, 1e-6),
+                                   (my - _DetailBox.z) / max(_DetailBox.w - _DetailBox.z, 1e-6));
+                float within = step(0.0, du.x) * step(du.x, 1.0) * step(0.0, du.y) * step(du.y, 1.0);
+                float edge = min(min(du.x, 1.0 - du.x), min(du.y, 1.0 - du.y));
+                close = within * smoothstep(0.0, 0.02, edge);
+                return du;
+            }
+
+            // An observation, taking its close-up where there is one. Nothing is enlarged or
+            // invented: the crop is the same observation at the resolution SSEC keeps.
+            float4 ObservedIn(sampler2D image, sampler2D detail, float detailOn, float2 lonLat)
+            {
+                float lat = radians(lonLat.y);
+                if (abs(lat) >= MERCATOR_LIMIT) return float4(0.0, 0.0, 0.0, 0.0);
+                float my = 0.5 - log(tan(PI * 0.25 + lat * 0.5)) / (2.0 * PI);
+                float u = lonLat.x / 360.0 + 0.5;
+                float4 coarse = tex2Dlod(image, float4(u, 1.0 - my, 0.0, 0.0));
+                if (detailOn < 0.5) return coarse;
+                float close;
+                float2 du = CloseUpAt(u, my, close);
+                float4 fine = tex2Dlod(detail, float4(du.x, 1.0 - du.y, 0.0, 0.0));
+                return lerp(coarse, fine, close);
+            }
+
             // A pair of observations at a point, carried towards each other. With the model
             // off, or on a step that does not follow on (gap 0), both are sampled in place,
             // which is the plain dissolve.
             void PairOf(sampler2D earlier, sampler2D later, sampler2D motion, float motionOn,
-                        float advect, float gap, float2 lonLat, out float4 now, out float4 was)
+                        float advect, float gap, float2 lonLat,
+                        sampler2D earlierDetail, sampler2D laterDetail,
+                        float earlierDetailOn, float laterDetailOn, out float4 now, out float4 was)
             {
                 float2 wind = WindOf(lonLat, motion, motionOn);
                 float since = advect * _Fade * gap;
                 float until = advect * (1.0 - _Fade) * gap;
-                was = ObservedAt(earlier, Carried(lonLat, wind, -since));
-                now = ObservedAt(later, Carried(lonLat, wind, until));
+                was = ObservedIn(earlier, earlierDetail, earlierDetailOn, Carried(lonLat, wind, -since));
+                now = ObservedIn(later, laterDetail, laterDetailOn, Carried(lonLat, wind, until));
             }
 
             // The two observations on screen.
             void Pair(float2 lonLat, out float4 now, out float4 was)
             {
-                PairOf(_WeatherPrev, _Weather, _Motion, _MotionOn, _Advect, _Gap, lonLat, now, was);
+                PairOf(_WeatherPrev, _Weather, _Motion, _MotionOn, _Advect, _Gap, lonLat,
+                       _DetailPrev, _Detail, _DetailPrevOn, _DetailOn, now, was);
             }
 
             // The overlaid pair at the loop's seam. Where no wind was observed it falls back
             // on the other pair's observed wind; its own measured motion covers most of it.
             void PairB(float2 lonLat, out float4 now, out float4 was)
             {
-                PairOf(_WeatherPrevB, _WeatherB, _MotionB, _MotionOnB, _AdvectB, _GapB, lonLat, now, was);
+                // The pair overlaid at the loop's seam is the oldest part of the window,
+                // which the close-up does not reach back to, so it keeps its global frames.
+                PairOf(_WeatherPrevB, _WeatherB, _MotionB, _MotionOnB, _AdvectB, _GapB, lonLat,
+                       _DetailPrev, _Detail, 0.0, 0.0, now, was);
             }
 
             // Cloud cover and relative cloud-top height at a point on the globe, from the two
@@ -532,6 +580,15 @@ Shader "MyAtras/EarthComposite"
                             float3 composite = lerp(groundLit, cloudColour, cloud);
                             // The SSEC logo corner is drawn from the observation itself.
                             float mark = step(uv.x, _Watermark.x) * step(1.0 - _Watermark.y, my);
+                            // The crop carries SSEC's logo in its own corner; it is drawn as
+                            // the image is, the way the global one is, never turned into cloud.
+                            if (_DetailOn > 0.5)
+                            {
+                                float inCrop;
+                                float2 du = CloseUpAt(uv.x, my, inCrop);
+                                mark = max(mark, inCrop * step(du.x, _DetailWatermark.x)
+                                                        * step(1.0 - _DetailWatermark.y, du.y));
+                            }
                             color = lerp(composite, lerp(color, observed.rgb, observed.a), mark);
                             cloudCover = cloud;
                             markAmount = mark;

@@ -267,6 +267,28 @@ function globeRegion(image) {
     Math.round(image.width * 0.85), Math.round(image.height * 0.55));
 }
 
+// The strip beside the globe: the page's own background shows past a whole globe and
+// nothing shows past the close view. Counted as distinct colours rather than brightness,
+// because the view it lands on can be night ocean.
+function besideStrip(image) {
+  return png.region(image,
+    Math.round(image.width * 0.05), Math.round(image.height * 0.30),
+    Math.round(image.width * 0.11), Math.round(image.height * 0.45));
+}
+
+/// The first moment of the flight: waits for it to be running rather than for the
+/// observations, which now take longer to arrive than the flight takes to land.
+async function openingShot(page) {
+  const deadline = Date.now() + 15000;
+  let flying = false;
+  while (Date.now() < deadline) {
+    flying = await page.js("!!(window.geoIntro && window.geoIntro.running)").catch(() => false);
+    if (flying) break;
+    await sleep(200);
+  }
+  return { image: await page.shot('00-opening'), flying, note: flying ? '' : 'never saw it running' };
+}
+
 // -------------------------------------------------- which storm the camera can see
 
 // The marks are drawn where the globe is looking, and it opens on Japan. With 71
@@ -346,6 +368,11 @@ async function loadWithWebGL(page, url) {
 }
 
 async function checkJavaScriptGlobe(page) {
+  // The opening flight is measured at the opening: it lasts eleven seconds, and waiting
+  // for the observations first would arrive after it had landed - which is what happened
+  // once the bundled sequence grew to 71 frames.
+  const opening = await openingShot(page);
+
   await page.waitFor(
     "!/確認中|読み込み中|準備中/.test(document.getElementById('observationTime').textContent)",
     60000, 'the observation timestamp never resolved');
@@ -357,17 +384,9 @@ async function checkJavaScriptGlobe(page) {
   check(true, 'observation shown',
     await page.js("document.getElementById('observationTime').textContent.trim()"));
 
-  // The opening flight: the whole globe, one turn, then Japan filling the frame.
-  // Measured at the side of the canvas, where the page's own background shows past a
-  // whole globe and nothing shows past the close view. Counting distinct colours
-  // rather than brightness, because the arriving view can be night ocean.
-  const opening = await page.shot('00-opening');
-  const besideStrip = image => png.region(image,
-    Math.round(image.width * 0.05), Math.round(image.height * 0.30),
-    Math.round(image.width * 0.11), Math.round(image.height * 0.45));
-  const wide = besideStrip(opening);
-  const flying = await page.js("!!(window.geoIntro && window.geoIntro.running)");
-  check(flying, 'the globe opens on a flight rather than where it lands');
+  const wide = besideStrip(opening.image);
+  check(opening.flying, 'the globe opens on a flight rather than where it lands',
+    opening.note);
   // Every later check wants the view it settles on, and a moving camera would
   // contaminate the pixel comparisons, so the rest of the flight is skipped here.
   await page.js("window.geoIntro && window.geoIntro.skip()");
@@ -680,6 +699,8 @@ async function checkUnityBuild(page) {
     box.dispatchEvent(new Event('change')); } })()`);
   await sleep(600);
 
+  await checkUnityCloseUp(page);
+
   // Paused, so the only thing a drag can change is the view.
   const paused = await page.shot('unity-03-paused');
   await page.drag(200, 420, 320, 470);
@@ -803,6 +824,60 @@ function globeRegionImage(image) {
       ((top + y) * image.width + right) * image.channels);
   }
   return { width, height, channels: image.channels, data };
+}
+
+// The same close-up the JavaScript page carries, on the Unity globe: offered only where
+// one is bundled, fetched only when asked, and measured the same way - it has to be drawn
+// (the picture changes) and it has to land where the coarse observation already put the
+// clouds (the coarse grid of cell brightness barely moves).
+async function checkUnityCloseUp(page) {
+  const offered = await page.js(
+    "(() => { const l = document.getElementById('closeUpToggle'); return !!l && !l.hidden; })()");
+  if (!offered) {
+    console.log('  --   no close-up is bundled with this build; its checks are skipped');
+    return;
+  }
+
+  // The newest observation: the close-up covers the newest hours of the sequence. The
+  // flow streaks are turned off for the comparison - they drift on their own, and two
+  // shots seconds apart would differ by them rather than by the close-up.
+  const flow = on => page.js(`(() => { const box = document.getElementById('flow');
+    box.checked = ${on}; box.dispatchEvent(new Event('change')); })()`);
+  await flow(false);
+  await page.js(`(() => {
+    const slider = document.getElementById('weatherTime');
+    slider.value = slider.max;
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await sleep(2000);
+  const coarse = await page.shot('unity-10-without-the-close-up');
+
+  await page.js(`(() => { const box = document.getElementById('closeUp');
+    box.checked = true; box.dispatchEvent(new Event('change')); })()`);
+  try {
+    await page.waitFor("/km\\/画素/.test((document.getElementById('closeUpNote') || {}).textContent || '')",
+      90000, 'the close-up never finished loading');
+  } catch (error) {
+    check(false, 'the close-up loads', error.message);
+    return;
+  }
+  await sleep(1500);
+  const close = await page.shot('unity-11-with-the-close-up');
+
+  const moved = png.changed(globeRegionImage(coarse), globeRegionImage(close));
+  check(moved > 0.002, 'the close-up is drawn over the observation',
+    `${(moved * 100).toFixed(1)}% of pixels differ`);
+  const drift = blockDrift(globeRegionImage(coarse), globeRegionImage(close));
+  check(drift < 0.02, 'the close-up lands where the coarse observation put the clouds',
+    `mean cell brightness moved by ${(drift * 100).toFixed(1)}% of full scale`);
+
+  const note = await page.js("(document.getElementById('closeUpNote') || {}).textContent || ''");
+  check(/km\/画素/.test(note), 'the page says how fine the close-up is', note.slice(0, 80));
+
+  await page.js(`(() => { const box = document.getElementById('closeUp');
+    box.checked = false; box.dispatchEvent(new Event('change')); })()`);
+  await flow(true);
+  await sleep(600);
 }
 
 // -------------------------------------------------- the panel on a phone

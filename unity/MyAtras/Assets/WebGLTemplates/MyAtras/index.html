@@ -15,7 +15,7 @@
 <div class="intro"><span class="eyebrow">EARTH / CLOUDS IN MOTION</span><h1>雲の流れを、<br>地球の上で。</h1><p>観測時刻を進めて、雲の変化を見る。</p></div>
 <div class="stage"><canvas id="globe" tabindex="0" aria-label="地球。ドラッグで回転、ピンチまたはホイールで拡大縮小"></canvas><div id="status" role="status">地球を読み込んでいます…</div><div class="caption"><span class="line"></span><span>EARTH<small id="surfaceLabel">赤外線の観測を風で動かした模型</small></span></div><div class="instructions">ドラッグで回転 <span>·</span> ピンチで拡大</div></div>
 <aside>
-<section class="weather-controls" aria-label="気象データ"><span class="eyebrow">SATELLITE OBSERVATIONS</span><h2>雲の流れ</h2><p>異なる観測時刻の雲を、地球上で連続再生します。</p><div class="display-modes" role="group" aria-label="雲の動かし方"><button data-motion="model" class="selected" aria-pressed="true">風で流す模型</button><button data-motion="observed" aria-pressed="false">実観測だけ</button></div><p id="motionNote" class="weather-note">観測と観測の間は、雲の動きを推定してつないだ模型です。推定した動きは観測ではありません。</p><button id="weatherPlay" aria-pressed="false" disabled>▶ 雲の流れを再生</button><p id="weatherPlaybackStatus" role="status">観測を準備中…</p><label for="weatherPlaybackSpeed">再生の速さ</label><select id="weatherPlaybackSpeed"><option value="1.5">ゆっくり（1秒で1.5時間）</option><option value="4.5" selected>標準（1秒で4.5時間）</option><option value="9">速い（1秒で9時間）</option></select><label class="toggle">観測の切り替わりをなめらかに（実観測だけのとき）<input type="checkbox" id="smoothObservations" checked><span></span></label><p class="weather-note">白い雲は未校正の赤外線観測からの簡易合成です。</p><p id="weatherStatus" role="status" aria-live="polite">保存した観測画像を読み込み中…</p><time id="observationTime">観測日時を確認中</time><label for="weatherTime">表示中の観測時刻</label><input type="range" id="weatherTime" min="0" max="0" value="0" disabled><details class="notes"><summary>この表示について</summary><p class="weather-note" id="flowDetail"></p><p class="weather-note" id="loopNote"></p><p class="weather-note">観測を時刻順に再生し、末尾で先頭へ戻ります。赤外線は白黒の観測です。未来館と同じカラー合成ではありません。合成時刻を日本時間で表示。画像の透かしとロゴはそのまま表示します。</p><p class="weather-note">背景の星は、エール輝星星表の6等星までの実在の星（2000年の位置）です。観測時刻の恒星時に合わせて並べ、明るさは見やすく調整しています。</p><p class="weather-note">模型です。実観測を出発点に、雲を動かして観測と観測の間をつないでいます。動きは、前後2つの観測画像を見比べて雲の模様がどちらへどれだけずれたかを推定したものです。推定できない所（雲が少ない所など）はSSECの観測風で、それも届かない所は貿易風・偏西風などの典型的な大気の流れで補っています。観測ごとに次の実観測へ合わせ直すので雲の配置は観測から離れませんが、間の動きは推定で、観測ではありません。</p><p class="weather-note">切り替わりの間は、前の観測と次の観測を重ねて溶け込ませます。どちらも実観測で、中間の時刻の観測を作り出してはいません。日時は溶け込み先の観測を指します。溶け込むのは次の観測へ進むときだけで、先頭へ戻るときや時刻を選んだときはすぐに切り替えます。</p><p class="weather-note">通常は、観測の明るさ0.38–0.82を白い雲の濃さに変換し、青い地表参考画像に重ねます。未校正の簡易合成で、検証された雲判定ではありません。冷たい地表を雲として含み、暖かい低層雲を見落とします。参考画像は雲のない地表で、雪氷は固定です。観測範囲外（緯度±85.05°より外）は参考画像のままです。</p><p class="weather-note">昼夜の境目は、表示中の観測時刻の太陽の位置から計算しています（天文年鑑の簡易式、誤差は約0.01°）。境目は太陽高度±約6°でなだらかにしています。夜側の雲も赤外線の観測で、暗く表示しています。街明かりはNASA Black Marble（2016年）の固定画像で、現在の観測ではありません。夜側の海岸線は、陸と海の境目が分かるように描いた補助線で、Natural Earth（パブリックドメイン）の地図データです。大気の色は、レイリー散乱（空気の分子）とミー散乱（もや）の一次散乱を計算して描いています。昼側の青い縁、境目の夕焼け色、太陽が地球の裏にあるときの橙と青の輪は計算から出てくるもので、色は指定していません。見やすさのため大気の厚さを6倍、濃さを1/6にしています（真上方向の光学的厚さは実際と同じ）。多重散乱は省略しています。</p><p class="weather-note">雲の立体感と影は、赤外線の明るさから推定した相対的な高さ（明るいほど冷たく、高い雲）を約10倍に誇張して描いた演出です。画像に温度の目盛りがないため、実際の高さではありません。影の向きと長さは観測時刻の太陽から計算しています。昼と夜の表示がオンのときに描きます。</p></details><a class="weather-source" href="https://realearth.ssec.wisc.edu/" target="_blank" rel="noreferrer">Source: SSEC RealEarth, UW-Madison</a></section>
+<section class="weather-controls" aria-label="気象データ"><span class="eyebrow">SATELLITE OBSERVATIONS</span><h2>雲の流れ</h2><p>異なる観測時刻の雲を、地球上で連続再生します。</p><div class="display-modes" role="group" aria-label="雲の動かし方"><button data-motion="model" class="selected" aria-pressed="true">風で流す模型</button><button data-motion="observed" aria-pressed="false">実観測だけ</button></div><p id="motionNote" class="weather-note">観測と観測の間は、雲の動きを推定してつないだ模型です。推定した動きは観測ではありません。</p><button id="weatherPlay" aria-pressed="false" disabled>▶ 雲の流れを再生</button><p id="weatherPlaybackStatus" role="status">観測を準備中…</p><label for="weatherPlaybackSpeed">再生の速さ</label><select id="weatherPlaybackSpeed"><option value="1.5">ゆっくり（1秒で1.5時間）</option><option value="4.5" selected>標準（1秒で4.5時間）</option><option value="9">速い（1秒で9時間）</option></select><label class="toggle">観測の切り替わりをなめらかに（実観測だけのとき）<input type="checkbox" id="smoothObservations" checked><span></span></label><label class="toggle" id="closeUpToggle" hidden>日本付近を細かく表示（高解像度の観測）<input type="checkbox" id="closeUp"><span></span></label><p id="closeUpNote" class="weather-note" hidden></p><p class="weather-note">白い雲は未校正の赤外線観測からの簡易合成です。</p><p id="weatherStatus" role="status" aria-live="polite">保存した観測画像を読み込み中…</p><time id="observationTime">観測日時を確認中</time><label for="weatherTime">表示中の観測時刻</label><input type="range" id="weatherTime" min="0" max="0" value="0" disabled><details class="notes"><summary>この表示について</summary><p class="weather-note" id="flowDetail"></p><p class="weather-note" id="loopNote"></p><p class="weather-note">観測を時刻順に再生し、末尾で先頭へ戻ります。赤外線は白黒の観測です。未来館と同じカラー合成ではありません。合成時刻を日本時間で表示。画像の透かしとロゴはそのまま表示します。</p><p class="weather-note">背景の星は、エール輝星星表の6等星までの実在の星（2000年の位置）です。観測時刻の恒星時に合わせて並べ、明るさは見やすく調整しています。</p><p class="weather-note">模型です。実観測を出発点に、雲を動かして観測と観測の間をつないでいます。動きは、前後2つの観測画像を見比べて雲の模様がどちらへどれだけずれたかを推定したものです。推定できない所（雲が少ない所など）はSSECの観測風で、それも届かない所は貿易風・偏西風などの典型的な大気の流れで補っています。観測ごとに次の実観測へ合わせ直すので雲の配置は観測から離れませんが、間の動きは推定で、観測ではありません。</p><p class="weather-note">切り替わりの間は、前の観測と次の観測を重ねて溶け込ませます。どちらも実観測で、中間の時刻の観測を作り出してはいません。日時は溶け込み先の観測を指します。溶け込むのは次の観測へ進むときだけで、先頭へ戻るときや時刻を選んだときはすぐに切り替えます。</p><p class="weather-note">通常は、観測の明るさ0.38–0.82を白い雲の濃さに変換し、青い地表参考画像に重ねます。未校正の簡易合成で、検証された雲判定ではありません。冷たい地表を雲として含み、暖かい低層雲を見落とします。参考画像は雲のない地表で、雪氷は固定です。観測範囲外（緯度±85.05°より外）は参考画像のままです。</p><p class="weather-note">昼夜の境目は、表示中の観測時刻の太陽の位置から計算しています（天文年鑑の簡易式、誤差は約0.01°）。境目は太陽高度±約6°でなだらかにしています。夜側の雲も赤外線の観測で、暗く表示しています。街明かりはNASA Black Marble（2016年）の固定画像で、現在の観測ではありません。夜側の海岸線は、陸と海の境目が分かるように描いた補助線で、Natural Earth（パブリックドメイン）の地図データです。大気の色は、レイリー散乱（空気の分子）とミー散乱（もや）の一次散乱を計算して描いています。昼側の青い縁、境目の夕焼け色、太陽が地球の裏にあるときの橙と青の輪は計算から出てくるもので、色は指定していません。見やすさのため大気の厚さを6倍、濃さを1/6にしています（真上方向の光学的厚さは実際と同じ）。多重散乱は省略しています。</p><p class="weather-note">雲の立体感と影は、赤外線の明るさから推定した相対的な高さ（明るいほど冷たく、高い雲）を約10倍に誇張して描いた演出です。画像に温度の目盛りがないため、実際の高さではありません。影の向きと長さは観測時刻の太陽から計算しています。昼と夜の表示がオンのときに描きます。</p></details><a class="weather-source" href="https://realearth.ssec.wisc.edu/" target="_blank" rel="noreferrer">Source: SSEC RealEarth, UW-Madison</a></section>
 <span class="eyebrow">VIEW SETTINGS</span><h2>地球の見え方</h2>
 <label class="toggle">観測時刻の昼と夜<input type="checkbox" id="sunlight"><span></span></label>
 <p id="sunPoint" class="weather-note" role="status">太陽の位置を計算中…</p>
@@ -138,6 +138,27 @@
       $('weatherTime').disabled = false;
       $('status').hidden = true;
     }
+      // The close-up: hidden where no crop is bundled, and the line beside it says what
+      // it is, how much of it is in hand while it loads, and how fine it is once it is
+      // there. Written on every report - it changes as the crops arrive - which is why
+      // it is here rather than in the one-time setup above.
+      $('closeUpToggle').hidden = s.closeUpExpected === 0;
+      var closeUpNote = $('closeUpNote');
+      if (s.closeUpExpected === 0) {
+        closeUpNote.hidden = true;
+      } else {
+        if (!s.closeUp) {
+          closeUpNote.textContent = '同じ観測の日本付近を切り出した高解像度版です。押すと読み込みます。';
+        } else if (s.closeUpExpected < 0 || s.closeUpCount < s.closeUpExpected) {
+          closeUpNote.textContent = '高解像度の観測を読み込み中… ' + s.closeUpCount + ' / ' +
+            (s.closeUpExpected < 0 ? '—' : s.closeUpExpected);
+        } else {
+          closeUpNote.textContent = '日本付近は約' + s.closeUpKmPerPixel.toFixed(1) +
+            ' km/画素の観測です（全球の観測は同じ緯度で約64 km/画素）。' + s.closeUpCount +
+            '時刻分だけで、他の時刻は全球の観測のままです。';
+        }
+        closeUpNote.hidden = false;
+      }
       if (s.storms !== undefined) $('storms').checked = s.storms;
       if (s.outlook !== undefined) $('outlook').checked = s.outlook;
       if (!s.storms) {
@@ -211,6 +232,7 @@
   $('weatherPlay').onclick = function () { if (state) send('SetPlaying', state.playing ? 0 : 1); };
   $('weatherPlaybackSpeed').onchange = function () { send('SetIntervalMs', stepMs()); };
   $('smoothObservations').onchange = function (e) { send('SetDissolve', e.target.checked ? 1 : 0); };
+  $('closeUp').onchange = function (e) { send('SetCloseUp', e.target.checked ? 1 : 0); };
   // How the clouds get from one observation to the next: carried by the wind (the
   // model, the default) or the observations alone.
   var motion = 'model';

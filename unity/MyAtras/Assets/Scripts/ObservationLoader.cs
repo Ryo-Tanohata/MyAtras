@@ -77,6 +77,33 @@ namespace MyAtras
         readonly List<Texture2D> motions = new List<Texture2D>();
 
         [Serializable]
+        class RegionBounds
+        {
+            public float south;
+            public float west;
+            public float north;
+            public float east;
+        }
+
+        [Serializable]
+        class RegionFrame
+        {
+            public string time;
+            public string file;
+        }
+
+        [Serializable]
+        class RegionManifest
+        {
+            public string name;
+            public int width;
+            public int height;
+            public float kmPerPixel;
+            public RegionBounds bounds;
+            public List<RegionFrame> frames;
+        }
+
+        [Serializable]
         class MotionEntry
         {
             public string from;
@@ -118,6 +145,93 @@ namespace MyAtras
         class Manifest
         {
             public List<Frame> globalir;
+        }
+
+        // ---- The close-up ------------------------------------------------------------
+        //
+        // The same observations over one box at the resolution SSEC holds - several times
+        // the bytes of a global frame - so they are fetched only when the page asks. An
+        // observation with no crop keeps its global frame; nothing is enlarged or invented.
+
+        readonly Dictionary<int, Texture2D> closeUps = new Dictionary<int, Texture2D>();
+
+        /// <summary>The crop for an observation, or null: that hour keeps its global frame.</summary>
+        public Texture2D CloseUpAt(int index)
+        {
+            return closeUps.TryGetValue(index, out Texture2D texture) ? texture : null;
+        }
+
+        public int CloseUpCount => closeUps.Count;
+        /// <summary>How many of the bundled observations have a crop; -1 until it is known.</summary>
+        public int CloseUpExpected { get; private set; } = -1;
+        public float CloseUpKmPerPixel { get; private set; }
+        public string CloseUpName { get; private set; } = "";
+        /// <summary>The box as u0, u1, v0, v1 in the coordinates the global frames are sampled in.</summary>
+        public Vector4 CloseUpBox { get; private set; }
+        public bool CloseUpLoading { get; private set; }
+
+        /// <summary>The Mercator y of a latitude, matching dist/region-box.js and the shader.</summary>
+        static float Mercator01(float latitude)
+        {
+            float clamped = Mathf.Clamp(latitude, -85.05113f, 85.05113f);
+            return 0.5f - Mathf.Log(Mathf.Tan(Mathf.PI * 0.25f + clamped * Mathf.PI / 360f)) / (2f * Mathf.PI);
+        }
+
+        public IEnumerator LoadCloseUp()
+        {
+            if (CloseUpLoading || CloseUpExpected == 0) yield break;
+            if (CloseUpExpected > 0 && closeUps.Count >= CloseUpExpected) yield break;
+            CloseUpLoading = true;
+
+            string root = SiteRoot();
+            string json = null;
+            yield return Text(root + "weather/region/manifest.json", text => json = text);
+            RegionManifest manifest = null;
+            if (json != null)
+            {
+                try { manifest = JsonUtility.FromJson<RegionManifest>(json); }
+                catch (Exception) { manifest = null; }
+            }
+            if (manifest == null || manifest.frames == null || manifest.frames.Count == 0
+                || manifest.bounds == null)
+            {
+                // A build with no close-up bundled: the page hides its switch.
+                CloseUpExpected = 0;
+                CloseUpLoading = false;
+                yield break;
+            }
+
+            var wanted = new List<string>();
+            var indices = new List<int>();
+            foreach (RegionFrame frame in manifest.frames)
+            {
+                int index = stamps.IndexOf(frame.time);
+                if (index < 0) continue;   // a crop of an hour this build does not show
+                wanted.Add(root + "weather/region/" + frame.file);
+                indices.Add(index);
+            }
+            CloseUpExpected = wanted.Count;
+            if (wanted.Count == 0)
+            {
+                CloseUpLoading = false;
+                yield break;
+            }
+
+            CloseUpName = manifest.name ?? "";
+            CloseUpKmPerPixel = manifest.kmPerPixel;
+            CloseUpBox = new Vector4(
+                (manifest.bounds.west + 180f) / 360f,
+                (manifest.bounds.east + 180f) / 360f,
+                Mercator01(manifest.bounds.north),
+                Mercator01(manifest.bounds.south));
+
+            var arrived = new Texture2D[wanted.Count];
+            yield return Textures(wanted, TextureWrapMode.Clamp, arrived, () => { });
+            for (int i = 0; i < arrived.Length; i++)
+            {
+                if (arrived[i] != null) closeUps[indices[i]] = arrived[i];
+            }
+            CloseUpLoading = false;
         }
 
         public IEnumerator Load()

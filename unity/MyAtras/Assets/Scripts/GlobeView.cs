@@ -78,6 +78,9 @@ namespace MyAtras
         bool stars = true;
         bool cloudRelief = true;
         bool flow = true;
+        // The close-up over one part of the world, off until the page asks: it is several
+        // times the bytes of the global frames, so it is not fetched before then.
+        bool closeUp;
         // The model between observations (ObservationPlayback, the shader's Pair): on unless
         // the page asks for the observations alone.
         bool model = true;
@@ -120,6 +123,13 @@ namespace MyAtras
             public bool cloudRelief; // cloud relief and shadows drawn
             public bool landMap;     // the night-side land and coastline map loaded
             public bool flow;        // the flow lines drawn
+            // The close-up: whether it is asked for, how many of its hours are in hand,
+            // how many there are, how fine it is and which part of the world it covers.
+            public bool closeUp;
+            public int closeUpCount;
+            public int closeUpExpected;
+            public float closeUpKmPerPixel;
+            public string closeUpName;
             public string windTime;  // the wind's observation stamp; empty if it could not be read
             public bool windEachTime; // the wind is the observed wind at each observation's own time
             public bool motionMeasured; // clouds are carried by the motion measured between observations
@@ -188,6 +198,9 @@ namespace MyAtras
             material.SetFloat("_WeatherActive", 1f);
             playback = new ObservationPlayback(loader.Times, Time.unscaledTime) { Model = model };
             loaded = true;
+            // Asked for before the observations were in, the close-up could not be started
+            // then; the page's switch would have sat on with nothing behind it.
+            if (closeUp) StartCoroutine(loader.LoadCloseUp());
             // After the globe is up: nothing about a storm is worth delaying the picture the
             // observations are already drawing.
             yield return stormMarks.Load(ObservationLoader.SiteRoot());
@@ -413,6 +426,17 @@ namespace MyAtras
             flow = on != 0;
         }
 
+        /// <summary>
+        /// The close-up over one part of the world. Asked for, it is fetched once and then
+        /// used for the hours it covers; the rest keep their global frames.
+        /// </summary>
+        public void SetCloseUp(int on)
+        {
+            closeUp = on != 0;
+            if (closeUp && loaded) StartCoroutine(loader.LoadCloseUp());
+            Report();
+        }
+
         /// <summary>Hours between consecutive stored observations.</summary>
         double StepHours()
         {
@@ -480,6 +504,8 @@ namespace MyAtras
                        | (stars ? 1L : 0L) << 21
                        | (cloudRelief ? 1L : 0L) << 22
                        | (flow ? 1L : 0L) << 23
+                       | (closeUp ? 1L : 0L) << 36
+                       | (long)Mathf.Min(loader.CloseUpCount, 63) << 37
                        | (loader.Error != null ? 1L : 0L) << 24
                        | (long)Mathf.RoundToInt(renderScale * 20f) << 25
                        | (model ? 1L : 0L) << 31
@@ -509,6 +535,11 @@ namespace MyAtras
                 cloudRelief = cloudRelief,
                 landMap = loader.Land != null,
                 flow = flow,
+                closeUp = closeUp,
+                closeUpCount = loader.CloseUpCount,
+                closeUpExpected = loader.CloseUpExpected,
+                closeUpKmPerPixel = loader.CloseUpKmPerPixel,
+                closeUpName = loader.CloseUpName,
                 windTime = loaded && WindFor(shownIndex) != loader.Wind ? loader.Stamps[shownIndex] : loader.WindStamp,
                 seam = loaded && playback.Overlaid,
                 loopHours = loaded && playback.Seam > 0 ? (int)Math.Round(StepHours() * playback.LoopLength) : 0,
@@ -577,6 +608,20 @@ namespace MyAtras
             if (measured != null) material.SetTexture("_Motion", measured);
             material.SetFloat("_MotionOn", measured != null ? 1f : 0f);
             material.SetFloat("_MotionScale", loader.MotionScale);
+            // The close-up pair, in step with the observation pair: an hour with no crop
+            // turns the layer off for that hour rather than showing an older one.
+            Texture2D detailNow = closeUp ? loader.CloseUpAt(playback.Current) : null;
+            Texture2D detailWas = closeUp ? loader.CloseUpAt(playback.Previous) : null;
+            if (detailNow != null) material.SetTexture("_Detail", detailNow);
+            if (detailWas != null) material.SetTexture("_DetailPrev", detailWas);
+            material.SetFloat("_DetailOn", detailNow != null ? 1f : 0f);
+            material.SetFloat("_DetailPrevOn", detailWas != null ? 1f : 0f);
+            material.SetVector("_DetailBox", loader.CloseUpBox);
+            // SSEC stamps a fixed-size logo into the lower-left corner of every image it
+            // serves, the crop included.
+            material.SetVector("_DetailWatermark", detailNow != null
+                ? new Vector4(54f / detailNow.width, 44f / detailNow.height, 0f, 0f)
+                : Vector4.zero);
             material.SetFloat("_Advect", carried ? 1f : 0f);
             material.SetFloat("_Gap", carried
                 ? (float)(loader.Times[playback.Current] - loader.Times[playback.Previous]).TotalSeconds
