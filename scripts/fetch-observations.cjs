@@ -20,6 +20,13 @@
 // clouds with between observations, and rebuilds dist/data/amv.json from the wind at
 // the middle of the sequence for the JavaScript version's wind model.
 //
+// What a run costs, measured 2026-09-22: the images are light (71 global frames 14.0 MB,
+// 12 close-up frames 4.5 MB, 2 snapshots 1.2 MB, 85 requests), and the wind is not - one
+// /api/shapes answer is 19.9 MB for AMV-LLlow and 3.3 MB for AMV-LLmid, so --winds at 71
+// times downloads about 1.6 GB to keep 3.2 MB of one-degree grids. Hours already stored
+// are therefore kept rather than asked for again (--refetch-winds forces the download),
+// and a full re-fetch of the wind is worth doing rarely.
+//
 // Without --every the newest listed observations are taken as they come, whatever
 // spacing SSEC is publishing. The run prints that spacing, so the cadence actually
 // on offer is visible before choosing. Every frame is around 200 KB and the page
@@ -81,6 +88,11 @@ const REGION_NAME = opt('--region-name', 'japan');
 const REGION_BOUNDS = opt('--region-bounds', '24,122,46,148');
 const REGION_WIDTH = Number(opt('--region-width', 1280));
 const REGION_FRAMES = Number(opt('--region-frames', 12));
+// The wind is what a run actually costs: one /api/shapes answer is about 20 MB for
+// AMV-LLlow and 3 MB for AMV-LLmid, so 71 observation times come to some 1.6 GB - and a
+// refresh usually asks again for hours it already holds. Hours already stored are kept
+// as they are unless this says otherwise.
+const REFETCH_WINDS = flag('--refetch-winds');
 const PRODUCTS = ['globalir', 'globalvis'];
 const WIND_PRODUCTS = ['AMV-LLlow', 'AMV-LLmid'];
 
@@ -364,9 +376,29 @@ async function winds(frameTimes) {
   fs.mkdirSync(WIND_OUT, { recursive: true });
 
   const middle = frameTimes[Math.floor((frameTimes.length - 1) / 2)];
+
+  // What a previous run already gridded. A wind is an observation at a fixed hour, so a
+  // stored grid whose file still matches the SHA-256 in the manifest is the same wind that
+  // would come back from asking again - and asking again costs 23 MB for that hour. The
+  // middle time is always fetched, because amv.json is rebuilt from its two responses.
+  const held = new Map();
+  if (!REFETCH_WINDS) {
+    try {
+      const before = JSON.parse(fs.readFileSync(path.join(WIND_OUT, 'manifest.json'), 'utf8'));
+      for (const entry of before.winds || []) {
+        const file = path.join(WIND_OUT, entry.file);
+        if (!fs.existsSync(file) || entry.time === middle) continue;
+        const digest = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+        if (digest === entry.sha256) held.set(entry.time, entry);
+      }
+    } catch { /* no manifest, or one that cannot be read: fetch everything */ }
+  }
+  const reused = [];
+
   const missing = [];
   const made = await pool(frameTimes, 3, async time => {
     if (!common.has(time)) { missing.push(time); return null; }
+    if (held.has(time)) { reused.push(time); return held.get(time); }
     const points = [], vectors = {}, sources = {}, texts = {};
     for (const product of WIND_PRODUCTS) {
       const { url, text } = await shapes(product, time);
@@ -401,6 +433,11 @@ async function winds(frameTimes) {
   });
 
   const entries = made.filter(Boolean);
+  if (reused.length) {
+    // 23 MB is one AMV-LLlow answer plus one AMV-LLmid answer, measured 2026-09-22.
+    process.stdout.write(`  wind  ${reused.length} hour(s) already stored, kept as they were` +
+      ` (about ${Math.round(reused.length * 23)} MB not asked for again)\n`);
+  }
   prune(WIND_OUT, new Set(entries.map(e => e.file)));
   fs.writeFileSync(path.join(WIND_OUT, 'manifest.json'), JSON.stringify({
     source: 'SSEC RealEarth, UW-Madison: AMV-LLlow and AMV-LLmid',
@@ -425,7 +462,7 @@ async function winds(frameTimes) {
     fs.rmSync(low, { force: true });
     fs.rmSync(mid, { force: true });
   }
-  return { count: entries.length, missing: missing.sort(), amvTime };
+  return { count: entries.length, missing: missing.sort(), amvTime, reused: reused.length };
 }
 
 async function main() {
@@ -448,6 +485,7 @@ async function main() {
   if (windTime) console.log(`  observed wind  ${windTime}`);
   if (windSet) {
     console.log(`  winds  ${windSet.count} of ${frames.count} observation times` +
+      (windSet.reused ? `, ${windSet.reused} of them already stored` : '') +
       (windSet.missing.length ? `; none kept for ${windSet.missing.join(', ')}` : ''));
     if (windSet.amvTime) console.log(`  amv.json  ${windSet.amvTime}, the middle of the sequence`);
   }

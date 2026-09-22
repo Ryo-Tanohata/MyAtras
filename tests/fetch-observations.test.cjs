@@ -28,8 +28,11 @@ const body = (product, time, size) => Buffer.from(`${product}:${time}:${size}`.r
 /// An API stand-in. `serve` decides what RE-Time each image answers with, so a test
 /// can make the server contradict the request.
 function api({ reTime = time => time, omitHeader = false, staleWind = false } = {}) {
+  // Every request, so a test can count what a run actually asked the server for.
+  const calls = [];
   const server = http.createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost');
+    calls.push(request.url);
     if (url.pathname.endsWith('/products')) {
       const product = url.searchParams.get('products');
       response.writeHead(200, { 'Content-Type': 'application/json' });
@@ -73,6 +76,7 @@ function api({ reTime = time => time, omitHeader = false, staleWind = false } = 
   });
   return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve({
     server,
+    calls,
     base: `http://127.0.0.1:${server.address().port}/api/`,
   })));
 }
@@ -278,6 +282,45 @@ s.test('--winds stores the wind observed at each bundled time, and says how it w
     // The JavaScript version's wind model gets the middle one.
     const amv = read(path.join(out, 'amv.json'));
     assert.strictEqual(amv.time, frames[Math.floor((frames.length - 1) / 2)]);
+  } finally {
+    server.close();
+    fs.rmSync(out, { recursive: true, force: true });
+  }
+});
+
+// The wind is what a run costs: one AMV-LLlow answer is about 20 MB and one AMV-LLmid
+// answer about 3 MB, so an hour asked for twice is 23 MB taken from a university server
+// for a grid already on disk. A wind is an observation at a fixed hour and does not
+// change, so an hour whose stored grid still matches its manifest is kept.
+s.test('the wind already stored is not asked for a second time', async () => {
+  const { server, base, calls } = await api();
+  const out = temp();
+  try {
+    const first = await run(base, out, ['--winds']);
+    assert.strictEqual(first.status, 0, first.stderr);
+    const askedFirst = calls.filter(u => u.includes('/shapes')).length;
+    assert.strictEqual(askedFirst, 6, 'three hours, two pressure bands');
+
+    calls.length = 0;
+    const again = await run(base, out, ['--winds']);
+    assert.strictEqual(again.status, 0, again.stderr);
+    const askedAgain = calls.filter(u => u.includes('/shapes')).length;
+    // Only the middle hour, whose two answers are what amv.json is rebuilt from.
+    assert.strictEqual(askedAgain, 2, `asked for ${askedAgain} shape responses again`);
+    assert.ok(/already stored/.test(again.stdout), again.stdout);
+
+    // And what was kept is still the wind for those hours, byte for byte.
+    const wind = read(path.join(out, 'wind', 'manifest.json'));
+    assert.strictEqual(wind.winds.length, 3);
+    for (const entry of wind.winds) {
+      assert.strictEqual(sha256(path.join(out, 'wind', entry.file)), entry.sha256, entry.file);
+    }
+
+    // --refetch-winds asks for all of them again.
+    calls.length = 0;
+    const forced = await run(base, out, ['--winds', '--refetch-winds']);
+    assert.strictEqual(forced.status, 0, forced.stderr);
+    assert.strictEqual(calls.filter(u => u.includes('/shapes')).length, 6);
   } finally {
     server.close();
     fs.rmSync(out, { recursive: true, force: true });

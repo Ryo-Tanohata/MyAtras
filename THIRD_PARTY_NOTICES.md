@@ -16,14 +16,22 @@ documented public HTTP API.
 
 | File | Product | Observed (UTC) |
 | --- | --- | --- |
-| `dist/weather/sequence/globalir_*.png` | `globalir` | 2026-09-17 05:00 – 2026-09-20 04:00 UTC, hourly (72 frames) |
-| `dist/weather/snapshot/globalir_20260920_040000.png` | `globalir` | 2026-09-20 04:00 UTC |
-| `dist/weather/snapshot/globalvis_20260920_040000.png` | `globalvis` | 2026-09-20 04:00 UTC |
+| `dist/weather/sequence/globalir_*.png` | `globalir` | 2026-09-19 03:00 – 2026-09-22 01:00 UTC, hourly (71 frames, 14.0 MB) |
+| `dist/weather/region/japan_globalir_*.png` | `globalir` | 2026-09-21 14:00 – 2026-09-22 01:00 UTC, hourly (12 frames, 4.4 MB) |
+| `dist/weather/snapshot/globalir_20260922_010000.png` | `globalir` | 2026-09-22 01:00 UTC |
+| `dist/weather/snapshot/globalvis_20260922_010000.png` | `globalvis` | 2026-09-22 01:00 UTC |
 
 The times above are a summary and go out of date the moment the observations are
 refreshed. `dist/weather/sequence/manifest.json` and `dist/weather/snapshot.json`
 are the authority: each bundled file is listed there with the request URL it came
 from and its SHA-256, and `scripts/export-html.py` re-checks those digests.
+
+The close-up in `dist/weather/region/` is the same product at the same times over a
+box instead of the whole world: south 24°, west 122°, north 46°, east 148°, 1280 × 1339
+pixels, about 1.9 km to a pixel. It is what the API returned for those bounds - nothing
+is enlarged, interpolated or generated - and `dist/weather/region/manifest.json` records
+the bounds, the size and each file's URL and SHA-256. The page loads it only when asked
+and shows it only inside those bounds.
 
 The image files are stored exactly as the API returned them. Each one records the
 request it came from and its SHA-256 in `dist/weather/sequence/manifest.json` or
@@ -34,16 +42,15 @@ computed in the shader at draw time; it never alters the stored image.
 
 ### Atmospheric motion vectors
 
-`dist/data/amv.json` holds 3,292 representative vectors selected from the
-`AMV-LLlow` and `AMV-LLmid` products at 2026-09-18 16:00 UTC, with the selection
-counts recorded alongside them. Source responses:
+`dist/data/amv.json` holds 2,776 representative vectors selected from the
+`AMV-LLlow` and `AMV-LLmid` products at 2026-09-20 14:00 UTC, the middle of the
+bundled sequence, with the selection counts recorded alongside them. Source responses:
 
-- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260918_160000
-- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260918_160000
+- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260920_140000
+- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260920_140000
 
 `dist/data/wind/` holds the same two products gridded at each of the bundled
-observation times, 71 of the 72 - SSEC had not published the vectors for the newest
-observation when it was fetched. Every grid records its source URLs, its vector
+observation times, all 71 of them. Every grid records its source URLs, its vector
 counts and its SHA-256 in `dist/data/wind/manifest.json`.
 
 ### Work derived from the observations
@@ -53,7 +60,7 @@ third-party material, but they exist only because of that data and are listed so
 the provenance is complete. Each one records the SHA-256 of the observations it was
 computed from, and is rebuilt whenever those are replaced.
 
-- `dist/data/motion/` — 71 fields, how the cloud pattern moved between each pair of
+- `dist/data/motion/` — 70 fields, how the cloud pattern moved between each pair of
   consecutive observations (`scripts/build-motion.cjs`). An estimate, not an
   observation.
 - `dist/data/storms.json` — the tropical cyclones found in the sequence

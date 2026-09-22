@@ -267,6 +267,49 @@ function globeRegion(image) {
     Math.round(image.width * 0.85), Math.round(image.height * 0.55));
 }
 
+// -------------------------------------------------- which storm the camera can see
+
+// The marks are drawn where the globe is looking, and it opens on Japan. With 71
+// observations of the whole world, the newest detection is as likely to be in the
+// eastern Pacific, whose marks never reach the screen - so the checks sit on the storm
+// that ends nearest the middle of the opening view, and say which one they took. Read
+// here rather than asked of the page, because the Unity build keeps its track to itself.
+const HOME_VIEW = { lat: 35.5, lon: 136 };
+
+function degreesApart(aLat, aLon, bLat, bLon) {
+  const rad = Math.PI / 180;
+  const cosine = Math.sin(aLat * rad) * Math.sin(bLat * rad)
+    + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.cos((aLon - bLon) * rad);
+  return Math.acos(Math.min(1, Math.max(-1, cosine))) / rad;
+}
+
+/// The observation indices to sit on: the storm's last detection, where the outlook may
+/// appear, and one from the middle of it, where the ring and its trail must. null when
+/// nothing is bundled.
+function stormTarget() {
+  let file;
+  try {
+    file = JSON.parse(fs.readFileSync(path.join(SERVE_ROOT, 'data', 'storms.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+  const times = JSON.parse(fs.readFileSync(
+    path.join(SERVE_ROOT, 'weather', 'sequence', 'manifest.json'), 'utf8')).globalir.map(f => f.time);
+  let best = null;
+  for (const storm of file.storms || []) {
+    const end = storm.points[storm.points.length - 1];
+    const last = times.indexOf(end.time);
+    const middle = storm.points[Math.floor((storm.points.length - 1) / 2)];
+    const mid = times.indexOf(middle.time);
+    if (last < 0 || mid < 0) continue;
+    const away = degreesApart(end.lat, end.lon, HOME_VIEW.lat, HOME_VIEW.lon);
+    if (!best || away < best.away) {
+      best = { away, last, mid, hours: storm.points.length, end };
+    }
+  }
+  return best;
+}
+
 // A blank page is one flat colour; a drawn globe has hundreds. The threshold sits
 // far from both, so this fails on a black frame and passes on a real render.
 const DRAWN_COLOURS = 100;
@@ -374,19 +417,18 @@ async function checkJavaScriptGlobe(page) {
   // an observation the storm was actually found in: three of these seventy-two have no
   // detection, and landing on one of those would fail a working globe. Counted by its own
   // amber rather than by pixels changing, so a stray repaint cannot pass for the mark.
-  const sought = await page.js(`(() => {
-    const w = window.geoWeather, t = window.geoStorms;
-    if (!w || !t || !t.loaded) return 'no storms loaded';
-    const product = document.getElementById('weatherProduct').value;
-    const times = (w.times && w.times[product]) || [];
-    const i = times.findIndex(x => t.at(x && x.time ? x.time : x).length > 0);
-    if (i < 0) return 'no observation has a storm';
+  const target = stormTarget();
+  const sought = !target ? 'no bundled storm has an observation to sit on' : await page.js(`(() => {
+    const t = window.geoStorms;
+    if (!t || !t.loaded) return 'no storms loaded';
     const slider = document.getElementById('weatherTime');
-    slider.value = String(i);
+    slider.value = '${target.mid}';
     slider.dispatchEvent(new Event('change', { bubbles: true }));
     return 'ok';
   })()`);
-  check(sought === 'ok', 'an observation with a storm can be shown', sought);
+  check(sought === 'ok', 'an observation with a storm can be shown',
+    target ? `${target.hours} hours of it, ending ${target.away.toFixed(0)}\u00b0 from the middle of the view`
+      : sought);
   await sleep(1800);
 
   const toggle = on => page.js(`(() => { const box = document.getElementById('showStorms');
@@ -425,16 +467,10 @@ async function checkJavaScriptGlobe(page) {
   check(honest === 'ok', 'no mark for a time the storm was not found in', honest);
 
   // What storms have typically done next, drawn only once the observations run out. Sought
-  // to the storm's own last observation, which is the only place it may appear.
-  const toLast = await page.js(`(() => {
-    const w = window.geoWeather, t = window.geoStorms;
-    const product = document.getElementById('weatherProduct').value;
-    const times = (w.times && w.times[product]) || [];
-    const wanted = t.storms.map(s => s.points[s.points.length - 1].time);
-    const i = times.findIndex(x => wanted.indexOf(x && x.time ? x.time : x) >= 0);
-    if (i < 0) return 'no observation is the last of a storm';
+  // to that storm's own last observation, which is the only place it may appear.
+  const toLast = !target ? 'no bundled storm has a last observation' : await page.js(`(() => {
     const slider = document.getElementById('weatherTime');
-    slider.value = String(i);
+    slider.value = '${target.last}';
     slider.dispatchEvent(new Event('change', { bubbles: true }));
     return 'ok';
   })()`);
@@ -462,7 +498,9 @@ async function checkJavaScriptGlobe(page) {
     'the outlook says it is not a forecast', said.slice(-52));
 
   // And nowhere else. An hour the globe has an observation for must not be overdrawn with
-  // a guess about it.
+  // a guess about it. Asked of one and the same observation with the outlook switched on
+  // and then off: two different hours differ by a few dozen scene pixels this violet test
+  // catches, which says nothing about whether a fan was drawn.
   const onlyAtTheEnd = await page.js(`(() => {
     const w = window.geoWeather, t = window.geoStorms;
     const product = document.getElementById('weatherProduct').value;
@@ -475,11 +513,13 @@ async function checkJavaScriptGlobe(page) {
   })()`);
   await sleep(1800);
   const midTrack = await page.shot('09-outlook-mid-track');
-  check(onlyAtTheEnd === 'ok' && violet(midTrack) <= wasViolet + 30,
-    'no outlook over an observation the globe already has',
-    `${violet(midTrack)} violet pixels mid-track against ${wasViolet} with it off`);
   await page.js(`(() => { const box = document.getElementById('showOutlook');
     box.checked = false; box.dispatchEvent(new Event('change')); })()`);
+  await sleep(1200);
+  const midTrackPlain = await page.shot('10-mid-track-without-it');
+  check(onlyAtTheEnd === 'ok' && violet(midTrack) <= violet(midTrackPlain) + 30,
+    'no outlook over an observation the globe already has',
+    `${violet(midTrack)} violet pixels mid-track with it on, ${violet(midTrackPlain)} with it off`);
   await sleep(400);
 
   await checkCloseUp(page);
@@ -573,14 +613,17 @@ async function checkUnityBuild(page) {
   // The same two marks the JavaScript globe draws, from the same two files. Unity draws
   // them over its own finished picture, so this checks the colours arrive on screen rather
   // than that the page asked for them.
+  const targetU = stormTarget();
   const seekLast = await page.js(`(() => {
     const slider = document.getElementById('weatherTime');
     if (!slider || !(+slider.max > 0)) return 'no observation slider';
-    slider.value = slider.max;
+    slider.value = ${targetU ? `'${targetU.last}'` : 'slider.max'};
     slider.dispatchEvent(new Event('input', { bubbles: true }));
     return 'ok';
   })()`);
-  check(seekLast === 'ok', 'the last observation can be shown', seekLast);
+  check(seekLast === 'ok', targetU ? "the storm's last observation can be shown"
+    : 'the last observation can be shown',
+    targetU ? `${targetU.hours} hours of it, ending ${targetU.away.toFixed(0)}\u00b0 from the middle of the view` : seekLast);
   await sleep(2000);
   const unmarkedU = await page.shot('unity-05-without-the-storm');
   await page.js(`(() => { const box = document.getElementById('storms');
@@ -619,7 +662,7 @@ async function checkUnityBuild(page) {
   // which says nothing about whether a fan was drawn.
   await page.js(`(() => {
     const slider = document.getElementById('weatherTime');
-    slider.value = String(Math.max(0, Math.round(+slider.max / 2)));
+    slider.value = ${targetU ? `'${targetU.mid}'` : 'String(Math.max(0, Math.round(+slider.max / 2)))'};
     slider.dispatchEvent(new Event('input', { bubbles: true }));
   })()`);
   await sleep(2000);

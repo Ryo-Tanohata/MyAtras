@@ -280,17 +280,24 @@ function judge(tracks) {
       ? Math.sqrt(steps.reduce((s, v) => s + (v - speed) ** 2, 0) / steps.length) / speed
       : Infinity;
     const meanAbsLat = points.reduce((s, p) => s + Math.abs(p.lat), 0) / n;
+    // The whole track has to stay out of the equatorial band, not average its way out of
+    // it. A mean let a system through that reached down to 7.4 degrees over northern
+    // South America, where the Coriolis force cannot hold a cyclone together and the
+    // ITCZ makes cold round cloud every afternoon; the track that ran through it was
+    // convection, not a storm. tests/find-storms.test.cjs already asked for every point
+    // of every bundled track to be off the band, which is this rule and not the mean.
+    const minAbsLat = points.reduce((s, p) => Math.min(s, Math.abs(p.lat)), Infinity);
     const shape = points.reduce((s, p) => s + p.circ, 0) / n;
     const m = {
       span, seen: n, completeness: n / span, net, straightness: path > 0 ? net / path : 0,
       speed, wobble, poleward: Math.abs(points[n - 1].lat) - Math.abs(points[0].lat),
-      meanAbsLat, shape,
+      meanAbsLat, minAbsLat, shape,
     };
     return {
       ...m,
       cyclone: span >= MIN_SPAN && m.completeness >= MIN_SEEN && speed >= MIN_SPEED
         && speed <= MAX_SPEED && wobble <= MAX_WOBBLE && m.straightness >= MIN_STRAIGHT
-        && m.poleward > MIN_POLEWARD && meanAbsLat >= MIN_ABS_LAT,
+        && m.poleward > MIN_POLEWARD && minAbsLat >= MIN_ABS_LAT,
       points: points.map(p => ({
         time: p.time,
         lat: +p.lat.toFixed(2),
