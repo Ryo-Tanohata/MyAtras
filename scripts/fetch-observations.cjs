@@ -10,6 +10,7 @@
 //   node scripts/fetch-observations.cjs --out /tmp/try   # write somewhere else
 //   node scripts/fetch-observations.cjs --region         # also a close-up of Japan
 //   node scripts/fetch-observations.cjs --region-only    # redo that close-up alone
+//   node scripts/fetch-observations.cjs --winds --wind-every 180   # wind every 3 hours
 //
 //   # Three days, one observation every three hours, with the wind at each of them:
 //   node scripts/fetch-observations.cjs --span 72 --frames 24 --every 180 --winds
@@ -26,7 +27,10 @@
 // /api/shapes answer is 19.9 MB for AMV-LLlow and 3.3 MB for AMV-LLmid, so --winds at 71
 // times downloads about 1.6 GB to keep 3.2 MB of one-degree grids. Hours already stored
 // are therefore kept rather than asked for again (--refetch-winds forces the download),
-// and a full re-fetch of the wind is worth doing rarely.
+// and --wind-every thins which hours are asked for at all: the wind is the second source
+// for the model between observations, behind the motion measured from the images, so
+// asking every three hours instead of every hour costs a third as much and leaves the
+// hours in between on the wind the globe already holds.
 //
 // Without --every the newest listed observations are taken as they come, whatever
 // spacing SSEC is publishing. The run prints that spacing, so the cadence actually
@@ -104,6 +108,13 @@ const REGION_FRAMES = Number(opt('--region-frames', 12));
 // refresh usually asks again for hours it already holds. Hours already stored are kept
 // as they are unless this says otherwise.
 const REFETCH_WINDS = flag('--refetch-winds');
+// Minutes of observation time between the hours the wind is asked for. 0 asks at every
+// observation, which is what a full run used to do and what costs 23 MB an hour. The
+// wind is the second source for the model between observations - the motion measured
+// from the images themselves is the first, and where no wind is stored for an hour the
+// globe falls back on the one wind it does hold, which is what already happens for an
+// hour SSEC never published vectors for.
+const WIND_EVERY = Number(opt('--wind-every', 0));
 const PRODUCTS = ['globalir', 'globalvis'];
 const WIND_PRODUCTS = ['AMV-LLlow', 'AMV-LLmid'];
 
@@ -400,29 +411,38 @@ async function winds(frameTimes) {
   fs.mkdirSync(WIND_OUT, { recursive: true });
 
   const middle = frameTimes[Math.floor((frameTimes.length - 1) / 2)];
+  // Thinned, if asked: the newest hour, the middle one (amv.json is built from it) and
+  // one every WIND_EVERY minutes back from the newest.
+  const asked = WIND_EVERY > 0
+    ? frameTimes.filter((time, i) => i === frameTimes.length - 1 || time === middle
+        || (stamp(frameTimes.at(-1)) - stamp(time)) % (WIND_EVERY * 60000) === 0)
+    : frameTimes;
+  if (WIND_EVERY > 0) {
+    console.log(`  wind  asking at ${asked.length} of ${frameTimes.length} observation times` +
+      ` (one every ${WIND_EVERY} minutes)`);
+  }
 
   // What a previous run already gridded. A wind is an observation at a fixed hour, so a
   // stored grid whose file still matches the SHA-256 in the manifest is the same wind that
   // would come back from asking again - and asking again costs 23 MB for that hour. The
   // middle time is always fetched, because amv.json is rebuilt from its two responses.
   const held = new Map();
-  if (!REFETCH_WINDS) {
-    try {
-      const before = JSON.parse(fs.readFileSync(path.join(WIND_OUT, 'manifest.json'), 'utf8'));
-      for (const entry of before.winds || []) {
-        const file = path.join(WIND_OUT, entry.file);
-        if (!fs.existsSync(file) || entry.time === middle) continue;
-        const digest = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-        if (digest === entry.sha256) held.set(entry.time, entry);
-      }
-    } catch { /* no manifest, or one that cannot be read: fetch everything */ }
-  }
-  const reused = [];
-
+  try {
+    const before = JSON.parse(fs.readFileSync(path.join(WIND_OUT, 'manifest.json'), 'utf8'));
+    for (const entry of before.winds || []) {
+      const file = path.join(WIND_OUT, entry.file);
+      if (!fs.existsSync(file) || entry.time === middle) continue;
+      const digest = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+      if (digest === entry.sha256) held.set(entry.time, entry);
+    }
+  } catch { /* no manifest, or one that cannot be read: fetch everything */ }
+  // Exactly which hours were downloaded, so the run can say what it spared: an hour can
+  // be skipped either because its grid is still good or because thinning never asked.
+  const downloaded = new Set();
   const missing = [];
-  const made = await pool(frameTimes, 3, async time => {
+  const made = await pool(asked, 3, async time => {
     if (!common.has(time)) { missing.push(time); return null; }
-    if (held.has(time)) { reused.push(time); return held.get(time); }
+    if (!REFETCH_WINDS && held.has(time)) return held.get(time);
     const points = [], vectors = {}, sources = {}, texts = {};
     for (const product of WIND_PRODUCTS) {
       const { url, text } = await shapes(product, time);
@@ -435,6 +455,7 @@ async function winds(frameTimes) {
       sources[product] = url;
       texts[product] = text;
     }
+    downloaded.add(time);
     const grid = W.grid(points);
     if (!grid.nearTexels) { missing.push(time); return null; }
     // The middle one also becomes amv.json, through the script that already builds it.
@@ -456,11 +477,19 @@ async function winds(frameTimes) {
     };
   });
 
-  const entries = made.filter(Boolean);
-  if (reused.length) {
+  // An hour not asked for keeps the grid it already had: thinning decides what to ask
+  // the server for, never what to throw away. Kept in the sequence's own order.
+  const fetched = new Map(made.filter(Boolean).map(entry => [entry.time, entry]));
+  const entries = frameTimes
+    .map(time => fetched.get(time) || held.get(time) || null)
+    .filter(Boolean);
+  // held holds only hours whose stored grid was still intact, and the pool returns those
+  // without asking the server, so this counts exactly what was not downloaded.
+  const kept = entries.filter(entry => !downloaded.has(entry.time)).length;
+  if (kept) {
     // 23 MB is one AMV-LLlow answer plus one AMV-LLmid answer, measured 2026-09-22.
-    process.stdout.write(`  wind  ${reused.length} hour(s) already stored, kept as they were` +
-      ` (about ${Math.round(reused.length * 23)} MB not asked for again)\n`);
+    process.stdout.write(`  wind  ${kept} hour(s) already stored, kept as they were` +
+      ` (about ${Math.round(kept * 23)} MB not asked for again)\n`);
   }
   prune(WIND_OUT, new Set(entries.map(e => e.file)));
   fs.writeFileSync(path.join(WIND_OUT, 'manifest.json'), JSON.stringify({
@@ -486,7 +515,7 @@ async function winds(frameTimes) {
     fs.rmSync(low, { force: true });
     fs.rmSync(mid, { force: true });
   }
-  return { count: entries.length, missing: missing.sort(), amvTime, reused: reused.length };
+  return { count: entries.length, missing: missing.sort(), amvTime, reused: kept, asked: asked.length };
 }
 
 async function main() {
@@ -522,6 +551,7 @@ async function main() {
   if (windTime) console.log(`  observed wind  ${windTime}`);
   if (windSet) {
     console.log(`  winds  ${windSet.count} of ${frames.count} observation times` +
+      (windSet.asked < frames.count ? `, asked for at ${windSet.asked}` : '') +
       (windSet.reused ? `, ${windSet.reused} of them already stored` : '') +
       (windSet.missing.length ? `; none kept for ${windSet.missing.join(', ')}` : ''));
     if (windSet.amvTime) console.log(`  amv.json  ${windSet.amvTime}, the middle of the sequence`);

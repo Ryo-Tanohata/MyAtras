@@ -349,6 +349,38 @@ s.test('an answer marked as watermarked is refused', async () => {
   }
 });
 
+// Thinning decides which hours are asked about, not which are kept: the wind is the
+// second source for the model between observations, behind the motion measured from the
+// images, so it can be asked for every few hours - but an hour already gridded stays.
+s.test('--wind-every asks about fewer hours and keeps the rest', async () => {
+  const { server, base, calls } = await api();
+  const out = temp();
+  try {
+    const first = await run(base, out, ['--frames', '5', '--every', '30', '--winds']);
+    assert.strictEqual(first.status, 0, first.stderr);
+    assert.strictEqual(calls.filter(u => u.includes('/shapes')).length, 10, 'five hours, two bands');
+    const before = read(path.join(out, 'wind', 'manifest.json')).winds.map(w => w.time);
+    assert.strictEqual(before.length, 5);
+
+    // Every hour, of five half-hourly observations: the newest, the middle (amv.json is
+    // built from it) and the one an hour before the newest.
+    calls.length = 0;
+    const thinned = await run(base, out,
+      ['--frames', '5', '--every', '30', '--winds', '--wind-every', '60', '--refetch-winds']);
+    assert.strictEqual(thinned.status, 0, thinned.stderr);
+    assert.strictEqual(calls.filter(u => u.includes('/shapes')).length, 6, 'three hours, two bands');
+
+    const after = read(path.join(out, 'wind', 'manifest.json')).winds.map(w => w.time);
+    assert.deepStrictEqual(after, before, 'the hours not asked about are still there');
+    for (const entry of read(path.join(out, 'wind', 'manifest.json')).winds) {
+      assert.strictEqual(sha256(path.join(out, 'wind', entry.file)), entry.sha256, entry.file);
+    }
+  } finally {
+    server.close();
+    fs.rmSync(out, { recursive: true, force: true });
+  }
+});
+
 // A wind observed at another time is not the wind at this one.
 s.test('wind observed at another time is not stored under this one', async () => {
   const { server, base } = await api({ staleWind: true });
