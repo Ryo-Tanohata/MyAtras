@@ -7,93 +7,93 @@
   "north": 46,
   "east": 148
  },
- "width": 1280,
- "height": 1339,
- "kmPerPixel": 1.85,
+ "width": 1024,
+ "height": 1071,
+ "kmPerPixel": 2.32,
  "frames": [
   {
    "time": "20260921.140000",
    "file": "japan_globalir_20260921_140000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_140000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "8e472bfea6dc714762301639d32ab9465b643bb809fe6be649d060b53a324a8e",
-   "bytes": 400567
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_140000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "f478778bf6e008c9bed5fe478584ce3d76688adecb20d02ed2a561db930b2e83",
+   "bytes": 275966
   },
   {
    "time": "20260921.150000",
    "file": "japan_globalir_20260921_150000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_150000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "2ed7d77760a01022a25e6b135d3fab3475f1483341fee94b9f9f2eea7b752b70",
-   "bytes": 401818
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_150000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "344a2d7a37bfe0714759dd0fd312cdd1f3459560ee67371d1656a275cec2b281",
+   "bytes": 276812
   },
   {
    "time": "20260921.160000",
    "file": "japan_globalir_20260921_160000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_160000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "2d2190c10d0841319dc10862e526d2aa88aad18bccf14be3c5c79386a9465257",
-   "bytes": 404310
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_160000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "9b102e009c02c4028a0c6098bc9013f0b536d3680ad95874befe76c4fd7b5592",
+   "bytes": 278094
   },
   {
    "time": "20260921.170000",
    "file": "japan_globalir_20260921_170000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_170000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "5de141faf03142a62693eb7803df2be4004123e2394b7603ab98db0000150b9b",
-   "bytes": 405845
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_170000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "900e1bc36a81078a12c8309ccf5391ee76855dbb3b2e7fc2a4ab11b45ab18879",
+   "bytes": 279319
   },
   {
    "time": "20260921.180000",
    "file": "japan_globalir_20260921_180000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_180000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "f8f4a89fe20a239a3d07bf353c8fc039cb06bac8bc446156273ba3ee066e6fbf",
-   "bytes": 406316
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_180000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "a32afbffe577ebfdc6c16326bf671559f1c8a49a0591a0cd39c512e505452090",
+   "bytes": 279896
   },
   {
    "time": "20260921.190000",
    "file": "japan_globalir_20260921_190000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_190000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "1bce72a7d5ff3cb0152a11daeb9700d093dd2a7340f2f73b11baa90a4eaf0d89",
-   "bytes": 402714
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_190000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "abdf2b29b746c219222973f84ca8d987cb97e2c10453cdd6ef06f47a4a8bddb7",
+   "bytes": 277197
   },
   {
    "time": "20260921.200000",
    "file": "japan_globalir_20260921_200000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_200000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "050c8a668f69820e08001199118153dd7319c32175a2cfca2e198035dbeac1f3",
-   "bytes": 398234
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_200000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "8f16fdbb7efaefb7548de3a3c913a7c81cbdd786e083bf9a58d53346a7fce42a",
+   "bytes": 273236
   },
   {
    "time": "20260921.210000",
    "file": "japan_globalir_20260921_210000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_210000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "a4bbc486ead0e946feb800f3619bcdbc14cc4a0f45a08771f38759302f35f2de",
-   "bytes": 394047
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_210000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "0de34d36eebda6d85fc93a50c33a8e3e2b4a2f933aea90c6542288165f3f7ea0",
+   "bytes": 268984
   },
   {
    "time": "20260921.220000",
    "file": "japan_globalir_20260921_220000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_220000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "a6463238921ab0246edca0d19324ea6188af222ddfe9fc615cb2fc087194937d",
-   "bytes": 382617
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_220000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "217892918bf04c897eafe5de589351808ac8c540b249d62f17effec9c38f5920",
+   "bytes": 260665
   },
   {
    "time": "20260921.230000",
    "file": "japan_globalir_20260921_230000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_230000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "4bd3b8ccbd9edc18a73b9f1a05d48ac3906b776c653470770dea14cb021be4fc",
-   "bytes": 364315
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260921_230000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "54f10bc9d4a179314aefd5be454cd61c708f93e259743c1946fd8ba68ddf3e66",
+   "bytes": 248199
   },
   {
    "time": "20260922.000000",
    "file": "japan_globalir_20260922_000000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260922_000000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "78984e07af7ebe7b631e73e3247a24f135c3b59ca671b6dae6b333029762e1b9",
-   "bytes": 351726
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260922_000000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "2833e6c2904d7bd7da5a08ca5aecaeeb9f53a75209f83d18d9313f8a620ed293",
+   "bytes": 240767
   },
   {
    "time": "20260922.010000",
    "file": "japan_globalir_20260922_010000.png",
-   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260922_010000&bounds=24%2C122%2C46%2C148&width=1280&height=1339&format=png",
-   "sha256": "595ebb9368f7de6008982426326e2f7a160e2a0f6b6b3480c331b7e2e8ab2787",
-   "bytes": 350104
+   "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260922_010000&bounds=24%2C122%2C46%2C148&width=1024&height=1071&format=png",
+   "sha256": "95b0053ce28ce51cbf1ff7a9ce65812a674c821743bf0625969b73bff7fc7ab0",
+   "bytes": 239240
   }
  ]
 }

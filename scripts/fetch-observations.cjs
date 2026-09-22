@@ -9,6 +9,7 @@
 //   node scripts/fetch-observations.cjs --wind           # also rebuild dist/data/amv.json
 //   node scripts/fetch-observations.cjs --out /tmp/try   # write somewhere else
 //   node scripts/fetch-observations.cjs --region         # also a close-up of Japan
+//   node scripts/fetch-observations.cjs --region-only    # redo that close-up alone
 //
 //   # Three days, one observation every three hours, with the wind at each of them:
 //   node scripts/fetch-observations.cjs --span 72 --frames 24 --every 180 --winds
@@ -40,8 +41,12 @@
 // is the same product, the same times and the same server; only the bounds and the
 // pixel count differ, and it carries its own manifest with each file's URL and
 // SHA-256. --region-bounds (south,west,north,east), --region-width and
-// --region-frames set it; the defaults are Japan, 1280 px across, and the newest 12
-// observations. About 2 km to a pixel, which is as fine as the infrared band gets.
+// --region-frames set it; the defaults are Japan, 1024 px across, and the newest 12
+// observations - about 2.4 km to a pixel. SSEC serves an image request of up to roughly
+// 1.17 million pixels; above that it returns the picture with "Size limit exceeded"
+// written across it in tiles and says so in an RE-Watermark header, which download()
+// refuses. The infrared band itself is about 2 km, so the cap is close to the limit of
+// what is there to see anyway.
 //
 // Run it where SSEC is reachable - the agent containers used for this repository
 // cannot reach realearth.ssec.wisc.edu - then commit dist/weather/ (and dist/data/
@@ -86,7 +91,13 @@ const SNAPSHOT_SIZE = 1024;  // the single observation the globe opens with
 const REGION = flag('--region');
 const REGION_NAME = opt('--region-name', 'japan');
 const REGION_BOUNDS = opt('--region-bounds', '24,122,46,148');
-const REGION_WIDTH = Number(opt('--region-width', 1280));
+// 1024 wide over the default box is about 1.10 million pixels, inside the roughly 1.17
+// million SSEC serves without stamping a notice across the picture (measured
+// 2026-09-22: 1024 clean, 1100 reported 1.04 times over, 1280 reported 1.21).
+const REGION_WIDTH = Number(opt('--region-width', 1024));
+// Refreshes the close-up alone, for the observation times already bundled - the crop
+// belongs to those hours, so it can be redone without touching them.
+const REGION_ONLY = flag('--region-only');
 const REGION_FRAMES = Number(opt('--region-frames', 12));
 // The wind is what a run actually costs: one /api/shapes answer is about 20 MB for
 // AMV-LLlow and 3 MB for AMV-LLmid, so 71 observation times come to some 1.6 GB - and a
@@ -142,6 +153,19 @@ async function download(product, time, size, destination, box) {
   }
   if (digits(served) !== digits(time)) {
     throw new Error(`${product}: asked for ${time}, served ${served}`);
+  }
+
+  // SSEC stamps "Size limit exceeded" across a picture it considers too large, and says
+  // so in a header. Such an image is not the observation - it is the observation with a
+  // notice written over it - so it is refused rather than stored. Measured 2026-09-22:
+  // the cap is an area of about 1.17 million pixels per image request, and the header's
+  // number is how many times over the request was in each direction.
+  const watermark = response.headers.get('re-watermark');
+  if (watermark) {
+    throw new Error(
+      `${product} ${time} came back watermarked (RE-Watermark: ${watermark}) - SSEC stamps ` +
+      '"Size limit exceeded" over an image request above about 1.17 million pixels. Ask for ' +
+      'fewer pixels (--region-width) rather than storing a picture with a notice across it.');
   }
 
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -468,6 +492,19 @@ async function winds(frameTimes) {
 async function main() {
   console.log(`fetching from ${BASE}`);
   console.log(`writing to   ${path.relative(ROOT, OUT) || OUT}`);
+
+  if (REGION_ONLY) {
+    const bundled = JSON.parse(fs.readFileSync(
+      path.join(OUT, 'sequence', 'manifest.json'), 'utf8')).globalir.map(f => f.time);
+    if (!bundled.length) throw new Error('no bundled observations to cut a close-up from');
+    const only = await region(bundled);
+    console.log('\nstored');
+    console.log(`  close-up   ${only.count} frames, ${only.megabytes.toFixed(1)} MB, ` +
+      `${only.kmPerPixel.toFixed(1)} km per pixel`);
+    if (only.removed) console.log(`  ${only.removed} file(s) from an earlier run removed`);
+    console.log('\nNext: node tools/check-webgl.cjs, then commit dist/weather/region/.');
+    return;
+  }
 
   const frames = await sequence();
   const closeUp = REGION ? await region(frames.times) : (noRegion(), null);

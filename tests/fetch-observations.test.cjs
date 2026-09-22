@@ -27,7 +27,7 @@ const body = (product, time, size) => Buffer.from(`${product}:${time}:${size}`.r
 
 /// An API stand-in. `serve` decides what RE-Time each image answers with, so a test
 /// can make the server contradict the request.
-function api({ reTime = time => time, omitHeader = false, staleWind = false } = {}) {
+function api({ reTime = time => time, omitHeader = false, staleWind = false, watermark = null } = {}) {
   // Every request, so a test can count what a run actually asked the server for.
   const calls = [];
   const server = http.createServer((request, response) => {
@@ -68,6 +68,9 @@ function api({ reTime = time => time, omitHeader = false, staleWind = false } = 
       const size = url.searchParams.get('width');
       const headers = { 'Content-Type': 'image/png' };
       if (!omitHeader) headers['RE-Time'] = reTime(time);
+      // What SSEC answers with when an image request is larger than it serves: the
+      // picture, with "Size limit exceeded" written across it in tiles.
+      if (watermark) headers['RE-Watermark'] = watermark;
       response.writeHead(200, headers);
       response.end(body(product, time, size));
       return;
@@ -321,6 +324,25 @@ s.test('the wind already stored is not asked for a second time', async () => {
     const forced = await run(base, out, ['--winds', '--refetch-winds']);
     assert.strictEqual(forced.status, 0, forced.stderr);
     assert.strictEqual(calls.filter(u => u.includes('/shapes')).length, 6);
+  } finally {
+    server.close();
+    fs.rmSync(out, { recursive: true, force: true });
+  }
+});
+
+// An image with a notice written across it is not the observation. SSEC stamps "Size
+// limit exceeded" over an image request above about 1.17 million pixels and says so in a
+// header; storing that would put the notice on the globe and call it an observation.
+s.test('an answer marked as watermarked is refused', async () => {
+  const { server, base } = await api({ watermark: 'size 1.21' });
+  const out = temp();
+  try {
+    const result = await run(base, out);
+    assert.notStrictEqual(result.status, 0, 'the run has to fail');
+    assert.ok(/RE-Watermark/.test(result.stderr), result.stderr);
+    assert.ok(/Size limit exceeded/.test(result.stderr), result.stderr);
+    assert.ok(!fs.existsSync(path.join(out, 'sequence', 'manifest.json')),
+      'nothing is recorded as bundled');
   } finally {
     server.close();
     fs.rmSync(out, { recursive: true, force: true });

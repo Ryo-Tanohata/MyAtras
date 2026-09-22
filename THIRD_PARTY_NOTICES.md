@@ -17,7 +17,7 @@ documented public HTTP API.
 | File | Product | Observed (UTC) |
 | --- | --- | --- |
 | `dist/weather/sequence/globalir_*.png` | `globalir` | 2026-09-19 03:00 – 2026-09-22 01:00 UTC, hourly (71 frames, 14.0 MB) |
-| `dist/weather/region/japan_globalir_*.png` | `globalir` | 2026-09-21 14:00 – 2026-09-22 01:00 UTC, hourly (12 frames, 4.4 MB) |
+| `dist/weather/region/japan_globalir_*.png` | `globalir` | 2026-09-21 14:00 – 2026-09-22 01:00 UTC, hourly (12 frames, 3.1 MB) |
 | `dist/weather/snapshot/globalir_20260922_010000.png` | `globalir` | 2026-09-22 01:00 UTC |
 | `dist/weather/snapshot/globalvis_20260922_010000.png` | `globalvis` | 2026-09-22 01:00 UTC |
 
@@ -27,8 +27,11 @@ are the authority: each bundled file is listed there with the request URL it cam
 from and its SHA-256, and `scripts/export-html.py` re-checks those digests.
 
 The close-up in `dist/weather/region/` is the same product at the same times over a
-box instead of the whole world: south 24°, west 122°, north 46°, east 148°, 1280 × 1339
-pixels, about 1.9 km to a pixel. It is what the API returned for those bounds - nothing
+box instead of the whole world: south 24°, west 122°, north 46°, east 148°, 1024 × 1071
+pixels, about 2.3 km to a pixel. That size is what SSEC serves: an image request above
+about 1.17 million pixels comes back with "Size limit exceeded" written across it in
+tiles and an `RE-Watermark` header saying how far over it was, and
+`scripts/fetch-observations.cjs` refuses such an answer instead of storing it. It is what the API returned for those bounds - nothing
 is enlarged, interpolated or generated - and `dist/weather/region/manifest.json` records
 the bounds, the size and each file's URL and SHA-256. The page loads it only when asked
 and shows it only inside those bounds.
