@@ -509,10 +509,22 @@ async function checkUnityBuild(page) {
     await page.js("document.getElementById('observationTime').textContent.trim()"));
   check(true, 'playback line',
     await page.js("document.getElementById('weatherPlaybackStatus').textContent.trim()"));
-  // The day/night line is drawn from the sun at the observation's own time; the page
-  // names the point where that sun is overhead.
+  // Day and night opens off, so the globe is the evenly lit exhibit the JavaScript
+  // version opens as. The page says so where the sun's position would go.
+  const sunAtRest = await page.js("(e => e ? e.textContent.trim() : '')(document.getElementById('sunPoint'))");
+  check(/オフ/.test(sunAtRest), 'day and night starts off', sunAtRest);
+
+  // Switched on, the line is drawn from the sun at the observation's own time; the page
+  // names the point where that sun is overhead. Switched back off afterwards, so the
+  // rest of the run sees what a visitor sees.
+  const sun = on => page.js(`(() => { const box = document.getElementById('sunlight');
+    box.checked = ${on}; box.dispatchEvent(new Event('change')); return box.checked; })()`);
+  await sun(true);
+  await sleep(1200);
   const sunPoint = await page.js("(e => e ? e.textContent.trim() : '')(document.getElementById('sunPoint'))");
   check(/太陽直下点：[北南]緯\d+\.\d° [東西]経\d+\.\d°/.test(sunPoint), 'the sun position is shown', sunPoint);
+  await sun(false);
+  await sleep(600);
 
   const first = await page.shot('unity-01-load');
   const drawn = globeRegion(first);
@@ -600,7 +612,11 @@ async function checkUnityBuild(page) {
     'the marks say what they are', noteU.slice(-52));
 
   // And nowhere else: an hour the globe has an observation for is not overdrawn with a
-  // guess about it.
+  // guess about it. Asked of one and the same observation, with the outlook switched on
+  // and then off. Comparing against a different observation used to do, while the globe
+  // opened with a night side; evenly lit it holds a hundred-odd scene pixels the violet
+  // test catches - scattered, not the run of a fan - and those differ from hour to hour,
+  // which says nothing about whether a fan was drawn.
   await page.js(`(() => {
     const slider = document.getElementById('weatherTime');
     slider.value = String(Math.max(0, Math.round(+slider.max / 2)));
@@ -608,9 +624,14 @@ async function checkUnityBuild(page) {
   })()`);
   await sleep(2000);
   const midU = await page.shot('unity-08-outlook-mid-track');
-  check(count(midU, violetTest) <= count(markedU, violetTest) + 30,
+  await page.js(`(() => { const box = document.getElementById('outlook');
+    box.checked = false; box.dispatchEvent(new Event('change')); })()`);
+  await sleep(1200);
+  const midPlainU = await page.shot('unity-09-mid-track-without-it');
+  check(count(midU, violetTest) <= count(midPlainU, violetTest) + 30,
     'no outlook over an observation the globe already has',
-    `${count(midU, violetTest)} violet pixels mid-track against ${count(markedU, violetTest)} with it off`);
+    `${count(midU, violetTest)} violet pixels mid-track with it on, ` +
+    `${count(midPlainU, violetTest)} with it off`);
   await page.js(`(() => { for (const id of ['storms', 'outlook']) {
     const box = document.getElementById(id); box.checked = false;
     box.dispatchEvent(new Event('change')); } })()`);

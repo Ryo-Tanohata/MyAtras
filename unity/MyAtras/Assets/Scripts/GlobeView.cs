@@ -72,7 +72,9 @@ namespace MyAtras
         ObservationPlayback playback;
         bool loaded;
         bool loadFinished;
-        bool sunlight = true;
+        // Off to begin with, as the page's switch now is: the globe opens as an evenly
+        // lit exhibit, the way the JavaScript version opens.
+        bool sunlight;
         bool stars = true;
         bool cloudRelief = true;
         bool flow = true;
