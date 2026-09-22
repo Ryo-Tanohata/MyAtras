@@ -17,6 +17,11 @@ name: Publish site
 # dist/weather/ is what a push publishes: the copy that works offline, that a fresh
 # clone can check, and that is published when a fetch cannot be made.
 #
+# `region` has to be asked for as well, because a fetch without it clears the close-up:
+# a crop belongs to the observations it was cut from, so the script empties the directory
+# rather than leave frames from hours that are no longer bundled. Left out of a dispatch,
+# this workflow would publish a site whose close-up switch has nothing behind it.
+#
 # The standalone single-file build is produced here rather than committed, so the
 # published copy is always rebuilt from the same observations the site serves.
 
@@ -45,6 +50,10 @@ on:
         default: '72'
       winds:
         description: 'Also store the observed wind at each observation time, for the Unity model'
+        type: boolean
+        default: true
+      region:
+        description: 'Also cut the close-up over Japan, which the page offers zoomed in'
         type: boolean
         default: true
       commit:
@@ -98,7 +107,8 @@ jobs:
             --frames "${{ inputs.frames || '72' }}" \
             --every "${{ inputs.every || '60' }}" \
             --span "${{ inputs.span || '72' }}" \
-            ${{ inputs.winds && '--winds' || '' }} | tee fetch.log
+            ${{ inputs.winds && '--winds' || '' }} \
+            ${{ inputs.region && '--region' || '' }} | tee fetch.log
 
       - name: Say which observations are being published
         run: |
