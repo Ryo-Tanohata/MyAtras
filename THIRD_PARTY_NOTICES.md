@@ -16,10 +16,10 @@ documented public HTTP API.
 
 | File | Product | Observed (UTC) |
 | --- | --- | --- |
-| `dist/weather/sequence/globalir_*.png` | `globalir` | 2026-09-19 03:00 – 2026-09-22 01:00 UTC, hourly (71 frames, 14.0 MB) |
-| `dist/weather/region/japan_globalir_*.png` | `globalir` | 2026-09-21 14:00 – 2026-09-22 01:00 UTC, hourly (12 frames, 3.1 MB) |
-| `dist/weather/snapshot/globalir_20260922_010000.png` | `globalir` | 2026-09-22 01:00 UTC |
-| `dist/weather/snapshot/globalvis_20260922_010000.png` | `globalvis` | 2026-09-22 01:00 UTC |
+| `dist/weather/sequence/globalir_*.png` | `globalir` | 2026-09-22 22:00 – 2026-09-25 20:00 UTC, hourly (71 frames, 13.9 MB) |
+| `dist/weather/region/japan_globalir_*.png` | `globalir` | 2026-09-25 09:00 – 2026-09-25 20:00 UTC, hourly (12 frames, 3.8 MB) |
+| `dist/weather/snapshot/globalir_20260925_200000.png` | `globalir` | 2026-09-25 20:00 UTC |
+| `dist/weather/snapshot/globalvis_20260925_200000.png` | `globalvis` | 2026-09-25 20:00 UTC |
 
 The times above are a summary and go out of date the moment the observations are
 refreshed. `dist/weather/sequence/manifest.json` and `dist/weather/snapshot.json`
@@ -46,15 +46,20 @@ computed in the shader at draw time; it never alters the stored image.
 ### Atmospheric motion vectors
 
 `dist/data/amv.json` holds 2,776 representative vectors selected from the
-`AMV-LLlow` and `AMV-LLmid` products at 2026-09-20 14:00 UTC, the middle of the
+`AMV-LLlow` and `AMV-LLmid` products at 2026-09-24 09:00 UTC, the middle of the
 bundled sequence, with the selection counts recorded alongside them. Source responses:
 
-- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260920_140000
-- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260920_140000
+- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLlow_20260924_090000
+- https://realearth.ssec.wisc.edu/api/shapes?products=AMV-LLmid_20260924_090000
 
-`dist/data/wind/` holds the same two products gridded at each of the bundled
-observation times, all 71 of them. Every grid records its source URLs, its vector
-counts and its SHA-256 in `dist/data/wind/manifest.json`.
+`dist/data/wind/` holds the same two products gridded at bundled observation times:
+13 of the 71, every sixth hour plus the one amv.json is built from. One answer for one
+hour is about 23 MB, so asking at every hour of a three-day set would download about
+1.6 GB from a university's public API to keep 3 MB of one-degree grids; the wind is the
+second source for the model between observations, behind the motion measured from the
+images themselves, so the hours in between fall back on that motion. Every grid records
+its source URLs, its vector counts and its SHA-256 in `dist/data/wind/manifest.json`,
+and an hour with no grid of its own is simply absent from it.
 
 ### Work derived from the observations
 
