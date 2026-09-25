@@ -1,14 +1,14 @@
 {
  "globalir": {
-  "time": "20260922.010000",
-  "file": "snapshot/globalir_20260922_010000.png",
-  "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260922_010000&bounds=-85.05112878%2C-180%2C85.05112878%2C180&width=1024&height=1024&format=png",
-  "sha256": "ce2d339c3a633c638a9dd04bea417c9918d68d5d20bd46bc5a5fbabe92793834"
+  "time": "20260925.200000",
+  "file": "snapshot/globalir_20260925_200000.png",
+  "source": "https://realearth.ssec.wisc.edu/api/image?products=globalir_20260925_200000&bounds=-85.05112878%2C-180%2C85.05112878%2C180&width=1024&height=1024&format=png",
+  "sha256": "1b1efa3b015b3bf8f62731b02d06c40f6f6441182fece3827779f97419634aac"
  },
  "globalvis": {
-  "time": "20260922.010000",
-  "file": "snapshot/globalvis_20260922_010000.png",
-  "source": "https://realearth.ssec.wisc.edu/api/image?products=globalvis_20260922_010000&bounds=-85.05112878%2C-180%2C85.05112878%2C180&width=1024&height=1024&format=png",
-  "sha256": "1208581395cdafa3a676b059da86736e7d6e66b4c054026018bf6eb6f735af7a"
+  "time": "20260925.200000",
+  "file": "snapshot/globalvis_20260925_200000.png",
+  "source": "https://realearth.ssec.wisc.edu/api/image?products=globalvis_20260925_200000&bounds=-85.05112878%2C-180%2C85.05112878%2C180&width=1024&height=1024&format=png",
+  "sha256": "0e8e04447de9906c034c9b783b8e86f71d91231f932e73136f332f638b838392"
  }
 }
