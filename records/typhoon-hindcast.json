@@ -9,16 +9,16 @@
   2026
  ],
  "starts": 3684,
- "tauScores48h": {
-  "0": 448,
-  "6": 418,
-  "12": 389,
-  "24": 363,
-  "48": 351,
-  "72": 347,
-  "96": 349
+ "tauScoresMeanOfLeads": {
+  "0": 661,
+  "6": 624,
+  "12": 596,
+  "24": 564,
+  "48": 553,
+  "72": 563,
+  "96": 571
  },
- "chosenTau": 72,
+ "chosenTau": 48,
  "track": [
   {
    "lead": 12,
@@ -41,13 +41,13 @@
   },
   {
    "lead": 24,
-   "n": 3497,
+   "n": 3495,
    "cases": 3629,
    "aliveTruth": 0.956,
-   "aliveModel": 0.97,
+   "aliveModel": 0.969,
    "model": {
-    "median": 136,
-    "mean": 176
+    "median": 133,
+    "mean": 174
    },
    "climatology": {
     "median": 235,
@@ -60,13 +60,13 @@
   },
   {
    "lead": 48,
-   "n": 2929,
+   "n": 2939,
    "cases": 3382,
    "aliveTruth": 0.825,
-   "aliveModel": 0.888,
+   "aliveModel": 0.891,
    "model": {
-    "median": 337,
-    "mean": 429
+    "median": 335,
+    "mean": 420
    },
    "climatology": {
     "median": 453,
@@ -74,22 +74,22 @@
    },
    "persistence": {
     "median": 367,
-    "mean": 451
+    "mean": 452
    }
   },
   {
    "lead": 72,
-   "n": 2289,
+   "n": 2316,
    "cases": 2970,
    "aliveTruth": 0.715,
-   "aliveModel": 0.816,
+   "aliveModel": 0.823,
    "model": {
-    "median": 544,
-    "mean": 704
+    "median": 548,
+    "mean": 680
    },
    "climatology": {
-    "median": 659,
-    "mean": 817
+    "median": 661,
+    "mean": 819
    },
    "persistence": {
     "median": 613,
@@ -98,80 +98,80 @@
   },
   {
    "lead": 96,
-   "n": 1646,
+   "n": 1695,
    "cases": 2504,
    "aliveTruth": 0.62,
-   "aliveModel": 0.72,
+   "aliveModel": 0.738,
    "model": {
-    "median": 740,
-    "mean": 976
+    "median": 761,
+    "mean": 938
    },
    "climatology": {
-    "median": 850,
-    "mean": 1047
+    "median": 861,
+    "mean": 1055
    },
    "persistence": {
-    "median": 891,
-    "mean": 1084
+    "median": 897,
+    "mean": 1097
    }
   },
   {
    "lead": 120,
-   "n": 1101,
+   "n": 1150,
    "cases": 2044,
    "aliveTruth": 0.532,
-   "aliveModel": 0.629,
+   "aliveModel": 0.647,
    "model": {
-    "median": 956,
-    "mean": 1256
+    "median": 939,
+    "mean": 1174
    },
    "climatology": {
-    "median": 1033,
-    "mean": 1264
+    "median": 1023,
+    "mean": 1260
    },
    "persistence": {
-    "median": 1173,
-    "mean": 1409
+    "median": 1174,
+    "mean": 1412
    }
   }
  ],
  "lifetime": {
   "n": 3680,
-  "medianAbsErrorH": 41,
-  "medianBiasH": 24,
+  "medianAbsErrorH": 42,
+  "medianBiasH": 26,
   "constantBaselineAbsErrorH": 39,
   "typicalRemainingH": 84
  },
  "intensity": [
   {
    "lead": 24,
-   "n": 3392,
+   "n": 3390,
    "modelMAE": 18.1,
    "persistenceMAE": 22.4
   },
   {
    "lead": 48,
-   "n": 2626,
-   "modelMAE": 24.1,
-   "persistenceMAE": 29.4
+   "n": 2630,
+   "modelMAE": 24,
+   "persistenceMAE": 29.5
   },
   {
    "lead": 72,
-   "n": 1895,
-   "modelMAE": 26.4,
-   "persistenceMAE": 31.7
+   "n": 1913,
+   "modelMAE": 26.5,
+   "persistenceMAE": 31.8
   }
  ],
  "plausibility": {
   "crossedEquator": 0,
-  "recurvedModel": 0,
+  "recurvedModel": 654,
   "recurvedTruth": 1227,
   "westwardStarts": 2743,
   "endReasons": {
-   "weakened": 2969,
-   "time": 231,
-   "left the record": 74,
-   "went extratropical or fell apart": 407,
+   "weakened": 2705,
+   "went extratropical or fell apart": 661,
+   "time": 212,
+   "left the record": 103,
    "reached the equator": 3
   }
  }
