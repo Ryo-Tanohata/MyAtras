@@ -5,7 +5,7 @@
 // both builds show identical data. Failure returns null and the UI keeps running
 // with whatever it already shows; nothing is substituted for a missing observation.
 (function(root){
-const SNAPSHOT='weather/snapshot.json',SEQUENCE='weather/sequence/manifest.json',REGION='weather/region/manifest.json',TYPHOON='data/typhoon.json',AMV='data/amv.json',STORMS='data/storms.json',TENDENCY='data/tendency.json';
+const SNAPSHOT='weather/snapshot.json',SEQUENCE='weather/sequence/manifest.json',REGION='weather/region/manifest.json',TYPHOON='data/typhoon.json',AMV='data/amv.json',STORMS='data/storms.json',TENDENCY='data/tendency.json',MOTION='data/motion/manifest.json';
 const pending=new Map();
 function loadJSON(path){if(pending.has(path))return pending.get(path);const request=(async()=>{const response=await fetch(path,{credentials:'omit'});if(!response.ok)throw Error('HTTP '+response.status);return response.json();})();pending.set(path,request);return request;}
 function beside(path,file){return path.slice(0,path.lastIndexOf('/')+1)+file;}
@@ -22,6 +22,9 @@ const GeoData={
  // What dist/typhoon.js moves storms by. Only asked for when the simulation is switched on;
  // not in the standalone export.
  async typhoon(){if(root.GEO_STANDALONE)return null;try{return await loadJSON(TYPHOON);}catch(error){return null;}},
+ // The cloud motion measured between consecutive observations (scripts/build-motion.cjs),
+ // which the storm simulation's background flow starts from. Not in the standalone export.
+ async motion(){if(root.GEO_STANDALONE)return null;try{const data=await loadJSON(MOTION);if(!data||!Array.isArray(data.intervals))return null;return {...data,intervals:data.intervals.map(iv=>({...iv,url:beside(MOTION,iv.file)}))};}catch(error){return null;}},
  async amv(){if(root.GEO_AMV_SNAPSHOT)return root.GEO_AMV_SNAPSHOT;try{const bundle=await loadJSON(AMV);root.GEO_AMV_SNAPSHOT=bundle;return bundle;}catch(error){return null;}},
  async storms(){if(root.GEO_STORMS)return root.GEO_STORMS;try{const bundle=await loadJSON(STORMS);root.GEO_STORMS=bundle;return bundle;}catch(error){return null;}},
  async tendency(){if(root.GEO_TENDENCY)return root.GEO_TENDENCY;try{const bundle=await loadJSON(TENDENCY);root.GEO_TENDENCY=bundle;return bundle;}catch(error){return null;}}

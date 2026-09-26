@@ -85,7 +85,7 @@ const detail=new DetailLayer();window.geoDetail=detail;
 // After the last observation (step two of three): the storms carried on to their end,
 // with the clouds moved round them. Off unless asked for; see dist/storm-sim.js.
 const stormSim=new StormSimulation(gl,7);window.geoStormSim=stormSim;
-let simulate=false,typhoonModel=null,simResume=null,simFrom=null,simLine='';
+let simulate=false,typhoonModel=null,motionFields=null,simResume=null,simFrom=null,simLine='';
 let detailNowOn=0,detailPrevOn=0,detailBox=[0,1,0,1],detailWatermark=[0,0];
 // The close-up pair is swapped in step with the observation pair, so a dissolve mixes
 // two observations at one resolution rather than two resolutions of one observation.
@@ -167,9 +167,22 @@ playback.onLastFrame=(time,resume)=>{
  if(!simulate||!typhoonModel||!stormSim.ready||cloudSim.enabled)return false;
  const storms=startingStorms(time);
  if(!storms.length)return false;
- if(!stormSim.start({observation:weatherTexture,watermark,storms,model:typhoonModel,viewport:[canvas.width,canvas.height]}))return false;
+ if(!stormSim.start({observation:weatherTexture,watermark,storms,model:typhoonModel,viewport:[canvas.width,canvas.height],air:startingAir(time)}))return false;
  simResume=resume;simFrom=time;simLine='';showSimStatus();return true;
 };
+// The background flow, started from the cloud motion measured over the six hours before
+// the last observation. Motion from more than twelve hours earlier - after a refresh brought
+// newer observations than the bundled motion - is not passed off as the last observation's:
+// the flow then starts from the typical circulation, and the page says so.
+function startingAir(time){
+ const until=stampHours(time),recent=(motionFields||[]).filter(f=>stampHours(f.to)<=until&&until-stampHours(f.to)<=12).slice(-6);
+ const start=BackgroundFlow.startingWinds(recent);const air=new BackgroundFlow.BarotropicFlow();air.setWinds(start.u,start.v);air.measured=recent.length;return air;
+}
+async function loadMotion(){
+ const data=await window.GeoData.motion();if(!data)return [];
+ const load=iv=>new Promise(resolve=>{const img=new Image();img.onload=()=>{try{const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(img,0,0);const px=x.getImageData(0,0,img.width,img.height).data;resolve(Object.assign(BackgroundFlow.motionField(px,img.width,img.height,4,data.scale),{to:iv.to}));}catch(e){resolve(null);}};img.onerror=()=>resolve(null);img.src=iv.url;});
+ return (await Promise.all(data.intervals.slice(-12).map(load))).filter(Boolean);
+}
 playback.onStop=()=>{if(stormSim.active)endSimulation(false);};
 // Paused, it stays where it is: the render loop only moves it on while playback plays.
 playback.onHold=()=>{simLine='';showSimStatus();};
@@ -192,7 +205,8 @@ function showSimStatus(){
  document.querySelector('#weatherPlaybackStatus').textContent=(playback.playing?'':'一時停止 · ')+'観測の後：過去の台風の動き方で進めたシミュレーション · 予報ではありません';
  const alive=stormSim.marks().filter(m=>!m.ended).length;
  const note=document.querySelector('#simulateNote');
- if(note)note.textContent=alive?`シミュレーション中の台風 ${alive}個（紫の輪）。雲は観測ではなく計算です。`:'台風は消滅しました。まもなく最初の観測に戻ります。';
+ const air=stormSim.air&&stormSim.air.measured?'':' 最後の観測の雲の動きを測ったデータが無いため、背景の流れは典型的な循環から始めています。';
+ if(note)note.textContent=(alive?`シミュレーション中の台風 ${alive}個（紫の輪）。雲は観測ではなく計算です。`:'台風は消滅しました。まもなく最初の観測に戻ります。')+air;
 }
 (()=>{
  const label=document.querySelector('#simulateToggle'),box=document.querySelector('#simulateStorms'),note=document.querySelector('#simulateNote');
@@ -204,7 +218,8 @@ function showSimStatus(){
   simulate=e.target.checked;
   if(note){note.hidden=!simulate;note.textContent=simulate?'台風のデータを読み込み中…':'';}
   if(simulate&&!typhoonModel){
-   const data=await window.GeoData.typhoon();
+   const [data,motion]=await Promise.all([window.GeoData.typhoon(),loadMotion()]);
+   motionFields=motion;
    if(data)typhoonModel=new Typhoon.TyphoonModel(data);
    else{if(note)note.textContent='台風のデータを読み込めませんでした。';return;}
   }

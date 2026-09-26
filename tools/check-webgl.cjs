@@ -611,6 +611,10 @@ async function checkSimulation(page) {
     }, 1500);
   })`);
   check(/"still":true/.test(paused) && /一時停止/.test(paused), 'pausing holds the simulation where it is', paused);
+  // The clouds ride a flow that started from the motion last measured and has moved on.
+  const air = await page.js(`JSON.stringify({ measured: window.geoStormSim.air.measured,
+    hours: window.geoStormSim.air.hours })`);
+  check(/"measured":6/.test(air) && JSON.parse(air).hours >= 20, 'the background flow starts from the measured motion and moves on', air);
   const marks = await page.js('window.geoStormSim.marks().filter(m => !m.ended).length');
   check(marks > 0, 'the simulated storms are marked', `${marks} alive a day on`);
   // Played through to the end, it hands back to the observations rather than stopping.

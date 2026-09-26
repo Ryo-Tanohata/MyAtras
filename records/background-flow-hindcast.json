@@ -1,0 +1,43 @@
+{
+  "method": "scripts/hindcast-flow.cjs: started from six hours of measured cloud motion, compared 12/24/48 h later with the motion measured then (confident, within 60 degrees); RMS vector difference in km/h, mean over starts",
+  "starts": 5,
+  "intervals": 70,
+  "chosenLd": 1000,
+  "table": {
+    "persistence": {
+      "12h": 21.6,
+      "24h": 28,
+      "48h": 29.9
+    },
+    "climatology": {
+      "12h": 34.8,
+      "24h": 35.3,
+      "48h": 33.5
+    },
+    "rotational part held": {
+      "12h": 21.8,
+      "24h": 26.7,
+      "48h": 28.4
+    },
+    "flow, Ld none": {
+      "12h": 21.3,
+      "24h": 25.9,
+      "48h": 28.2
+    },
+    "flow, Ld 2000 km": {
+      "12h": 20.4,
+      "24h": 25.2,
+      "48h": 27.4
+    },
+    "flow, Ld 1000 km": {
+      "12h": 20.3,
+      "24h": 25,
+      "48h": 27.1
+    },
+    "flow, Ld 500 km": {
+      "12h": 20.6,
+      "24h": 25.6,
+      "48h": 27.6
+    }
+  }
+}

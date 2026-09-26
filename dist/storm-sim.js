@@ -2,18 +2,22 @@
 // What happens after the last observation: every storm the observations found, carried on
 // by dist/typhoon.js until it dies, with the clouds moving round it.
 //
-// Step two of three. The clouds on screen are the last observation's clouds, moved by
-// three things added together:
-// - the general wind: trade winds, westerlies and polar easterlies by latitude, the same
-//   curve the Unity globe falls back on (EarthComposite.shader, ClimateWind);
+// Steps two and three of three. The clouds on screen are the last observation's clouds,
+// moved by three things added together:
+// - the background flow (dist/background-flow.js): the motion the observations last
+//   showed, carried on by the vorticity equation so troughs and ridges travel and
+//   meander. Without it - with the typical circulation by latitude alone, as step two
+//   had it - every cloud in the westerlies was drawn out into an east-west streak;
 // - near each storm, the storm's own motion, so its cloud goes where it goes;
 // - the storm's spin - anticlockwise in the north, clockwise in the south - fastest a
 //   little way out from the centre and weaker further out, with a slight inflow.
-// Nobody draws the spiral bands: cloud nearer the centre is carried round faster than
-// cloud further out, and that winds whatever cloud there is into spirals. Around each
-// centre cloud builds in proportion to the storm's strength; when the storm ends that
-// stops and it thins away, and everything slowly tends to the average cloudiness of its
-// latitude.
+// Around each centre cloud builds in proportion to the storm's strength: a dense core and
+// two spiral bands of a typical pitch. The spin alone was meant to make the bands - cloud
+// nearer the centre goes round faster - but cloud that is built evenly has no pattern to
+// wind, and the first try showed only a small white dot. The spin winds the bands on,
+// and the observed cloud near the storm with them. When the storm ends the cloud stops
+// being made and thins away, and everything slowly tends to the average cloudiness of
+// its latitude.
 //
 // The observation is not pushed along frame by frame. Every resampling softens an image a
 // little, and a hundred of them a second leave only fog - the first version did exactly
@@ -36,6 +40,7 @@
   const STEP_HOURS = 0.5;         // the largest step things are moved by at once
   const RELAX_HOURS = 120;        // how slowly the clouds tend to their latitude's average
   const MAX_START_KMH = 45;       // a faster start is a detection hopping between systems
+  const FLOW_STEP_HOURS = 2;      // how often the background flow is moved on
 
   const VERTEX = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
   const COMMON = `precision highp float;
@@ -57,13 +62,20 @@
   vec4 encodeD(vec2 d){d.x=mod(d.x+180.,360.)-180.;return vec4(pack((d.x+180.)/360.),pack((d.y+90.)/180.));}
   vec2 displacement(sampler2D f,vec2 uv){vec2 w,a,b,c,d;taps(f,uv,w,a,b,c,d);
    return mix(mix(decodeD(texture2D(f,a)),decodeD(texture2D(f,b)),w.x),mix(decodeD(texture2D(f,c)),decodeD(texture2D(f,d)),w.x),w.y);}
-  // km/h east, by latitude: trade winds near 12 degrees, westerlies near 45, polar easterlies.
-  float climate(float lat){float a=abs(lat);float t=(a-12.)/10.,w=(a-45.)/13.,p=(a-75.)/8.;
-   return 3.6*(-6.*exp(-t*t)+14.*exp(-w*w)-3.*exp(-p*p));}
+  // The background flow, km/h east and north, on its 128 x 64 grid: 16 bits a component
+  // over +-400, so filtered by hand.
+  uniform sampler2D background;
+  vec2 decodeW(vec4 t){return vec2(unpack2(t.rg),unpack2(t.ba))*800.-400.;}
+  vec2 backgroundWind(float lat,float lon){
+   vec2 s=vec2(128.,64.);vec2 p=vec2((lon+180.)/360.,(lat+90.)/180.)*s-.5;vec2 i=floor(p);vec2 w=p-i;
+   vec2 a=(i+.5)/s,b=(i+vec2(1.,0.)+.5)/s,c=(i+vec2(0.,1.)+.5)/s,d=(i+1.5)/s;
+   a.y=clamp(a.y,.5/s.y,1.-.5/s.y);b.y=a.y;c.y=clamp(c.y,.5/s.y,1.-.5/s.y);d.y=c.y;
+   return mix(mix(decodeW(texture2D(background,a)),decodeW(texture2D(background,b)),w.x),
+              mix(decodeW(texture2D(background,c)),decodeW(texture2D(background,d)),w.x),w.y);}
   uniform vec4 storm[${MAX_STORMS}];uniform vec4 motion[${MAX_STORMS}];uniform float count;
   // The wind at a point in km/h, and how much storm cloud is being made there.
   vec2 wind(float lat,float lon,out float source){
-   vec2 vel=vec2(climate(lat),0.);vec2 swirl=vec2(0.);source=0.;
+   vec2 vel=backgroundWind(lat,lon);vec2 swirl=vec2(0.);source=0.;
    for(int i=0;i<${MAX_STORMS};i++){if(float(i)>=count)break;
     float dlon=mod(lon-storm[i].y+540.,360.)-180.;
     vec2 d=vec2(dlon*KM*cos(radians(lat)),(lat-storm[i].x)*KM);float r=max(length(d),1.);
@@ -191,6 +203,14 @@
       this.cloud = [target(W, H, false), target(W, H, false)];
       this.baseline = target(1, H, false);
       this.display = target(W, H, true);
+      this.background = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE0 + 6);
+      gl.bindTexture(gl.TEXTURE_2D, this.background);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 128, 64, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.activeTexture(gl.TEXTURE0 + this.displayUnit);
       gl.bindTexture(gl.TEXTURE_2D, this.display.texture);
@@ -242,10 +262,15 @@
     }
 
     /// Starts from the observation on screen. storms: [{lat, lon, u, v}] - where each was
-    /// last seen and its motion over the last twelve hours, in km/h.
-    start({ observation, watermark, storms, model, viewport }) {
-      if (!this.ready || !model || !storms.length) return false;
+    /// last seen and its motion over the last twelve hours, in km/h. air: a
+    /// BarotropicFlow already started, from the measured motion or, without it, the
+    /// typical circulation.
+    start({ observation, watermark, storms, model, viewport, air }) {
+      if (!this.ready || !model || !storms.length || !air) return false;
       this.viewport = viewport;
+      this.air = air;
+      this.airHours = 0;
+      this.uploadAir();
       this.tracks = storms.slice(0, MAX_STORMS).map(s => {
         // A detection that hopped between systems shows up as an impossible speed; the
         // object starts no faster than any storm in the record kept up.
@@ -264,6 +289,14 @@
       this.active = true;
       this.restore();
       return true;
+    }
+
+    uploadAir() {
+      const gl = this.gl;
+      this.airPixels = this.air.texture(this.airPixels);
+      gl.activeTexture(gl.TEXTURE0 + 6);
+      gl.bindTexture(gl.TEXTURE_2D, this.background);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 128, 64, gl.RGBA, gl.UNSIGNED_BYTE, this.airPixels);
     }
 
     resolve() {
@@ -310,11 +343,17 @@
         const dt = Math.min(STEP_HOURS, left);
         const u = Object.assign({ dt }, this.uniformsAt(this.hours + dt / 2));
         const next = 1 - this.current;
-        this.pass('flow', this.flow[next], { prev: this.flow[this.current].texture }, u);
-        this.pass('storm', this.cloud[next], { prev: this.cloud[this.current].texture }, u);
+        const air = this.background;
+        this.pass('flow', this.flow[next], { prev: this.flow[this.current].texture, background: air }, u);
+        this.pass('storm', this.cloud[next], { prev: this.cloud[this.current].texture, background: air }, u);
         this.current = next;
         this.hours += dt;
         left -= dt;
+        if (this.hours >= this.airHours + FLOW_STEP_HOURS) {
+          this.air.step(FLOW_STEP_HOURS);
+          this.airHours += FLOW_STEP_HOURS;
+          this.uploadAir();
+        }
       }
       this.resolve();
       this.restore();
