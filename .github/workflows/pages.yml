@@ -79,6 +79,10 @@ on:
         description: 'Commit the fetched observations, making them the bundled set'
         type: boolean
         default: false
+      jma_charts_again:
+        description: "Fetch the agency's surface charts (fronts) again for the bundled observations; the typhoon forecast is left as committed"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -162,6 +166,24 @@ jobs:
             echo "fetched=false" >> "$GITHUB_OUTPUT"
           else
             node scripts/fetch-jma-typhoon.cjs --dump | tee jma.log
+            echo "fetched=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The agency's surface charts, for the fronts on them, go with the observations the
+      # same way: the analysis and the 24 and 48 hour forecasts from the initial time
+      # nearest the last observation, a few small files, fetched only when the committed
+      # ones were chosen for other observations (or asked for again). Best effort.
+      - name: Fetch the Japan Meteorological Agency's surface charts for the observations
+        id: jmafronts
+        continue-on-error: true
+        run: |
+          WANT="$(node -p 'require("./dist/weather/sequence/manifest.json").globalir.at(-1).time')"
+          HAVE="$(node -p 'try { require("./dist/data/jma-fronts.json").for || "" } catch (e) { "" }')"
+          if [ "$WANT" = "$HAVE" ] && [ "${{ inputs.jma_charts_again }}" != "true" ]; then
+            echo "The committed charts were chosen for $WANT; not fetched again." | tee jma-fronts.log
+            echo "fetched=false" >> "$GITHUB_OUTPUT"
+          else
+            node scripts/fetch-jma-fronts.cjs --dump | tee jma-fronts.log
             echo "fetched=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -274,16 +296,17 @@ jobs:
       # The forecast fetched for the bundled observations - on a push after they were
       # committed, say - is kept with them, so the next publish need not find it again:
       # the agency's feed holds only a few days of reports.
-      - name: Keep the typhoon forecast with the bundled observations
-        if: steps.fetch.outcome != 'success' && steps.jma.outputs.fetched == 'true'
+      - name: Keep the typhoon forecast and surface charts with the bundled observations
+        if: steps.fetch.outcome != 'success' && (steps.jma.outputs.fetched == 'true' || steps.jmafronts.outputs.fetched == 'true')
         run: |
           set -x
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add dist/data/jma-typhoon.json
+          [ -f dist/data/jma-fronts.json ] && git add dist/data/jma-fronts.json
           if git diff --cached --quiet; then exit 0; fi
           FOR="$(node -p 'require("./dist/data/jma-typhoon.json").for')"
-          git commit -m "Keep the agency's typhoon forecast for the observations ending $FOR"
+          git commit -m "Keep the agency's typhoon forecast and surface charts for the observations ending $FOR"
           if git pull --rebase origin main && git push origin HEAD:main; then
             echo "Kept."
           else
@@ -299,7 +322,9 @@ jobs:
             .check-shots/
             fetch.log
             jma.log
+            jma-fronts.log
             dist/data/jma-typhoon.json
+            dist/data/jma-fronts.json
             records/published-observations.json
           # .check-shots starts with a dot, and the upload skips hidden files unless
           # told otherwise - which is why the first run's artifact held no screenshots.
