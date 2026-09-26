@@ -587,7 +587,9 @@ async function checkSimulation(page) {
   check(started, 'the simulation starts after the last observation', `from ${lastShown}: ${tracks}`);
   if (!started) return;
   // Where the Japan Meteorological Agency has a forecast covering this hour, the storm
-  // follows it: through the agency's analysed centre, at its hour. With no such forecast
+  // follows it: through the agency's forecast centre at each forecast hour, from the first
+  // one twelve hours or more on (before that it is still easing over from where the
+  // observations saw it, which can be a hundred kilometres away). With no such forecast
   // (none published, or the observations too old for it) there is nothing to hold it to.
   const jma = JSON.parse(await page.js(`(async () => {
     const data = await window.GeoData.jmaTyphoon(), sim = window.geoStormSim;
@@ -595,7 +597,7 @@ async function checkSimulation(page) {
     const covering = ((data && data.storms) || []).filter(f => Typhoon.followForecast(f, start));
     const followed = sim.tracks.filter(t => t.from.jma);
     const off = covering.map(f => {
-      const a = f.points.find(p => p.kind === 'analysis'), h = Math.round((Date.parse(a.time) - start) / 3600000);
+      const a = f.points.find(p => Date.parse(p.time) - start >= 12 * 3600000), h = a ? Math.round((Date.parse(a.time) - start) / 3600000) : -1;
       const t = followed.find(t => t.from.jma.issued === f.issued);
       return t && h >= 0 && t.points[h] ? Math.round(Typhoon.distanceKm(t.points[h], a)) : null;
     });
