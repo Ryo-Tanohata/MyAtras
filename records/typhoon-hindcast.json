@@ -44,7 +44,8 @@
   }
  },
  "recurveFloor": 0.7,
- "chosenTau": 0,
+ "minTau": 6,
+ "chosenTau": 6,
  "track": [
   {
    "lead": 12,
@@ -53,8 +54,8 @@
    "aliveTruth": 0.995,
    "aliveModel": 0.998,
    "model": {
-    "median": 113,
-    "mean": 135
+    "median": 79,
+    "mean": 95
    },
    "climatology": {
     "median": 120,
@@ -67,32 +68,32 @@
   },
   {
    "lead": 24,
-   "n": 3500,
+   "n": 3479,
    "cases": 3629,
    "aliveTruth": 0.956,
-   "aliveModel": 0.966,
+   "aliveModel": 0.962,
    "model": {
-    "median": 228,
-    "mean": 275
+    "median": 189,
+    "mean": 228
    },
    "climatology": {
-    "median": 236,
-    "mean": 292
+    "median": 235,
+    "mean": 291
    },
    "persistence": {
-    "median": 143,
-    "mean": 178
+    "median": 142,
+    "mean": 177
    }
   },
   {
    "lead": 48,
-   "n": 2808,
+   "n": 2775,
    "cases": 3382,
    "aliveTruth": 0.825,
-   "aliveModel": 0.838,
+   "aliveModel": 0.835,
    "model": {
-    "median": 451,
-    "mean": 542
+    "median": 417,
+    "mean": 498
    },
    "climatology": {
     "median": 458,
@@ -105,17 +106,17 @@
   },
   {
    "lead": 72,
-   "n": 1908,
+   "n": 1888,
    "cases": 2970,
    "aliveTruth": 0.715,
-   "aliveModel": 0.657,
+   "aliveModel": 0.661,
    "model": {
-    "median": 677,
-    "mean": 802
+    "median": 645,
+    "mean": 767
    },
    "climatology": {
-    "median": 671,
-    "mean": 822
+    "median": 677,
+    "mean": 828
    },
    "persistence": {
     "median": 646,
@@ -124,40 +125,40 @@
   },
   {
    "lead": 96,
-   "n": 1136,
+   "n": 1132,
    "cases": 2504,
    "aliveTruth": 0.62,
-   "aliveModel": 0.467,
+   "aliveModel": 0.479,
    "model": {
-    "median": 897,
-    "mean": 1045
+    "median": 858,
+    "mean": 1022
    },
    "climatology": {
-    "median": 887,
-    "mean": 1058
+    "median": 888,
+    "mean": 1070
    },
    "persistence": {
-    "median": 989,
-    "mean": 1176
+    "median": 996,
+    "mean": 1192
    }
   },
   {
    "lead": 120,
-   "n": 666,
+   "n": 660,
    "cases": 2044,
    "aliveTruth": 0.532,
-   "aliveModel": 0.34,
+   "aliveModel": 0.351,
    "model": {
-    "median": 1064,
-    "mean": 1257
+    "median": 1016,
+    "mean": 1236
    },
    "climatology": {
-    "median": 1038,
-    "mean": 1272
+    "median": 1036,
+    "mean": 1277
    },
    "persistence": {
-    "median": 1372,
-    "mean": 1624
+    "median": 1375,
+    "mean": 1638
    }
   }
  ],
@@ -171,31 +172,31 @@
  "intensity": [
   {
    "lead": 24,
-   "n": 3383,
-   "modelMAE": 18.7,
+   "n": 3375,
+   "modelMAE": 18.4,
    "persistenceMAE": 22.4
   },
   {
    "lead": 48,
-   "n": 2482,
-   "modelMAE": 25.3,
-   "persistenceMAE": 29.7
+   "n": 2490,
+   "modelMAE": 25.2,
+   "persistenceMAE": 29.5
   },
   {
    "lead": 72,
-   "n": 1551,
-   "modelMAE": 27.7,
-   "persistenceMAE": 31.5
+   "n": 1564,
+   "modelMAE": 27.8,
+   "persistenceMAE": 31.6
   }
  ],
  "plausibility": {
   "crossedEquator": 0,
-  "recurvedModel": 976,
+  "recurvedModel": 889,
   "recurvedTruth": 1227,
   "westwardStarts": 2743,
   "endReasons": {
-   "as storms here end": 2648,
-   "weakened": 1032,
+   "as storms here end": 2635,
+   "weakened": 1045,
    "time": 1,
    "left the record": 3
   }
