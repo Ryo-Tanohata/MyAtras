@@ -73,8 +73,11 @@ function parseChart(xml) {
   const title = first(/<Control>[\s\S]*?<Title>([^<]+)<\/Title>/, xml) || first(/<Head\b[^>]*>[\s\S]*?<Title>([^<]+)<\/Title>/, xml);
   const status = first(/<Control>[\s\S]*?<Status>([^<]+)<\/Status>/, xml);
   const issued = first(/<Head\b[^>]*>[\s\S]*?<ReportDateTime>([^<]+)<\/ReportDateTime>/, xml);
-  const target = first(/<Head\b[^>]*>[\s\S]*?<TargetDateTime>([^<]+)<\/TargetDateTime>/, xml)
-    || first(/<MeteorologicalInfo>[\s\S]*?<DateTime[^>]*>([^<]+)<\/DateTime>/, xml);
+  // The head's target time is the chart's initial time; the time it is for is in the body
+  // ("予想　４８時間後"). The first run read the head's as the time a forecast was for,
+  // and took a chart for 9/27 12Z to be for 9/26 12Z.
+  const initial = first(/<Head\b[^>]*>[\s\S]*?<TargetDateTime>([^<]+)<\/TargetDateTime>/, xml);
+  const target = first(/<MeteorologicalInfo>[\s\S]*?<DateTime[^>]*>([^<]+)<\/DateTime>/, xml) || initial;
   const k = chartKind(title) || { kind: null, hours: null };
   const fronts = [];
   // Each item names what it is (Type) and gives its line; the fronts are the ones whose
@@ -91,8 +94,23 @@ function parseChart(xml) {
     }
   }
   const valid = target ? new Date(target).toISOString() : null;
-  const base = valid && k.hours !== null ? new Date(Date.parse(valid) - k.hours * HOUR).toISOString() : null;
+  const base = initial ? new Date(initial).toISOString()
+    : valid && k.hours !== null ? new Date(Date.parse(valid) - k.hours * HOUR).toISOString() : null;
   return { title, status, kind: k.kind, hours: k.hours, issued: issued ? new Date(issued).toISOString() : null, valid, base, fronts };
+}
+
+/// Of the feed's charts, the ones that can be for a simulation starting at `at`: the
+/// charts are made from the 00 and 12 UTC analyses, so for each of the two initial times
+/// either side of `at`, the forecasts issued in the half day after it and the analyses
+/// issued in the six hours after it. A few files rather than the thirty around - each is
+/// 140 to 300 KB, and the first run fetched 9 MB where 2 would have done.
+function wanted(entries, at) {
+  const b1 = Math.floor(at / (12 * HOUR)) * 12 * HOUR, bases = [b1, b1 + 12 * HOUR];
+  return entries.filter(e => {
+    const u = Date.parse(e.updated), code = (/_(VZS[AF]\d\d)_/.exec(e.link) || [])[1] || '';
+    const forecast = /^VZSF/.test(code) || /予想図/.test(e.title);
+    return bases.some(b => forecast ? u >= b + 2 * HOUR && u <= b + 14 * HOUR : u >= b && u <= b + 6 * HOUR);
+  });
 }
 
 /// "20260925.200000" as milliseconds.
@@ -109,7 +127,7 @@ function forObservations(charts, at) {
   const usable = charts.filter(c => c.kind && c.valid && (!c.status || c.status === '通常'));
   const latest = new Map();
   for (const c of usable) {
-    const key = `${c.kind}|${c.hours}|${c.valid}`, held = latest.get(key);
+    const key = `${c.kind}|${c.hours}|${c.valid}|${c.title}`, held = latest.get(key);
     if (!held || (c.issued || '') > (held.issued || '')) latest.set(key, c);
   }
   const all = [...latest.values()];
@@ -118,7 +136,10 @@ function forObservations(charts, at) {
   const base = forecasts.map(c => Date.parse(c.base)).sort((a, b) => Math.abs(a - at) - Math.abs(b - at) || b - a)[0];
   const chosen = forecasts.filter(c => Date.parse(c.base) === base);
   const analyses = all.filter(c => c.kind === 'analysis');
-  const analysis = analyses.find(c => Date.parse(c.valid) === base)
+  // Of analyses for the same time (the Japan area and the wider Asia-Pacific chart), the
+  // one with the most front drawn.
+  const extent = c => c.fronts.reduce((n, f) => n + f.points.length, 0);
+  const analysis = analyses.filter(c => Date.parse(c.valid) === base).sort((a, b) => extent(b) - extent(a))[0]
     || analyses.sort((a, b) => Math.abs(Date.parse(a.valid) - at) - Math.abs(Date.parse(b.valid) - at))[0];
   return [analysis, ...chosen].filter(Boolean).sort((a, b) => a.valid.localeCompare(b.valid));
 }
@@ -146,8 +167,7 @@ async function main() {
         for (const e of parseFeed(xml)) if (TITLE.test(e.title) && !seen.has(e.link)) { seen.add(e.link); entries.push(e); }
       } catch (error) { console.log(`feed ${feed}: ${error.message}`); }
     }
-    // Only charts issued around the observations' end can be the ones for them.
-    const near = entries.filter(e => { const u = Date.parse(e.updated); return u > at - 18 * HOUR && u < at + 30 * HOUR; });
+    const near = wanted(entries, at);
     console.log(`${entries.length} surface charts listed, ${near.length} issued around ${forTime}`);
     const charts = [];
     const dumped = new Set();
@@ -159,7 +179,9 @@ async function main() {
         charts.push(c);
         if (dump && !dumped.has(c.kind + c.hours)) {
           dumped.add(c.kind + c.hours);
-          console.log(`----- ${e.title} ${e.link} (${xml.length} bytes)\n${xml.slice(0, 40000)}\n----- end`);
+          // All but the isobars, which are most of the file: the head, the fronts and centres.
+          const lean = xml.replace(/<Item>(?:(?!<\/Item>)[\s\S])*?<Type>等圧線<\/Type>[\s\S]*?<\/Item>\s*/g, '');
+          console.log(`----- ${e.title} ${e.link} (${xml.length} bytes, ${lean.length} without isobars)\n${lean.slice(0, 60000)}\n----- end`);
         }
       } catch (error) { console.log(`chart ${e.link}: ${error.message}`); }
     }
@@ -178,4 +200,4 @@ async function main() {
 }
 
 if (require.main === module) main();
-module.exports = { parseFeed, parseChart, chartKind, coordinates, forObservations, stampMs };
+module.exports = { parseFeed, parseChart, chartKind, coordinates, forObservations, wanted, stampMs };
