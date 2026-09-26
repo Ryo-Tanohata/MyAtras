@@ -60,10 +60,13 @@ const number = (re, s) => { const v = first(re, s); return v === null || v === '
 
 /// One report: the typhoon it is about and its centre at each time it gives.
 function parseReport(xml) {
-  const issued = first(/<Head>[\s\S]*?<ReportDateTime>([^<]+)<\/ReportDateTime>/, xml)
+  const issued = first(/<Head\b[^>]*>[\s\S]*?<ReportDateTime>([^<]+)<\/ReportDateTime>/, xml)
     || first(/<ReportDateTime>([^<]+)<\/ReportDateTime>/, xml);
   const status = first(/<Control>[\s\S]*?<Status>([^<]+)<\/Status>/, xml);
-  const infoType = first(/<Head>[\s\S]*?<InfoType>([^<]+)<\/InfoType>/, xml);
+  const infoType = first(/<Head\b[^>]*>[\s\S]*?<InfoType>([^<]+)<\/InfoType>/, xml);
+  // The agency's own identifier for the disturbance, kept from a tropical depression's
+  // first report to its last as a typhoon; the typhoon number only comes when it is named.
+  const eventId = first(/<Head\b[^>]*>[\s\S]*?<EventID>([^<]+)<\/EventID>/, xml);
   const numberText = first(/<TyphoonNamePart>[\s\S]*?<Number>([^<]*)<\/Number>/, xml);
   const name = first(/<TyphoonNamePart>[\s\S]*?<Name>([^<]*)<\/Name>/, xml);
   const kana = first(/<TyphoonNamePart>[\s\S]*?<NameKana>([^<]*)<\/NameKana>/, xml);
@@ -77,9 +80,16 @@ function parseReport(xml) {
     if (!kind) continue;
     const where = coordinate(first(/type="中心位置（度）"[^>]*>([^<]+)</, body));
     if (!where) continue;
-    let windKt = number(/<jmx_eb:WindSpeed[^>]*type="最大風速"[^>]*unit="ノット"[^>]*>([^<]*)</, body);
+    // Attributes come in any order: the agency writes unit before type.
+    const wind = unit => {
+      for (const w of body.matchAll(/<jmx_eb:WindSpeed([^>]*)>([^<]*)</g)) {
+        if (/type="最大風速"/.test(w[1]) && w[1].includes(`unit="${unit}"`) && w[2].trim() !== '') return Number(w[2]);
+      }
+      return null;
+    };
+    let windKt = wind('ノット');
     if (windKt === null) {
-      const ms = number(/<jmx_eb:WindSpeed[^>]*type="最大風速"[^>]*unit="m\/s"[^>]*>([^<]*)</, body);
+      const ms = wind('m/s');
       if (ms !== null) windKt = Math.round(ms * KNOTS_PER_MS);
     }
     const circle = /<ProbabilityCircle[^>]*type="予報円"[^>]*>([\s\S]*?)<\/ProbabilityCircle>/.exec(body);
@@ -95,24 +105,27 @@ function parseReport(xml) {
   }
   points.sort((a, b) => a.time.localeCompare(b.time));
   return {
-    number: numberText || null, name, kana,
+    eventId, number: numberText || null, name, kana,
     issued: issued ? new Date(issued).toISOString() : null,
     status, infoType, points,
   };
 }
 
 /// The newest usable report of each typhoon, from reports already parsed. Cancellations
-/// and drills are left out, as is a report with no centre in it.
-function newestPerTyphoon(reports) {
+/// and drills are left out, as is a report with no centre in it, and - given now - one
+/// issued more than a day before or whose forecast has already run out: the feed keeps
+/// days of reports, and a storm that stopped being reported has ended.
+function newestPerTyphoon(reports, now = null) {
   const best = new Map();
   for (const r of reports) {
     if (!r.issued || !r.points.some(p => p.kind === 'analysis')) continue;
+    if (now !== null && (Date.parse(r.issued) < now - 24 * 3600000 || Date.parse(r.points[r.points.length - 1].time) < now)) continue;
     if (r.status && r.status !== '通常') continue;
     if (r.infoType && /取消/.test(r.infoType)) continue;
-    const key = r.number || `${r.name}|${r.points[0].lat}`;
+    const key = r.eventId || r.number || `${r.name}|${r.points[0].lat}`;
     if (!best.has(key) || best.get(key).issued < r.issued) best.set(key, r);
   }
-  return [...best.values()].sort((a, b) => (a.number || '').localeCompare(b.number || ''));
+  return [...best.values()].sort((a, b) => (a.eventId || a.number || '').localeCompare(b.eventId || b.number || ''));
 }
 
 async function get(url) {
@@ -143,10 +156,10 @@ async function main() {
         if (dump && reports.length === 1) console.log(xml.slice(0, 12000));
       } catch (error) { console.log(`report ${e.link}: ${error.message}`); }
     }
-    out.storms = newestPerTyphoon(reports);
+    out.storms = newestPerTyphoon(reports, Date.now());
     for (const s of out.storms) {
       const a = s.points.find(p => p.kind === 'analysis');
-      console.log(`typhoon ${s.number} ${s.kana || s.name || ''}: issued ${s.issued}, centre ${a.lat}N ${a.lon}E at ${a.time}, ` +
+      console.log(`${s.eventId} typhoon ${s.number} ${s.kana || s.name || ''}: issued ${s.issued}, centre ${a.lat}N ${a.lon}E at ${a.time}, ` +
         `${s.points.filter(p => p.kind === 'forecast').length} forecast points to ${s.points.at(-1).time}`);
     }
   } catch (error) {

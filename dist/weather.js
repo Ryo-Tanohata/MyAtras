@@ -14,7 +14,12 @@ class WeatherController{
  async init(skipInitialRefresh=false){const u=this.ui;u.weatherProduct.addEventListener('change',()=>this.changeProduct());u.refreshWeather.addEventListener('click',()=>this.refresh());u.weatherTime.addEventListener('change',()=>{const product=u.weatherProduct.value;const time=this.times[product]?.[Number(u.weatherTime.value)];if(time)this.show(product,time);});
  this.timer=setInterval(()=>{if(u.autoWeather.checked&&!document.hidden&&u.weatherProduct.value!=='earth'&&!this.busy)this.refresh();},60*60*1000);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&u.autoWeather.checked&&Date.now()-this.lastCheck>60*60*1000&&!this.busy&&u.weatherProduct.value!=='earth')this.refresh();});
- const snapshot=await bundledSnapshot();const id=u.weatherProduct.value;if(snapshot?.[id]){const s=snapshot[id];this.times[id]=[s.time];await this.show(id,s.time,s.url,true);}if(!skipInitialRefresh&&u.weatherProduct.value===id)await this.refresh();}
+ const snapshot=await bundledSnapshot();const id=u.weatherProduct.value;if(snapshot?.[id]){const s=snapshot[id];this.times[id]=[s.time];await this.show(id,s.time,s.url,true);}if(!skipInitialRefresh&&u.weatherProduct.value===id)await this.refresh();
+ // Opened on the bundled observations, the hour before the next check starts now. From 0,
+ // the first time the page came back into view - after switching apps, say to start a
+ // screen recording - replaced them at once with SSEC's newest day, which the bundled
+ // storms and cloud motion know nothing about.
+ else if(skipInitialRefresh)this.lastCheck=Date.now();}
  token(){this.abort?.abort();this.abort=new AbortController();return {generation:++this.generation,signal:this.abort.signal};}
  valid(token){return token.generation===this.generation&&!token.signal.aborted;}
  loading(message){this.busy=true;this.ui.refreshWeather.disabled=true;this.ui.weatherTime.disabled=true;this.ui.weatherStatus.textContent=message;}

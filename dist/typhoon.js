@@ -33,6 +33,7 @@
   const MAX_HOURS = 360;        // fifteen days; nothing in the record outlives that by much
   const HYSTERESIS = 2;         // km/h of eastward motion before a storm counts as recurved
   const CLASSES = [34, 64, 96]; // knots: tropical storm, typhoon, strong typhoon
+  const JOIN_HOURS = 12;        // how long a storm seen off a forecast takes to join it
 
   const toRad = d => d * Math.PI / 180;
   const wrapLon = lon => ((lon + 540) % 360) - 180;
@@ -212,7 +213,87 @@
     }
   }
 
-  const Typhoon = { TyphoonModel, betaDrift, decodeBits, END_KT, CLASSES, KM_PER_DEGREE };
+  /// Great-circle distance in km.
+  function distanceKm(a, b) {
+    const p1 = toRad(a.lat), p2 = toRad(b.lat), dp = p2 - p1, dl = toRad(wrapLon(b.lon - a.lon));
+    const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+    return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+
+  /// A storm moved along an issued forecast - the Japan Meteorological Agency's, from
+  /// scripts/fetch-jma-typhoon.cjs - rather than by the record: its analysed and forecast
+  /// centres joined smoothly in time, its strength as forecast between them.
+  ///
+  /// forecast: { points: [{ time (ISO), kind, lat, lon, windKt, class }] }
+  /// startMs: the hour the simulation starts, which may fall before the analysis (the
+  ///   observations are older than the forecast) or after it (newer).
+  /// seen: where the storm was seen at startMs, if it was; the path then starts there
+  ///   and eases onto the forecast over JOIN_HOURS. Seen and analysed centres can be a
+  ///   hundred kilometres apart - the cloud mass is not the centre - and joined at the
+  ///   analysis hour, a few hours on, the path overshot and doubled back.
+  /// model: a TyphoonModel, to carry on past the last forecast hour if the forecast
+  ///   still has a tropical storm there.
+  ///
+  /// Returns { points, end, forecastHours, knotHours } like run(), with points every hour
+  /// from the start, or null when the forecast does not cover the start.
+  function followForecast(forecast, startMs, { seen = null, model = null } = {}) {
+    const knots = [];
+    for (const p of (forecast && forecast.points) || []) {
+      const h = (Date.parse(p.time) - startMs) / 3600000;
+      if (!Number.isFinite(h) || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) continue;
+      if (knots.length && Math.abs(h - knots[knots.length - 1].h) < 0.5) continue;
+      knots.push({ h, lat: p.lat, lon: p.lon, kt: Number.isFinite(p.windKt) ? p.windKt : 30, cls: p.class || '' });
+    }
+    if (knots.length < 2) return null;
+    // Longitudes made continuous, so a path over the date line does not swing round the earth.
+    for (let i = 1; i < knots.length; i++) knots[i].lon = knots[i - 1].lon + wrapLon(knots[i].lon - knots[i - 1].lon);
+    const last = knots[knots.length - 1];
+    if (last.h < 12 || knots[0].h > 24) return null;
+    if (knots[0].h > 0) {
+      // Before the analysis, back along the way it was forecast to go.
+      const a = knots[0], b = knots[1], k = a.h / (b.h - a.h);
+      knots.unshift({ h: 0, lat: a.lat - (b.lat - a.lat) * k, lon: a.lon - (b.lon - a.lon) * k, kt: a.kt, cls: a.cls });
+    }
+    // Cubic Hermite through the knots, the slope at each from its neighbours in time:
+    // smooth through every forecast centre, and exactly on each.
+    const slope = (i, key) => {
+      const a = knots[Math.max(0, i - 1)], b = knots[Math.min(knots.length - 1, i + 1)];
+      return (b[key] - a[key]) / (b.h - a.h);
+    };
+    const at = h => {
+      let i = 0;
+      while (i < knots.length - 2 && knots[i + 1].h < h) i++;
+      const a = knots[i], b = knots[i + 1], d = b.h - a.h, t = Math.min(1, Math.max(0, (h - a.h) / d));
+      const h00 = 2 * t ** 3 - 3 * t ** 2 + 1, h10 = t ** 3 - 2 * t ** 2 + t, h01 = -2 * t ** 3 + 3 * t ** 2, h11 = t ** 3 - t ** 2;
+      const lat = h00 * a.lat + h10 * d * slope(i, 'lat') + h01 * b.lat + h11 * d * slope(i + 1, 'lat');
+      const lon = h00 * a.lon + h10 * d * slope(i, 'lon') + h01 * b.lon + h11 * d * slope(i + 1, 'lon');
+      return { lat, lon: wrapLon(lon), kt: a.kt + (b.kt - a.kt) * t, cls: t < 1 ? a.cls : b.cls };
+    };
+    const hours = Math.floor(last.h);
+    const start = at(0);
+    const dLat = seen ? seen.lat - start.lat : 0, dLon = seen ? wrapLon(seen.lon - start.lon) : 0;
+    const points = [];
+    for (let t = 0; t <= hours; t++) {
+      const p = at(t), k = Math.max(0, 1 - t / JOIN_HOURS);
+      const lat = p.lat + dLat * k, lon = wrapLon(p.lon + dLon * k);
+      points.push({ t, lat, lon, kt: p.kt, land: model ? model.isLand(lat, lon) : false, forecast: true });
+    }
+    const forecastHours = hours;
+    let end = { t: hours, reason: 'the forecast ends' };
+    // Still a tropical storm when the forecast stops: carried on by the record from there.
+    if (model && /台風/.test(last.cls) && last.kt >= END_KT && hours > 0) {
+      const a = points[points.length - 2] || points[points.length - 1], b = points[points.length - 1];
+      const u = wrapLon(b.lon - a.lon) * KM_PER_DEGREE * Math.cos(toRad(b.lat)), v = (b.lat - a.lat) * KM_PER_DEGREE;
+      const run = model.run({ lat: b.lat, lon: b.lon, kt: b.kt, u, v }, { hours: Math.max(1, MAX_HOURS - hours) });
+      for (const p of run.points.slice(1)) points.push(Object.assign({}, p, { t: p.t + hours }));
+      end = { t: points[points.length - 1].t, reason: run.end.reason };
+    }
+    // The forecast's own hours, for marks on the path the agency's map would have.
+    const knotHours = knots.map(k => Math.round(k.h)).filter(h => h > 0 && h <= hours);
+    return { points, end, forecastHours, knotHours };
+  }
+
+  const Typhoon = { TyphoonModel, betaDrift, decodeBits, followForecast, distanceKm, END_KT, CLASSES, KM_PER_DEGREE };
   root.Typhoon = Typhoon;
   if (typeof module !== 'undefined') module.exports = Typhoon;
 })(typeof window === 'undefined' ? globalThis : window);

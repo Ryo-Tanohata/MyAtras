@@ -85,7 +85,7 @@ const detail=new DetailLayer();window.geoDetail=detail;
 // After the last observation (step two of three): the storms carried on to their end,
 // with the clouds moved round them. Off unless asked for; see dist/storm-sim.js.
 const stormSim=new StormSimulation(gl,7);window.geoStormSim=stormSim;
-let simulate=false,typhoonModel=null,motionFields=null,simResume=null,simFrom=null,simLine='',simBack=null,simUnder=false;
+let simulate=false,typhoonModel=null,motionFields=null,jmaForecasts=null,simResume=null,simFrom=null,simLine='',simBack=null,simUnder=false;
 // How much of the simulation is on screen: all of it while it runs, then fading out over the
 // return to the first observation, which is put underneath it at once.
 window.geoSimShown=()=>simShown(performance.now());
@@ -171,10 +171,25 @@ function startingStorms(time){
 // ride the background flow, and any storm the last observation holds is carried to its end.
 playback.onLastFrame=(time,resume)=>{
  if(!simulate||!motionFields||!stormSim.ready||cloudSim.enabled)return false;
- const storms=typhoonModel?startingStorms(time):[];
+ const storms=simStorms(time);
  if(!stormSim.start({observation:weatherTexture,watermark,storms,model:typhoonModel,viewport:[canvas.width,canvas.height],air:startingAir(time)}))return false;
  simResume=resume;simFrom=time;simLine='';showSimStatus();return true;
 };
+// The storms to carry on: every typhoon the Japan Meteorological Agency has a forecast for
+// that covers this hour, moved along that forecast, and every other storm found in the last
+// observation, moved by the typhoon object. A storm the observations found near a forecast
+// centre is that typhoon: its path starts where it was seen and joins the forecast.
+function simStorms(time){
+ const startMs=stampHours(time)*3600000,seen=typhoonModel?startingStorms(time):[],out=[];
+ for(const f of (jmaForecasts&&jmaForecasts.storms)||[]){
+  const probe=Typhoon.followForecast(f,startMs);if(!probe)continue;
+  const at=probe.points[0],near=seen.find(s=>Typhoon.distanceKm(s,at)<600);
+  const track=near?Typhoon.followForecast(f,startMs,{seen:near,model:typhoonModel}):Typhoon.followForecast(f,startMs,{model:typhoonModel});
+  if(near)seen.splice(seen.indexOf(near),1);
+  out.push({lat:track.points[0].lat,lon:track.points[0].lon,u:0,v:0,track,jma:{number:f.number,kana:f.kana,name:f.name,issued:f.issued}});
+ }
+ return out.concat(seen);
+}
 // The background flow, started from the cloud motion measured over the six hours before
 // the last observation. Motion from more than twelve hours earlier - after a refresh brought
 // newer observations than the bundled motion - is not passed off as the last observation's:
@@ -189,6 +204,10 @@ async function loadMotion(){
  return (await Promise.all(data.intervals.slice(-12).map(load))).filter(Boolean);
 }
 playback.onStop=()=>{if(stormSim.active)endSimulation(false);};
+// At its end the simulation stays on screen, paused, with the button offering the
+// observations from the start: going back days on its own read as the weather jumping.
+function finishSimulation(){playback.finish();simLine='';showSimStatus();}
+playback.onRestart=()=>{if(stormSim.active)endSimulation(true);};
 // Paused, it stays where it is: the render loop only moves it on while playback plays.
 playback.onHold=()=>{simLine='';showSimStatus();};
 // carryOn: back to the observations, faded from the simulation to the first of them. Not
@@ -200,7 +219,7 @@ function endSimulation(carryOn){
  if(window.geoWeather.current)window.geoWeather.renderCurrent();
  if(carryOn&&next)next();
 }
-function simIdle(){return `最後の観測のあとも、雲を背景の流れで、見つけた台風を過去の台風の動き方で消滅まで進め、そのあと最初の観測へゆっくり戻ります。台風の強さは画像から測れないため${StormSimulation.ASSUMED_KT}ktと仮定しています。予報ではありません。`;}
+function simIdle(){return `最後の観測のあとも、雲を背景の流れで進め、台風は気象庁の予報があればその進路に、無ければ過去の台風の動き方に沿って消滅まで進めます。終わるとその場で止まります。`;}
 // While it runs, the date says how far past the last observation it is, not a time that
 // was observed.
 function showSimStatus(){
@@ -210,12 +229,18 @@ function showSimStatus(){
  const text=`シミュレーション +${h}時間（${new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(from)} の観測から）`;
  if(text===simLine)return;simLine=text;
  document.querySelector('#observationTime').textContent=text;
- document.querySelector('#weatherPlaybackStatus').textContent=(playback.playing?'':'一時停止 · ')+'観測の後のシミュレーション（背景の流れ・過去の台風の動き方） · 予報ではありません';
+ const jma=stormSim.tracks.filter(t=>t.from.jma),record=stormSim.tracks.length-jma.length;
+ const line=stormSim.finished?`シミュレーションの終わり（+${h}時間） · 「観測の最初から再生」で最初の観測に戻ります`:
+  (playback.playing?'':'一時停止 · ')+'観測の後のシミュレーション · '+(jma.length?'台風は気象庁の予報進路に沿って動き、':'')+'雲は計算です · このアプリの予報ではありません';
+ document.querySelector('#weatherPlaybackStatus').textContent=line;
  const alive=stormSim.marks().filter(m=>!m.ended).length;
  const note=document.querySelector('#simulateNote');
  const air=stormSim.air&&stormSim.air.measured?'':' 最後の観測の雲の動きを測ったデータが無いため、背景の流れは典型的な循環から始めています。';
- const storms=!stormSim.tracks.length?'この観測では台風が見つかっていません。':alive?`シミュレーション中の台風 ${alive}個（紫の輪）。`:'台風は消滅しました。';
- const soon=stormSim.horizon-stormSim.hours<=12?` まもなく最初の観測（最後の観測より約${playback.spanDays()}日前）へ戻ります。`:'';
+ const jst=iso=>new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso));
+ const named=jma.map(t=>`台風${String(t.from.jma.number||'').slice(-2).replace(/^0/,'')}号${t.from.jma.kana?`（${t.from.jma.kana}）`:''}は気象庁の予報（${jst(t.from.jma.issued)}発表）の進路と強さに沿って動かしています（予報の先は過去の台風の動き方）。出典：気象庁「台風解析・予報情報」を加工して作成。`).join('');
+ const others=record?`${jma.length?'ほかの':''}${record}個は過去の台風の動き方で動かしています。`:'';
+ const storms=!stormSim.tracks.length?'この観測では台風が見つかっていません。':(alive?`シミュレーション中の台風 ${alive}個（紫の輪）。`:'台風は消滅しました。')+named+others;
+ const soon=!stormSim.finished&&stormSim.horizon-stormSim.hours<=12?' まもなくシミュレーションの終わりです。':'';
  if(note)note.textContent=storms+'雲は観測ではなく計算です。'+soon+air;
 }
 (()=>{
@@ -230,8 +255,8 @@ function showSimStatus(){
   simulate=on;
   if(note){note.hidden=!simulate;note.textContent=simulate?'シミュレーションのデータを読み込み中…':'';}
   if(simulate&&!motionFields){
-   const [data,motion]=await Promise.all([window.GeoData.typhoon(),loadMotion()]);
-   motionFields=motion;
+   const [data,motion,jma]=await Promise.all([window.GeoData.typhoon(),loadMotion(),window.GeoData.jmaTyphoon()]);
+   motionFields=motion;jmaForecasts=jma;
    if(data)typhoonModel=new Typhoon.TyphoonModel(data);
    else if(note&&simulate){note.textContent='台風のデータを読み込めませんでした。雲だけを進めます。';return;}
   }
@@ -244,7 +269,7 @@ function showSimStatus(){
 (async()=>{await window.geoWeather.init(true);if(!cloudSim.enabled&&!matchMedia('(prefers-reduced-motion: reduce)').matches)await playback.prepare(true);})().catch(()=>{document.querySelector('#weatherPlaybackStatus').textContent='読み込めませんでした。「最新を取得」を押してください。';});
 document.querySelector('#rawObservation').onchange=e=>{rawObservation=e.target.checked;if(window.geoWeather.current)window.geoWeather.renderCurrent();};
 document.querySelectorAll('[data-cloud-mode]').forEach(button=>button.onclick=()=>{cloudSim.enabled=button.dataset.cloudMode==='3d';if(cloudSim.enabled)playback.stop();document.querySelectorAll('[data-cloud-mode]').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});document.querySelector('#cloudControls').hidden=!cloudSim.enabled;document.querySelector('#imageControls').hidden=cloudSim.enabled;if(!cloudSim.enabled){if(!weatherStarted){weatherStarted=true;window.geoWeather.init();}else if(window.geoWeather.current)window.geoWeather.renderCurrent();}else document.querySelector('#surfaceLabel').textContent='観測風による移動 · 雲の形は模型';});
-let previous=0;function render(t){requestAnimationFrame(render);if(!ready||document.hidden)return;const dt=Math.min((t-previous)/1000,.05);previous=t;if(intro&&intro.start){const k=Math.min(1,(t-intro.start)/(INTRO.seconds*1000));const ease=x=>{const c=Math.min(1,Math.max(0,x));return c*c*(3.-2.*c);};const turned=ease(k/INTRO.turnBy),closed=ease((k-INTRO.diveFrom)/(1-INTRO.diveFrom));yaw=HOME.yaw-TURN*(1-turned);pitch=INTRO.pitch+(HOME.pitch-INTRO.pitch)*closed;zoom=INTRO.zoom*Math.pow(HOME.zoom/INTRO.zoom,closed);if(k>=1)endIntro();}if(rotating&&!intro&&pointers.size===0)yaw-=dt*.065*speed;const rect=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,1.75);const w=Math.round(rect.width*dpr),h=Math.round(rect.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}if(stormSim.active&&window.geoPlayback&&window.geoPlayback.playing){if(!stormSim.advance(dt*window.geoPlayback.hoursPerSecond,[w,h]))endSimulation(true);}if(stormSim.active)showSimStatus();gl.useProgram(program);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);gl.uniform2f(uniforms.resolution,w,h);gl.uniform2f(uniforms.watermark,watermark[0],watermark[1]);for(const [k,val] of Object.entries({yaw,pitch,zoom,mode,panels:panels?1:0,rawObservation:rawObservation?1:0,fade:fade.value(t),weatherActive:weatherReady&&weatherEnabled&&!cloudSim.enabled?1:0,detailNowOn:stormSim.active||simBack!==null?0:detailNowOn,detailPrevOn:stormSim.active||simBack!==null?0:detailPrevOn,simActive:simShown(t)}))gl.uniform1f(uniforms[k],val);gl.uniform4f(uniforms.detailBox,detailBox[0],detailBox[1],detailBox[2],detailBox[3]);gl.uniform2f(uniforms.detailWatermark,detailWatermark[0],detailWatermark[1]);gl.drawArrays(gl.TRIANGLES,0,6);cloudSim.tick(dt);cloudRenderer.draw({width:w,height:h,yaw,pitch,zoom,mode});stormRenderer.draw({width:w,height:h,yaw,pitch,zoom,time:window.geoWeather&&window.geoWeather.current&&window.geoWeather.current.time,enabled:showStorms&&!cloudSim.enabled,outlook:showOutlook&&!stormSim.active,simulated:stormSim.active?stormSim.marks():null});if(showStorms)showStormStatus();}requestAnimationFrame(render);
+let previous=0;function render(t){requestAnimationFrame(render);if(!ready||document.hidden)return;const dt=Math.min((t-previous)/1000,.05);previous=t;if(intro&&intro.start){const k=Math.min(1,(t-intro.start)/(INTRO.seconds*1000));const ease=x=>{const c=Math.min(1,Math.max(0,x));return c*c*(3.-2.*c);};const turned=ease(k/INTRO.turnBy),closed=ease((k-INTRO.diveFrom)/(1-INTRO.diveFrom));yaw=HOME.yaw-TURN*(1-turned);pitch=INTRO.pitch+(HOME.pitch-INTRO.pitch)*closed;zoom=INTRO.zoom*Math.pow(HOME.zoom/INTRO.zoom,closed);if(k>=1)endIntro();}if(rotating&&!intro&&pointers.size===0)yaw-=dt*.065*speed;const rect=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,1.75);const w=Math.round(rect.width*dpr),h=Math.round(rect.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}if(stormSim.active&&!stormSim.finished&&window.geoPlayback&&window.geoPlayback.playing){if(!stormSim.advance(dt*window.geoPlayback.hoursPerSecond,[w,h]))finishSimulation();}if(stormSim.active)showSimStatus();gl.useProgram(program);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);gl.uniform2f(uniforms.resolution,w,h);gl.uniform2f(uniforms.watermark,watermark[0],watermark[1]);for(const [k,val] of Object.entries({yaw,pitch,zoom,mode,panels:panels?1:0,rawObservation:rawObservation?1:0,fade:fade.value(t),weatherActive:weatherReady&&weatherEnabled&&!cloudSim.enabled?1:0,detailNowOn:stormSim.active||simBack!==null?0:detailNowOn,detailPrevOn:stormSim.active||simBack!==null?0:detailPrevOn,simActive:simShown(t)}))gl.uniform1f(uniforms[k],val);gl.uniform4f(uniforms.detailBox,detailBox[0],detailBox[1],detailBox[2],detailBox[3]);gl.uniform2f(uniforms.detailWatermark,detailWatermark[0],detailWatermark[1]);gl.drawArrays(gl.TRIANGLES,0,6);cloudSim.tick(dt);cloudRenderer.draw({width:w,height:h,yaw,pitch,zoom,mode});stormRenderer.draw({width:w,height:h,yaw,pitch,zoom,time:window.geoWeather&&window.geoWeather.current&&window.geoWeather.current.time,enabled:showStorms&&!cloudSim.enabled,outlook:showOutlook&&!stormSim.active,simulated:stormSim.active?stormSim.marks():null});if(showStorms)showStormStatus();}requestAnimationFrame(render);
 canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();ready=false;fail('3D表示が中断されました。ページを再読み込みしてください。');});
 }
 const pointers=new Map();const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));function setZoom(z){zoom=clamp(z,.65,8);}canvas.addEventListener('pointerdown',e=>{endIntro();pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{const old=pointers.get(e.pointerId);if(!old)return;if(pointers.size===1){yaw-=(e.clientX-old.x)*.006;pitch=clamp(pitch+(e.clientY-old.y)*.006,-1.4,1.4);}else{const other=[...pointers.entries()].find(([id])=>id!==e.pointerId)[1];const before=Math.hypot(old.x-other.x,old.y-other.y),after=Math.hypot(e.clientX-other.x,e.clientY-other.y);if(before>0)setZoom(zoom*after/before);}pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});});for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,e=>pointers.delete(e.pointerId));canvas.addEventListener('wheel',e=>{e.preventDefault();endIntro();setZoom(zoom*Math.exp(-e.deltaY*.001));},{passive:false});canvas.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-'].includes(e.key)){e.preventDefault();endIntro();}if(e.key==='ArrowLeft')yaw+=.12;if(e.key==='ArrowRight')yaw-=.12;if(e.key==='ArrowUp')pitch=clamp(pitch+.1,-1.4,1.4);if(e.key==='ArrowDown')pitch=clamp(pitch-.1,-1.4,1.4);if(e.key==='+'||e.key==='=')setZoom(zoom*1.15);if(e.key==='-')setZoom(zoom/1.15);});

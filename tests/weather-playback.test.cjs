@@ -377,4 +377,32 @@ s.test('pausing while handed over holds the scene rather than ending it', async 
   clearInterval(controller.timer);
 });
 
+// At its end, what playback handed over to stays on screen, paused, until someone asks
+// for the observations again: going back days on its own read as the weather jumping.
+s.test('when the hand-over has run its course, it waits for the button', async () => {
+  const { playback, controller } = setup();
+  await playback.prepare(true);
+  clearTimeout(playback.timer);
+  let resume = null, restarted = 0;
+  playback.onLastFrame = (time, back) => { resume = back; return true; };
+  playback.onRestart = () => { restarted++; resume(); };
+  playback.index = playback.frames.length - 1;
+  stepOnce(playback);
+  playback.step();
+  playback.finish();
+  const button = env.document.getElementById('weatherPlay');
+  assert.strictEqual(playback.playing, false);
+  assert.strictEqual(button.textContent, '↺ 観測の最初から再生');
+  const last = controller.current.time;
+  playback.step();
+  assert.strictEqual(controller.current.time, last, 'nothing moves on by itself');
+  button.onclick();
+  clearTimeout(playback.timer);
+  assert.strictEqual(restarted, 1);
+  assert.strictEqual(playback.playing, true);
+  assert.strictEqual(controller.current.time, playback.frames[0], 'the observations from the start');
+  playback.stop();
+  clearInterval(controller.timer);
+});
+
 s.run();

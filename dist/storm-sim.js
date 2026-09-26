@@ -273,12 +273,14 @@
     start({ observation, watermark, storms, model, viewport, air }) {
       // With no storm, or no model to move one, the clouds still ride the flow.
       if (!this.ready || !air) return false;
-      if (!model) storms = [];
+      // A storm that comes with its own track (a forecast it follows) needs no model.
+      if (!model) storms = storms.filter(s => s.track);
       this.viewport = viewport;
       this.air = air;
       this.airHours = 0;
       this.uploadAir();
       this.tracks = storms.slice(0, MAX_STORMS).map(s => {
+        if (s.track) return Object.assign({ from: s }, s.track);
         // A detection that hopped between systems shows up as an impossible speed; the
         // object starts no faster than any storm in the record kept up.
         const speed = Math.hypot(s.u, s.v), k = speed > MAX_START_KMH ? MAX_START_KMH / speed : 1;
@@ -293,6 +295,7 @@
       this.pass('clear', this.cloud[0]);
       this.current = 0;
       this.hours = 0;
+      this.finished = false;
       this.resolve();
       this.active = true;
       this.restore();
@@ -344,7 +347,7 @@
 
     /// Moves the scene on by some hours. Returns false once it has run its course.
     advance(hours, viewport) {
-      if (!this.active) return false;
+      if (!this.active || this.finished) return false;
       this.viewport = viewport || this.viewport;
       let left = Math.min(hours, 6);
       while (left > 1e-6) {
@@ -365,11 +368,12 @@
       }
       this.resolve();
       this.restore();
-      if (this.hours >= this.horizon) { this.active = false; return false; }
+      // At the end it stays on screen as it is, until the page takes it away.
+      if (this.hours >= this.horizon) { this.finished = true; return false; }
       return true;
     }
 
-    stop() { this.active = false; this.hours = 0; }
+    stop() { this.active = false; this.finished = false; this.hours = 0; }
 
     /// Where the storms are now and where they are going, for the marks on the globe: the
     /// path a day apart, which stays readable when zoomed in on one storm.
@@ -377,7 +381,9 @@
       if (!this.active) return [];
       return this.tracks.map(track => {
         const now = this.stormAt(track, this.hours);
-        const ahead = track.points.filter(p => p.t > this.hours + 3 && p.t % 24 === 0);
+        // On a forecast, the forecast's own hours; past it, and otherwise, a day apart.
+        const knots = new Set(track.knotHours || []), until = track.forecastHours || 0;
+        const ahead = track.points.filter(p => p.t > this.hours + 3 && (p.t <= until ? knots.has(p.t) : (p.t - until) % 24 === 0));
         return { now, ahead, ended: !now.alive };
       });
     }

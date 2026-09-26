@@ -91,6 +91,9 @@ s.test('the bundled observation is shown without any network call', async () => 
   assert.strictEqual(c.current.time, '20260916.170000');
   assert.strictEqual(c.current.saved, true);
   assert.ok(env.loads.every(u => !u.includes('api/products')), 'no product listing was requested');
+  // The hour before the automatic check starts at opening, not at 0: from 0, the first
+  // return to the page replaced the bundled observations straight away.
+  assert.strictEqual(c.lastCheck, Date.parse('2026-09-16T18:00:00Z'));
   const shown = env.document.getElementById('observationTime').textContent;
   assert.ok(shown.includes('2026/09/17') && shown.includes('02:00') && shown.includes('日本時間'),
     'timestamp is shown in Japan time: ' + shown);

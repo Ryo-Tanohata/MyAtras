@@ -10,7 +10,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const { suite } = require('./harness.cjs');
-const { TyphoonModel, betaDrift, decodeBits } = require('../dist/typhoon.js');
+const { TyphoonModel, betaDrift, decodeBits, followForecast, distanceKm } = require('../dist/typhoon.js');
 const B = require('../scripts/build-typhoon.cjs');
 const H = require('../scripts/hindcast-typhoon.cjs');
 
@@ -216,6 +216,79 @@ s.test('the bundled model, when there is one, is whole', () => {
   const run = model.run({ lat: 18, lon: 135, kt: 100, u: -15, v: 5 });
   assert.ok(run.points.length > 24, 'a typhoon east of the Philippines lasts more than a day');
   assert.ok(run.points.every(p => p.lat > 0), 'and stays north of the equator');
+});
+
+// Following an issued forecast (the Japan Meteorological Agency's). Made up in the shape
+// scripts/fetch-jma-typhoon.cjs writes: an analysis and forecast centres at 12, 24, 48
+// and 120 hours.
+const FORECAST = { points: [
+  { time: '2026-09-26T00:00:00Z', kind: 'analysis', lat: 21.5, lon: 126.8, windKt: 50, class: '台風（ＴＳ）' },
+  { time: '2026-09-26T12:00:00Z', kind: 'forecast', lat: 22.4, lon: 126.2, windKt: 60, class: '台風（ＳＴＳ）' },
+  { time: '2026-09-27T00:00:00Z', kind: 'forecast', lat: 23.3, lon: 126.0, windKt: 65, class: '台風（ＴＹ）' },
+  { time: '2026-09-28T00:00:00Z', kind: 'forecast', lat: 25.0, lon: 126.5, windKt: 70, class: '台風（ＴＹ）' },
+  { time: '2026-10-01T00:00:00Z', kind: 'forecast', lat: 31.0, lon: 133.0, windKt: 65, class: '台風（ＴＹ）' },
+] };
+const START = Date.parse('2026-09-25T20:00:00Z');   // four hours before the analysis
+
+s.test('a forecast is followed through every forecast centre, smoothly and hour by hour', () => {
+  const run = followForecast(FORECAST, START, { seen: { lat: 21.3, lon: 127.0 } });
+  assert.ok(run, 'the forecast covers the start');
+  for (const p of FORECAST.points) {
+    const h = (Date.parse(p.time) - START) / 3600000, at = run.points[h];
+    if (h >= 12) assert.ok(distanceKm(at, p) < 1, `${h} h: ${at.lat.toFixed(2)}, ${at.lon.toFixed(2)}`);
+    assert.ok(Math.abs(at.kt - p.windKt) < 1e-9);
+  }
+  // Starts where the storm was seen, and eases onto the forecast over twelve hours without
+  // overshooting it: seen a hundred kilometres south of the analysis, it never runs past it.
+  assert.ok(distanceKm(run.points[0], { lat: 21.3, lon: 127.0 }) < 1);
+  for (let t = 1; t <= 12; t++) assert.ok(run.points[t].lat >= run.points[t - 1].lat, `northward all the way, ${t} h`);
+  // No hour jumps: the path is smooth, never more than a day's worth of the fastest leg in an hour.
+  for (let i = 1; i < run.points.length; i++) assert.ok(distanceKm(run.points[i - 1], run.points[i]) < 60);
+  assert.deepStrictEqual(run.knotHours, [4, 16, 28, 52, 124]);
+  assert.strictEqual(run.forecastHours, 124);
+  assert.strictEqual(run.end.reason, 'the forecast ends', 'with no model, it ends with the forecast');
+});
+
+s.test('seen nowhere near, it starts on the way the forecast was going', () => {
+  const run = followForecast(FORECAST, START);
+  const back = run.points[0];
+  // Four hours before the analysis, back along the first twelve-hour leg.
+  assert.ok(back.lat < 21.5 && back.lon > 126.8, `${back.lat}, ${back.lon}`);
+  assert.ok(distanceKm(back, FORECAST.points[0]) < 50);
+});
+
+s.test('observations newer than the forecast start part way along it', () => {
+  const run = followForecast(FORECAST, Date.parse('2026-09-27T00:00:00Z'));
+  assert.ok(distanceKm(run.points[0], FORECAST.points[2]) < 1);
+  assert.strictEqual(run.forecastHours, 96);
+});
+
+s.test('a forecast that does not cover the start is not used', () => {
+  assert.strictEqual(followForecast(FORECAST, Date.parse('2026-09-30T20:00:00Z')), null, 'ends within 12 hours');
+  assert.strictEqual(followForecast(FORECAST, Date.parse('2026-09-24T12:00:00Z')), null, 'begins more than a day later');
+  assert.strictEqual(followForecast({ points: [FORECAST.points[0]] }, START), null);
+});
+
+s.test('past the last forecast hour a typhoon carries on by the record; a depression ends', () => {
+  const model = madeUpModel();
+  const on = followForecast(FORECAST, START, { model });
+  assert.ok(on.points.length > 125 && on.end.t > 124, `ended at ${on.end.t}`);
+  for (let i = 125; i < on.points.length; i++) assert.strictEqual(on.points[i].t, i);
+  assert.ok(distanceKm(on.points[124], on.points[125]) < 80, 'no jump where the forecast hands over');
+  const weak = { points: FORECAST.points.map((p, i) => i === 4 ? Object.assign({}, p, { class: '熱帯低気圧（ＴＤ）', windKt: 30 }) : p) };
+  const off = followForecast(weak, START, { model });
+  assert.strictEqual(off.end.t, 124);
+  assert.strictEqual(off.end.reason, 'the forecast ends');
+});
+
+s.test('a path over the date line does not swing round the earth', () => {
+  const f = { points: [
+    { time: '2026-09-26T00:00:00Z', lat: 30, lon: 178, windKt: 60, class: '台風（ＳＴＳ）' },
+    { time: '2026-09-27T00:00:00Z', lat: 33, lon: -178, windKt: 60, class: '台風（ＳＴＳ）' },
+  ] };
+  const run = followForecast(f, Date.parse('2026-09-26T00:00:00Z'));
+  for (let i = 1; i < run.points.length; i++) assert.ok(distanceKm(run.points[i - 1], run.points[i]) < 60);
+  assert.ok(Math.abs(run.points[12].lon) > 179, `half way at ${run.points[12].lon}`);
 });
 
 s.run();

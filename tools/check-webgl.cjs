@@ -586,6 +586,24 @@ async function checkSimulation(page) {
     [+t.from.lat.toFixed(1), +t.from.lon.toFixed(1), t.end.t + 'h']))`) : '';
   check(started, 'the simulation starts after the last observation', `from ${lastShown}: ${tracks}`);
   if (!started) return;
+  // Where the Japan Meteorological Agency has a forecast covering this hour, the storm
+  // follows it: through the agency's analysed centre, at its hour. With no such forecast
+  // (none published, or the observations too old for it) there is nothing to hold it to.
+  const jma = JSON.parse(await page.js(`(async () => {
+    const data = await window.GeoData.jmaTyphoon(), sim = window.geoStormSim;
+    const start = Date.parse(${JSON.stringify(lastShown)}.replace(/^(\\d{4})(\\d\\d)(\\d\\d)\\.(\\d\\d)(\\d\\d)(\\d\\d)$/, '$1-$2-$3T$4:$5:$6Z'));
+    const covering = ((data && data.storms) || []).filter(f => Typhoon.followForecast(f, start));
+    const followed = sim.tracks.filter(t => t.from.jma);
+    const off = covering.map(f => {
+      const a = f.points.find(p => p.kind === 'analysis'), h = Math.round((Date.parse(a.time) - start) / 3600000);
+      const t = followed.find(t => t.from.jma.issued === f.issued);
+      return t && h >= 0 && t.points[h] ? Math.round(Typhoon.distanceKm(t.points[h], a)) : null;
+    });
+    return JSON.stringify({ covering: covering.length, followed: followed.length, off,
+      note: document.getElementById('simulateNote').textContent.slice(0, 60) });
+  })()`));
+  check(jma.followed === jma.covering && jma.off.every(d => d !== null && d <= 5) && (!jma.covering || /気象庁の予報/.test(jma.note)),
+    jma.covering ? "the storms follow the agency's forecast" : 'no agency forecast covers these observations', JSON.stringify(jma));
   const lastObservation = await page.shot('11-simulation-start');
   await page.waitFor('window.geoStormSim.hours >= 24 || !window.geoStormSim.active', 30000).catch(() => {});
   const label = await page.js("document.getElementById('observationTime').textContent");
@@ -617,15 +635,29 @@ async function checkSimulation(page) {
   check(/"measured":6/.test(air) && JSON.parse(air).hours >= 20, 'the background flow starts from the measured motion and moves on', air);
   const marks = await page.js('window.geoStormSim.marks().filter(m => !m.ended).length');
   check(marks > 0, 'the simulated storms are marked', `${marks} alive a day on`);
-  // Played through to the end, it hands back to the observations rather than stopping -
-  // fading from the simulation to the first of them over seconds, and saying so, rather
-  // than cutting to weather days earlier.
-  const ended = await page.waitFor('!window.geoStormSim.active', 90000).then(() => true, () => false);
+  // Played through to the end, it stops there - the last simulated hour stays on screen,
+  // paused - and the play button offers the observations from the start. Going back days
+  // on its own read as the weather jumping.
+  const finished = await page.waitFor('window.geoStormSim.finished', 90000).then(() => true, () => false);
+  await sleep(1200);
+  const atEnd = await page.js(`JSON.stringify({ active: window.geoStormSim.active, hours: Math.round(window.geoStormSim.hours),
+    playing: window.geoPlayback.playing, button: document.getElementById('weatherPlay').textContent,
+    line: document.getElementById('weatherPlaybackStatus').textContent })`);
+  const hd = JSON.parse(atEnd);
+  check(finished && hd.active && !hd.playing && /観測の最初から再生/.test(hd.button) && /シミュレーションの終わり/.test(hd.line),
+    'at its end it stops and offers the observations from the start', atEnd);
+  const still = await page.js('window.geoStormSim.hours');
+  await sleep(800);
+  check(await page.js('window.geoStormSim.hours') === still, 'and nothing moves on by itself');
+  // Asked, it fades from the simulation to the first observation over seconds, saying so.
+  await page.js("document.getElementById('weatherPlay').click()");
+  await sleep(300);
   const returning = await page.js(`JSON.stringify({ shown: +window.geoSimShown().toFixed(2),
     line: document.getElementById('weatherPlaybackStatus').textContent })`);
   const r = JSON.parse(returning);
-  check(ended && r.shown > 0 && r.shown < 1 && /最初の観測へ戻っています/.test(r.line),
-    'it fades back to the first observation, saying so', returning);
+  check(r.shown > 0 && r.shown < 1 && /最初の観測へ戻っています/.test(r.line),
+    'asked, it fades back to the first observation, saying so', returning);
+  const ended = true;
   await sleep(1500);
   const back = await page.js(`JSON.stringify({ playing: window.geoPlayback.playing,
     time: document.getElementById('observationTime').textContent })`);
