@@ -117,7 +117,7 @@ class StormRenderer{
   varying float kind;varying float shade;
   vec3 toView(vec3 q){float cy=cos(yaw),sy=sin(yaw),cp=cos(pitch),sp=sin(pitch);float x=q.x*cy-q.z*sy;float z=q.x*sy+q.z*cy;return vec3(x,q.y*cp-z*sp,q.y*sp+z*cp);}
   void main(){vec3 c=toView(centre);kind=style.x;shade=style.y;float s=min(resolution.x,resolution.y)*zoom*.77;
-   float size=kind>1.5?.022:(kind>.5?.052:.016);
+   float size=kind>2.5?.052:(kind>1.5?.022:(kind>.5?.052:.016));
    gl_Position=vec4(c.xy*s/resolution,0.,1.);gl_PointSize=min(maxPoint,size*s);}`;
   // A ring for where the storm is now, a soft dot for where it has been - amber, because
   // the globe is white cloud on blue sea and neither reads as a mark. What is only
@@ -204,10 +204,27 @@ class StormRenderer{
   }
   return this.memo.ahead;
  }
- draw({width,height,yaw,pitch,zoom,time,enabled,outlook}){
+ // simulated: storms carried on past the last observation (dist/storm-sim.js). Drawn in
+ // the colour of what is only expected, hollow: a large ring where the storm is in the
+ // simulation, small ones every six hours along where it is going. The amber ring at the
+ // last observed position stays - it is where what was seen stops.
+ draw({width,height,yaw,pitch,zoom,time,enabled,outlook,simulated}){
   const gl=this.gl;
-  if(!enabled||!this.track.loaded)return 0;
-  const {points,fan}=this.marks(time,yaw,pitch,outlook);
+  const seen=enabled&&this.track.loaded?this.marks(time,yaw,pitch,outlook):{points:[],fan:[]};
+  const points=seen.points.slice(),fan=seen.fan;
+  if(simulated&&simulated.length){
+   const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+   const put=(p,kind,shade)=>{
+    const lat=p.lat*RAD,lon=p.lon*RAD,r=1.004;
+    const x=r*Math.cos(lat)*Math.sin(lon),y=r*Math.sin(lat),z=r*Math.cos(lat)*Math.cos(lon);
+    if(y*sp+(x*sy+z*cy)*cp<.02)return;
+    points.push(x,y,z,kind,shade);
+   };
+   for(const s of simulated){
+    for(const p of s.ahead)put(p,2,.8);
+    put(s.now,3,s.ended?Math.max(.2,s.now.fade):1);
+   }
+  }
   if(!points.length&&!fan.length)return 0;
   gl.useProgram(this.program);
   gl.uniform2f(this.uniforms.resolution,width,height);

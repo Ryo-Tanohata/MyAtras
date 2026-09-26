@@ -89,7 +89,10 @@ def sequence():
             raise SystemExit("%s observation times are not distinct and ordered" % product)
         bundle[product] = out
         print("  sequence %-9s %d frames %s → %s" % (product, len(out), times[0], times[-1]))
-    return script("window.GEO_WEATHER_SEQUENCE=%s;" % literal(bundle))
+    # GEO_STANDALONE says this page is the single-file export. The served page also ends
+    # up with GEO_WEATHER_SEQUENCE set - data-sources.js caches what it loaded there - so
+    # that cannot be what tells the two apart.
+    return script("window.GEO_STANDALONE=true;window.GEO_WEATHER_SEQUENCE=%s;" % literal(bundle))
 
 
 def amv():

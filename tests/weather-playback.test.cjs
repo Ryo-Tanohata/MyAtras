@@ -301,4 +301,74 @@ s.test('refreshing while playing restarts from the newly listed times', async ()
   clearInterval(controller.timer);
 });
 
+// What comes after the last observation is someone else's to show - the storm simulation.
+// Playback hands over once per loop, with the last observation still on screen, waits
+// until handed back, and then starts again from the first.
+s.test('after the last observation playback can hand over and wait', async () => {
+  const { playback, controller } = setup();
+  await playback.prepare(true);
+  clearTimeout(playback.timer);
+  const offered = [];
+  let resume = null;
+  playback.onLastFrame = (time, back) => { offered.push(time); resume = back; return true; };
+  const last = playback.frames[playback.frames.length - 1];
+  playback.index = playback.frames.length - 1;
+  assert.strictEqual(stepOnce(playback), last);
+  assert.strictEqual(offered.length, 0, 'not offered before the last observation has been shown');
+  playback.step();
+  clearTimeout(playback.timer);
+  assert.deepStrictEqual(offered, [last], 'offered once, with the last observation');
+  assert.strictEqual(controller.current.time, last, 'the last observation stays until handed back');
+  playback.step();
+  clearTimeout(playback.timer);
+  assert.strictEqual(offered.length, 1, 'a stray step while waiting does not offer again');
+  resume();
+  clearTimeout(playback.timer);
+  assert.strictEqual(controller.current.time, playback.frames[0], 'handed back, it starts from the first');
+  assert.strictEqual(offered.length, 1);
+  playback.stop();
+  clearInterval(controller.timer);
+});
+
+s.test('declining the hand-over loops as before, and pausing tells the one waiting', async () => {
+  const { playback, controller } = setup();
+  await playback.prepare(true);
+  clearTimeout(playback.timer);
+  let stopped = 0;
+  playback.onLastFrame = () => false;
+  playback.onStop = () => { stopped++; };
+  playback.index = playback.frames.length - 1;
+  stepOnce(playback);
+  assert.strictEqual(stepOnce(playback), playback.frames[0]);
+  playback.stop();
+  assert.strictEqual(stopped, 1);
+  clearInterval(controller.timer);
+});
+
+s.test('pausing while handed over holds the scene rather than ending it', async () => {
+  const { playback, controller } = setup();
+  await playback.prepare(true);
+  clearTimeout(playback.timer);
+  let resume = null, stopped = 0;
+  const held = [];
+  playback.onLastFrame = (time, back) => { resume = back; return true; };
+  playback.onStop = () => { stopped++; };
+  playback.onHold = paused => held.push(paused);
+  playback.index = playback.frames.length - 1;
+  stepOnce(playback);
+  playback.step();
+  const button = env.document.getElementById('weatherPlay');
+  button.onclick();
+  assert.strictEqual(playback.playing, false, 'paused');
+  assert.strictEqual(stopped, 0, 'not stopped: the one carrying the scene keeps it');
+  button.onclick();
+  assert.strictEqual(playback.playing, true, 'playing again');
+  assert.deepStrictEqual(held, [true, false]);
+  resume();
+  clearTimeout(playback.timer);
+  assert.strictEqual(controller.current.time, playback.frames[0], 'and handed back as before');
+  playback.stop();
+  clearInterval(controller.timer);
+});
+
 s.run();

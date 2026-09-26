@@ -1,0 +1,355 @@
+'use strict';
+// What happens after the last observation: every storm the observations found, carried on
+// by dist/typhoon.js until it dies, with the clouds moving round it.
+//
+// Step two of three. The clouds on screen are the last observation's clouds, moved by
+// three things added together:
+// - the general wind: trade winds, westerlies and polar easterlies by latitude, the same
+//   curve the Unity globe falls back on (EarthComposite.shader, ClimateWind);
+// - near each storm, the storm's own motion, so its cloud goes where it goes;
+// - the storm's spin - anticlockwise in the north, clockwise in the south - fastest a
+//   little way out from the centre and weaker further out, with a slight inflow.
+// Nobody draws the spiral bands: cloud nearer the centre is carried round faster than
+// cloud further out, and that winds whatever cloud there is into spirals. Around each
+// centre cloud builds in proportion to the storm's strength; when the storm ends that
+// stops and it thins away, and everything slowly tends to the average cloudiness of its
+// latitude.
+//
+// The observation is not pushed along frame by frame. Every resampling softens an image a
+// little, and a hundred of them a second leave only fog - the first version did exactly
+// that. What is carried along instead is, for every point, where its air was at the last
+// observation; the clouds are then read from the observation once, at that place. The
+// map of where things came from is smooth, so carrying it costs nothing visible, and the
+// cloud keeps the observation's own detail however long the scene runs. The storm's own
+// cloud, which is built rather than observed, is carried the ordinary way.
+//
+// Not an observation and not a forecast. The strength of a storm cannot be read from these
+// images (the eye is smaller than a pixel), so every storm starts at ASSUMED_KT.
+//
+// Values are held at 16 bits in two 8-bit channels: at 8 bits the slow changes round away
+// to nothing, and half-float textures cannot be counted on in a phone's browser.
+(function (root) {
+  const W = 1024, H = 512;
+  const ASSUMED_KT = 80;          // a typhoon, since strength cannot be measured here
+  const MAX_STORMS = 4;
+  const AFTER_END_HOURS = 18;     // the scene keeps running this long after the last storm ends
+  const STEP_HOURS = 0.5;         // the largest step things are moved by at once
+  const RELAX_HOURS = 120;        // how slowly the clouds tend to their latitude's average
+  const MAX_START_KMH = 45;       // a faster start is a detection hopping between systems
+
+  const VERTEX = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
+  const COMMON = `precision highp float;
+  const float PI=3.14159265359;const float KM=111.195;
+  uniform vec2 size;
+  vec2 pack(float c){c=clamp(c,0.,1.)*255.;float hi=floor(c);return vec2(hi/255.,fract(c));}
+  float unpack2(vec2 t){return t.x+t.y/255.;}
+  float unpack(vec4 t){return unpack2(t.rg);}
+  vec2 wrapUV(vec2 uv){return vec2(fract(uv.x),clamp(uv.y,0.,1.));}
+  // Four texels by hand: a packed value cannot be filtered by the hardware.
+  vec4 taps(sampler2D f,vec2 uv,out vec2 w,out vec2 a,out vec2 b,out vec2 c,out vec2 d){
+   vec2 p=uv*size-.5;vec2 i=floor(p);w=p-i;
+   a=wrapUV((i+.5)/size);b=wrapUV((i+vec2(1.,0.)+.5)/size);c=wrapUV((i+vec2(0.,1.)+.5)/size);d=wrapUV((i+1.5)/size);
+   return vec4(0.);}
+  float field(sampler2D f,vec2 uv){vec2 w,a,b,c,d;taps(f,uv,w,a,b,c,d);
+   return mix(mix(unpack(texture2D(f,a)),unpack(texture2D(f,b)),w.x),mix(unpack(texture2D(f,c)),unpack(texture2D(f,d)),w.x),w.y);}
+  // A displacement in degrees, lon in rg over +-180 and lat in ba over +-90.
+  vec2 decodeD(vec4 t){return vec2(unpack2(t.rg)*360.-180.,unpack2(t.ba)*180.-90.);}
+  vec4 encodeD(vec2 d){d.x=mod(d.x+180.,360.)-180.;return vec4(pack((d.x+180.)/360.),pack((d.y+90.)/180.));}
+  vec2 displacement(sampler2D f,vec2 uv){vec2 w,a,b,c,d;taps(f,uv,w,a,b,c,d);
+   return mix(mix(decodeD(texture2D(f,a)),decodeD(texture2D(f,b)),w.x),mix(decodeD(texture2D(f,c)),decodeD(texture2D(f,d)),w.x),w.y);}
+  // km/h east, by latitude: trade winds near 12 degrees, westerlies near 45, polar easterlies.
+  float climate(float lat){float a=abs(lat);float t=(a-12.)/10.,w=(a-45.)/13.,p=(a-75.)/8.;
+   return 3.6*(-6.*exp(-t*t)+14.*exp(-w*w)-3.*exp(-p*p));}
+  uniform vec4 storm[${MAX_STORMS}];uniform vec4 motion[${MAX_STORMS}];uniform float count;
+  // The wind at a point in km/h, and how much storm cloud is being made there.
+  vec2 wind(float lat,float lon,out float source){
+   vec2 vel=vec2(climate(lat),0.);vec2 swirl=vec2(0.);source=0.;
+   for(int i=0;i<${MAX_STORMS};i++){if(float(i)>=count)break;
+    float dlon=mod(lon-storm[i].y+540.,360.)-180.;
+    vec2 d=vec2(dlon*KM*cos(radians(lat)),(lat-storm[i].x)*KM);float r=max(length(d),1.);
+    float s=storm[i].z,R=storm[i].w;
+    vel=mix(vel,motion[i].xy,exp(-(r*r)/(900.*900.))*motion[i].z);
+    float vt=s*80.*(r<R?r/R:pow(R/r,.6));
+    float hemi=storm[i].x>=0.?1.:-1.;
+    swirl+=vt*(hemi*vec2(-d.y,d.x)/r-.22*d/r);
+    // Where its cloud is made: a dense core some 250 km across and two bands spiralling in
+    // towards it the way the winds do, anticlockwise in the north. The spiral's pitch is a
+    // typical one; the spin then winds the carried cloud on from there.
+    float turn=hemi*atan(d.y,d.x)+2.5*log(r/100.);
+    float band=pow(.5+.5*cos(2.*turn),3.)*smoothstep(120.,260.,r)*exp(-(r*r)/(650.*650.));
+    source=max(source,s*max(exp(-(r*r)/(230.*230.)),.85*band));}
+   return abs(lat)>80.?vec2(0.):vel+swirl;}
+  vec2 degreesPerHour(vec2 kmh,float lat){return vec2(kmh.x/(KM*max(.15,cos(radians(lat)))),kmh.y/KM);}`;
+
+  // The last observation's clouds, from its Mercator layout into latitude-longitude, by the
+  // same brightness curve the globe draws them with. The SSEC logo in its corner is left out.
+  const INIT = COMMON + `
+  uniform sampler2D obs;uniform vec2 watermark;
+  void main(){vec2 uv=gl_FragCoord.xy/size;float lat=uv.y*180.-90.;float c=0.;
+   if(abs(lat)<85.05){float my=.5-log(tan(PI*.25+radians(lat)*.5))/(2.*PI);
+    vec4 o=texture2D(obs,vec2(uv.x,my));
+    float mark=step(uv.x,watermark.x)*step(1.-watermark.y,my);
+    c=smoothstep(.38,.82,dot(o.rgb,vec3(.299,.587,.114)))*o.a*(1.-mark);}
+   gl_FragColor=vec4(c,c,c,1.);}`;
+
+  // The average cloudiness of each latitude, for the clouds to tend towards.
+  const BASELINE = COMMON + `
+  uniform sampler2D start;
+  void main(){float y=gl_FragCoord.y/size.y;float sum=0.;
+   for(int k=0;k<128;k++){sum+=texture2D(start,vec2((float(k)+.5)/128.,y)).r;}
+   gl_FragColor=vec4(pack(sum/128.),0.,1.);}`;
+
+  // Zero displacement: every point's air is where it is.
+  const ZERO = COMMON + `void main(){gl_FragColor=encodeD(vec2(0.));}`;
+  const CLEAR = COMMON + `void main(){gl_FragColor=vec4(0.,0.,0.,1.);}`;
+
+  // Where each point's air was at the last observation, carried on by dt hours.
+  const FLOW = COMMON + `
+  uniform sampler2D prev;uniform float dt;
+  void main(){vec2 uv=gl_FragCoord.xy/size;float lat=uv.y*180.-90.,lon=uv.x*360.-180.;
+   float source;vec2 move=degreesPerHour(wind(lat,lon,source),lat)*dt;
+   vec2 back=vec2(lon,lat)-move;
+   vec2 d=displacement(prev,vec2((back.x+180.)/360.,(back.y+90.)/180.))-move;
+   gl_FragColor=encodeD(d);}`;
+
+  // The storm's own cloud: carried the ordinary way, made near each centre, thinning after.
+  const STORM = COMMON + `
+  uniform sampler2D prev;uniform float dt;
+  void main(){vec2 uv=gl_FragCoord.xy/size;float lat=uv.y*180.-90.,lon=uv.x*360.-180.;
+   float source;vec2 move=degreesPerHour(wind(lat,lon,source),lat)*dt;
+   vec2 back=vec2(lon,lat)-move;
+   float s=field(prev,vec2((back.x+180.)/360.,(back.y+90.)/180.));
+   s*=exp(-dt/30.);
+   s+=(1.-s)*source*(1.-exp(-dt/1.5));
+   gl_FragColor=vec4(pack(s),0.,1.);}`;
+
+  // For the globe to draw: the observation read once at where each point's air came from,
+  // tending to its latitude's average, with the storm cloud over it. One 8-bit channel,
+  // filtered by the hardware.
+  const RESOLVE = COMMON + `
+  uniform sampler2D start;uniform sampler2D flow;uniform sampler2D stormCloud;uniform sampler2D baseline;uniform float relax;
+  void main(){vec2 uv=gl_FragCoord.xy/size;float lat=uv.y*180.-90.,lon=uv.x*360.-180.;
+   vec2 d=decodeD(texture2D(flow,uv));
+   vec2 from=vec2(lon,lat)+d;
+   float c=texture2D(start,wrapUV(vec2((from.x+180.)/360.,(from.y+90.)/180.))).r;
+   c=mix(c,unpack(texture2D(baseline,vec2(.5,uv.y))),relax);
+   float s=unpack(texture2D(stormCloud,uv));
+   c=1.-(1.-c)*(1.-s);
+   gl_FragColor=vec4(c,c,c,1.);}`;
+
+  class StormSimulation {
+    constructor(gl, displayUnit = 7) {
+      this.gl = gl;
+      this.displayUnit = displayUnit;
+      this.active = false;
+      this.hours = 0;
+      this.tracks = [];
+      this.ready = false;
+      this.borrowed = new Map();
+      try { this.setUp(); this.ready = true; } catch (error) { console.warn('storm simulation unavailable:', error.message); }
+    }
+
+    setUp() {
+      const gl = this.gl;
+      const compile = (type, src) => {
+        const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+        return s;
+      };
+      const program = fs => {
+        const p = gl.createProgram();
+        gl.attachShader(p, compile(gl.VERTEX_SHADER, VERTEX));
+        gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+        gl.linkProgram(p);
+        if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+        return p;
+      };
+      this.programs = { init: program(INIT), baseline: program(BASELINE), zero: program(ZERO),
+        clear: program(CLEAR), flow: program(FLOW), storm: program(STORM), resolve: program(RESOLVE) };
+      this.quad = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+      const target = (w, h, linear) => {
+        const texture = gl.createTexture();
+        gl.activeTexture(gl.TEXTURE0 + 5);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        const filter = linear ? gl.LINEAR : gl.NEAREST;
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, w > 1 ? gl.REPEAT : gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        const fb = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('framebuffer incomplete');
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        return { texture, fb, w, h };
+      };
+      this.start0 = target(W, H, true);
+      this.flow = [target(W, H, false), target(W, H, false)];
+      this.cloud = [target(W, H, false), target(W, H, false)];
+      this.baseline = target(1, H, false);
+      this.display = target(W, H, true);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.activeTexture(gl.TEXTURE0 + this.displayUnit);
+      gl.bindTexture(gl.TEXTURE_2D, this.display.texture);
+      gl.activeTexture(gl.TEXTURE0);
+    }
+
+    /// Draws one full-screen pass into a target, with the given textures on units 3 onward.
+    /// The globe keeps its own textures on 0-4 and 7 bound across frames, so every pass ends
+    /// by putting back whatever it borrowed (restore()).
+    pass(name, into, inputs, uniforms) {
+      const gl = this.gl, p = this.programs[name];
+      gl.useProgram(p);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, into.fb);
+      gl.viewport(0, 0, into.w, into.h);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
+      const a = gl.getAttribLocation(p, 'a');
+      gl.enableVertexAttribArray(a);
+      gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+      // A phone may have only eight units, so the passes use 5 and 6, which the globe leaves
+      // free, and borrow 3 and 4, putting back what was there.
+      const units = [5, 6, 3, 4];
+      Object.entries(inputs || {}).forEach(([nameOf, texture], k) => {
+        gl.activeTexture(gl.TEXTURE0 + units[k]);
+        if (units[k] < 5 && !this.borrowed.has(units[k])) this.borrowed.set(units[k], gl.getParameter(gl.TEXTURE_BINDING_2D));
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.uniform1i(gl.getUniformLocation(p, nameOf), units[k]);
+      });
+      gl.uniform2f(gl.getUniformLocation(p, 'size'), into.w, into.h);
+      for (const [k, v] of Object.entries(uniforms || {})) {
+        const loc = gl.getUniformLocation(p, k);
+        if (loc === null) continue;
+        if (Array.isArray(v) && v.length === 2) gl.uniform2f(loc, v[0], v[1]);
+        else if (v instanceof Float32Array) gl.uniform4fv(loc, v);
+        else gl.uniform1f(loc, v);
+      }
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.disableVertexAttribArray(a);
+    }
+
+    restore() {
+      const gl = this.gl;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      if (this.viewport) gl.viewport(0, 0, this.viewport[0], this.viewport[1]);
+      for (const [unit, texture] of this.borrowed) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, texture); }
+      this.borrowed.clear();
+      gl.activeTexture(gl.TEXTURE0 + this.displayUnit);
+      gl.bindTexture(gl.TEXTURE_2D, this.display.texture);
+      gl.activeTexture(gl.TEXTURE0);
+    }
+
+    /// Starts from the observation on screen. storms: [{lat, lon, u, v}] - where each was
+    /// last seen and its motion over the last twelve hours, in km/h.
+    start({ observation, watermark, storms, model, viewport }) {
+      if (!this.ready || !model || !storms.length) return false;
+      this.viewport = viewport;
+      this.tracks = storms.slice(0, MAX_STORMS).map(s => {
+        // A detection that hopped between systems shows up as an impossible speed; the
+        // object starts no faster than any storm in the record kept up.
+        const speed = Math.hypot(s.u, s.v), k = speed > MAX_START_KMH ? MAX_START_KMH / speed : 1;
+        const run = model.run({ lat: s.lat, lon: s.lon, kt: ASSUMED_KT, u: s.u * k, v: s.v * k });
+        return { from: s, points: run.points, end: run.end };
+      });
+      this.lastEnd = Math.max(...this.tracks.map(t => t.end.t));
+      this.pass('init', this.start0, { obs: observation }, { watermark });
+      this.pass('baseline', this.baseline, { start: this.start0.texture });
+      this.pass('zero', this.flow[0]);
+      this.pass('clear', this.cloud[0]);
+      this.current = 0;
+      this.hours = 0;
+      this.resolve();
+      this.active = true;
+      this.restore();
+      return true;
+    }
+
+    resolve() {
+      this.pass('resolve', this.display, { start: this.start0.texture, flow: this.flow[this.current].texture,
+        stormCloud: this.cloud[this.current].texture, baseline: this.baseline.texture },
+        { relax: 1 - Math.exp(-this.hours / RELAX_HOURS) });
+    }
+
+    /// Where a storm is at an hour of the simulation, between its hourly points; after its
+    /// end, fading where it ended.
+    stormAt(track, hours) {
+      const pts = track.points, last = pts[pts.length - 1];
+      if (hours >= last.t) {
+        const fade = Math.max(0, 1 - (hours - last.t) / 12);
+        return { lat: last.lat, lon: last.lon, kt: last.kt * fade, u: 0, v: 0, alive: false, fade };
+      }
+      const i = Math.floor(hours), f = hours - i;
+      const a = pts[i], b = pts[Math.min(i + 1, pts.length - 1)];
+      const dlon = ((b.lon - a.lon + 540) % 360) - 180;
+      return {
+        lat: a.lat + (b.lat - a.lat) * f, lon: a.lon + dlon * f, kt: a.kt + (b.kt - a.kt) * f,
+        u: dlon * 111.195 * Math.cos(a.lat * Math.PI / 180), v: (b.lat - a.lat) * 111.195,
+        alive: true, fade: 1,
+      };
+    }
+
+    uniformsAt(hours) {
+      const storm = new Float32Array(MAX_STORMS * 4), motion = new Float32Array(MAX_STORMS * 4);
+      this.tracks.forEach((track, i) => {
+        const s = this.stormAt(track, hours);
+        const strength = Math.max(0, Math.min(1, (s.kt - 34) / 66)) * s.fade;
+        storm.set([s.lat, s.lon, strength, 90], i * 4);
+        motion.set([s.u, s.v, s.alive ? 1 : s.fade, 0], i * 4);
+      });
+      return { storm, motion, count: this.tracks.length };
+    }
+
+    /// Moves the scene on by some hours. Returns false once it has run its course.
+    advance(hours, viewport) {
+      if (!this.active) return false;
+      this.viewport = viewport || this.viewport;
+      let left = Math.min(hours, 6);
+      while (left > 1e-6) {
+        const dt = Math.min(STEP_HOURS, left);
+        const u = Object.assign({ dt }, this.uniformsAt(this.hours + dt / 2));
+        const next = 1 - this.current;
+        this.pass('flow', this.flow[next], { prev: this.flow[this.current].texture }, u);
+        this.pass('storm', this.cloud[next], { prev: this.cloud[this.current].texture }, u);
+        this.current = next;
+        this.hours += dt;
+        left -= dt;
+      }
+      this.resolve();
+      this.restore();
+      if (this.hours > this.lastEnd + AFTER_END_HOURS) { this.active = false; return false; }
+      return true;
+    }
+
+    stop() { this.active = false; this.hours = 0; }
+
+    /// Where the storms are now and where they are going, for the marks on the globe: the
+    /// path a day apart, which stays readable when zoomed in on one storm.
+    marks() {
+      if (!this.active) return [];
+      return this.tracks.map(track => {
+        const now = this.stormAt(track, this.hours);
+        const ahead = track.points.filter(p => p.t > this.hours + 3 && p.t % 24 === 0);
+        return { now, ahead, ended: !now.alive };
+      });
+    }
+
+    /// The simulated cloud at a place, read back from the GPU: for checks, not for drawing.
+    sample(lat, lon, radius = 3) {
+      const gl = this.gl;
+      const x = Math.round((lon + 180) / 360 * W), y = Math.round((lat + 90) / 180 * H);
+      const size = radius * 2 + 1, buffer = new Uint8Array(size * size * 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.display.fb);
+      gl.readPixels(Math.max(0, x - radius), Math.max(0, y - radius), size, size, gl.RGBA, gl.UNSIGNED_BYTE, buffer);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      let max = 0, sum = 0;
+      for (let i = 0; i < buffer.length; i += 4) { max = Math.max(max, buffer[i]); sum += buffer[i]; }
+      return { max: max / 255, mean: sum / (buffer.length / 4) / 255 };
+    }
+  }
+
+  root.StormSimulation = StormSimulation;
+  root.StormSimulation.ASSUMED_KT = ASSUMED_KT;
+  if (typeof module !== 'undefined') module.exports = { StormSimulation, ASSUMED_KT };
+})(typeof window === 'undefined' ? globalThis : window);

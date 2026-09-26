@@ -542,6 +542,7 @@ async function checkJavaScriptGlobe(page) {
   await sleep(400);
 
   await checkCloseUp(page);
+  await checkSimulation(page);
 
   const before = await page.shot('03-before-drag');
   await page.drag(200, 420, 320, 470);
@@ -551,6 +552,81 @@ async function checkJavaScriptGlobe(page) {
   check(rotated >= 0.02, 'a touch drag rotates the globe',
     `${(rotated * 100).toFixed(1)}% of pixels differ`);
 
+}
+
+/// After the last observation, the storms found in it carried on to their end by the typhoon
+/// object, the clouds with them - and then back to the observations. Run at the fastest
+/// playback so the whole scene, some four simulated days, passes in under a minute.
+async function checkSimulation(page) {
+  const offered = await page.js("!document.getElementById('simulateToggle').hidden");
+  // The standalone export carries no typhoon model, so it must not offer one.
+  if (await page.js('!!window.GEO_STANDALONE')) {
+    check(!offered, 'the standalone page does not offer the simulation');
+    return;
+  }
+  check(offered, 'the simulation switch is offered');
+  if (!offered) return;
+  const speed = await page.js("document.getElementById('weatherPlaybackSpeed').value");
+  await page.js(`(() => {
+    const box = document.getElementById('simulateStorms');
+    box.checked = true; box.dispatchEvent(new Event('change'));
+  })()`);
+  const loaded = await page.waitFor("/観測が尽きたあと/.test(document.getElementById('simulateNote').textContent)", 20000)
+    .then(() => true, () => false);
+  check(loaded, 'the typhoon model loads', await page.js("document.getElementById('simulateNote').textContent"));
+  const lastShown = await page.js(`(() => {
+    const p = window.geoPlayback, s = document.getElementById('weatherPlaybackSpeed');
+    s.value = '9'; s.dispatchEvent(new Event('change'));
+    if (!p.playing) document.getElementById('weatherPlay').click();
+    p.index = p.frames.length - 1;
+    return p.frames[p.frames.length - 1];
+  })()`);
+  const started = await page.waitFor('window.geoStormSim.active', 30000).then(() => true, () => false);
+  const tracks = started ? await page.js(`JSON.stringify(window.geoStormSim.tracks.map(t =>
+    [+t.from.lat.toFixed(1), +t.from.lon.toFixed(1), t.end.t + 'h']))`) : '';
+  check(started, 'the simulation starts after the last observation', `from ${lastShown}: ${tracks}`);
+  if (!started) return;
+  const lastObservation = await page.shot('11-simulation-start');
+  await page.waitFor('window.geoStormSim.hours >= 24 || !window.geoStormSim.active', 30000).catch(() => {});
+  const label = await page.js("document.getElementById('observationTime').textContent");
+  check(/シミュレーション/.test(label) && /観測から/.test(label), 'the time says it is a simulation', label);
+  const status = await page.js("document.getElementById('weatherPlaybackStatus').textContent");
+  check(/予報ではありません/.test(status), 'the simulation says it is not a forecast', status);
+  const day = await page.shot('12-simulation-a-day-on');
+  const moved = png.changed(lastObservation, day);
+  check(moved >= 0.02, 'the simulated clouds move', `${(moved * 100).toFixed(1)}% of pixels differ after a day`);
+  // The observations wait while it runs: nothing else is swapped in underneath.
+  const held = await page.js(`JSON.stringify({ index: window.geoPlayback.index,
+    active: window.geoStormSim.active })`);
+  check(held === '{"index":0,"active":true}', 'the observations wait while it runs', held);
+  // Paused, it stays where it is, for as long as anyone likes to look.
+  const paused = await page.js(`new Promise(resolve => {
+    document.getElementById('weatherPlay').click();
+    const at = window.geoStormSim.hours;
+    setTimeout(() => {
+      const still = window.geoStormSim.active && window.geoStormSim.hours === at;
+      const line = document.getElementById('weatherPlaybackStatus').textContent;
+      document.getElementById('weatherPlay').click();
+      resolve(JSON.stringify({ still, line }));
+    }, 1500);
+  })`);
+  check(/"still":true/.test(paused) && /一時停止/.test(paused), 'pausing holds the simulation where it is', paused);
+  const marks = await page.js('window.geoStormSim.marks().filter(m => !m.ended).length');
+  check(marks > 0, 'the simulated storms are marked', `${marks} alive a day on`);
+  // Played through to the end, it hands back to the observations rather than stopping.
+  const ended = await page.waitFor('!window.geoStormSim.active', 90000).then(() => true, () => false);
+  await sleep(1500);
+  const back = await page.js(`JSON.stringify({ playing: window.geoPlayback.playing,
+    time: document.getElementById('observationTime').textContent })`);
+  check(ended && /"playing":true/.test(back) && !/シミュレーション/.test(back),
+    'the observations play again after it', back);
+  await page.js(`(() => {
+    const box = document.getElementById('simulateStorms');
+    box.checked = false; box.dispatchEvent(new Event('change'));
+    const s = document.getElementById('weatherPlaybackSpeed');
+    s.value = ${JSON.stringify(speed)}; s.dispatchEvent(new Event('change'));
+  })()`);
+  await sleep(800);
 }
 
 async function checkUnityBuild(page) {
