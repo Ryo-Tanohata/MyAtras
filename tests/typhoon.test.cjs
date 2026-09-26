@@ -114,7 +114,8 @@ s.test('an object it has no record for ends rather than guessing', () => {
   assert.strictEqual(run.points.length, 1);
 });
 
-/// A best-track file in IBTrACS's shape, for storms that follow the made-up world.
+/// A best-track file in IBTrACS's shape, for storms that follow the made-up world. Three-
+/// hourly, as the real file is: anything that counts points instead of hours breaks here.
 function madeUpTracks(count = 400) {
   const head = 'SID,SEASON,NUMBER,BASIN,SUBBASIN,NAME,ISO_TIME,NATURE,LAT,LON,WMO_WIND,DIST2LAND,USA_WIND';
   const lines = [head, ' ,Year, , , , , , ,degrees_north,degrees_east,kts,km,kts'];
@@ -124,17 +125,17 @@ function madeUpTracks(count = 400) {
     const season = 1980 + (n % 40);
     let lat = 10 + rand() * 8, lon = 135 + rand() * 25, kt = 40 + rand() * 20, east = false;
     const t0 = Date.UTC(season, 7, 1) + n * 3600000;
-    for (let k = 0; k < 40; k++) {
+    for (let k = 0; k < 80; k++) {
       const a = Math.abs(lat);
       let u = a < 22 ? -18 : a < 28 ? -18 + (a - 22) * 3.5 : 6, v = a < 22 ? 6 : 12;
       if (east || u > 2) { east = true; u = 25; v = 12; }
-      const nature = k > 30 ? 'ET' : 'TS';
-      const time = new Date(t0 + k * 6 * 3600000).toISOString().replace('T', ' ').slice(0, 19);
+      const nature = k > 60 ? 'ET' : 'TS';
+      const time = new Date(t0 + k * 3 * 3600000).toISOString().replace('T', ' ').slice(0, 19);
       lines.push([`S${n}`, season, n, 'WP', 'MM', 'X', time, nature, lat.toFixed(2), lon.toFixed(2),
         '', 500, kt.toFixed(0)].join(','));
-      lat += v * 6 / 111.195;
-      lon += u * 6 / (111.195 * Math.cos(lat * Math.PI / 180));
-      kt += a < 20 ? 6 : -8;
+      lat += v * 3 / 111.195;
+      lon += u * 3 / (111.195 * Math.cos(lat * Math.PI / 180));
+      kt += a < 20 ? 3 : -4;
     }
   }
   return lines.join('\n') + '\n';

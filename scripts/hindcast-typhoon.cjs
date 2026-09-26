@@ -66,11 +66,20 @@ function starts(storms, fromSeason, toSeason) {
   for (const s of storms) {
     if (s.season < fromSeason || s.season > toSeason) continue;
     let last = -Infinity;
-    for (let i = 2; i < s.points.length; i++) {
-      const p = s.points[i], before = s.points[i - 2];
+    for (let i = 1; i < s.points.length; i++) {
+      const p = s.points[i];
       if (p.nature !== 'TS' || !(p.kt >= START_KT)) continue;
-      const hours = (p.t - before.t) / 3600000;
-      if (hours < 11 || hours > 13) continue;
+      // Twelve hours back by time, not by count: IBTrACS gives a point every three
+      // hours (the six-hourly analyses with interpolated ones between), so counting two
+      // back lands six hours earlier and every case was thrown out.
+      const target = p.t - 12 * 3600000;
+      let before = null;
+      for (let j = i - 1; j >= 0; j--) {
+        if (s.points[j].t > target + 3600000) continue;
+        if (Math.abs(s.points[j].t - target) <= 3600000) before = s.points[j];
+        break;
+      }
+      if (!before) continue;
       if (p.t - last < 12 * 3600000) continue;
       last = p.t;
       const vel = B.velocity(before, p);
@@ -156,6 +165,12 @@ function main() {
   const chosenTau = +Object.entries(tauScores).sort((a, b) => a[1] - b[1])[0][0];
 
   const cases = starts(storms, TEST_FROM, latest);
+  // A backtest with nothing in it must fail loudly rather than write an empty score -
+  // the first run on the real archive did exactly that, and committed it.
+  if (!tune.length || !cases.length) {
+    console.error(`no cases to score: ${tune.length} to tune on, ${cases.length} to test on`);
+    process.exit(1);
+  }
   const runs = {
     model: positions(cases, c => trained.run(c.init, { tau: chosenTau })),
     climatology: positions(cases, c => trained.run(c.init, { tau: 0, regime: 'all' })),
