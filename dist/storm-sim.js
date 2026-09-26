@@ -155,9 +155,14 @@
    gl_FragColor=vec4(c,c,c,1.);}`;
 
   class StormSimulation {
-    constructor(gl, displayUnit = 7) {
+    /// The hour on screen is bound to displayUnit, the hour before it to previousUnit, for
+    /// the globe to dissolve from one to the other as it does between observations.
+    constructor(gl, displayUnit = 7, previousUnit = 6) {
       this.gl = gl;
       this.displayUnit = displayUnit;
+      this.previousUnit = previousUnit;
+      this.shownHours = 0;
+      this.shownAt = 0;
       this.active = false;
       this.hours = 0;
       this.tracks = [];
@@ -207,7 +212,11 @@
       this.flow = [target(W, H, false), target(W, H, false)];
       this.cloud = [target(W, H, false), target(W, H, false)];
       this.baseline = target(1, H, false);
-      this.display = target(W, H, true);
+      // Two, the hour on screen and the one before: the scene is shown an hour at a time,
+      // like the observations before it, not moving on every frame. Computed continuously
+      // and shown in steps, it keeps the rhythm of what it follows on from.
+      this.shown = [target(W, H, true), target(W, H, true)];
+      this.showing = 0;
       this.background = gl.createTexture();
       gl.activeTexture(gl.TEXTURE0 + 6);
       gl.bindTexture(gl.TEXTURE_2D, this.background);
@@ -217,6 +226,16 @@
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.bindShown();
+    }
+
+    get display() { return this.shown[this.showing]; }
+    get previous() { return this.shown[1 - this.showing]; }
+
+    bindShown() {
+      const gl = this.gl;
+      gl.activeTexture(gl.TEXTURE0 + this.previousUnit);
+      gl.bindTexture(gl.TEXTURE_2D, this.previous.texture);
       gl.activeTexture(gl.TEXTURE0 + this.displayUnit);
       gl.bindTexture(gl.TEXTURE_2D, this.display.texture);
       gl.activeTexture(gl.TEXTURE0);
@@ -261,9 +280,7 @@
       if (this.viewport) gl.viewport(0, 0, this.viewport[0], this.viewport[1]);
       for (const [unit, texture] of this.borrowed) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, texture); }
       this.borrowed.clear();
-      gl.activeTexture(gl.TEXTURE0 + this.displayUnit);
-      gl.bindTexture(gl.TEXTURE_2D, this.display.texture);
-      gl.activeTexture(gl.TEXTURE0);
+      this.bindShown();
     }
 
     /// Starts from the observation on screen. storms: [{lat, lon, u, v}] - where each was
@@ -296,7 +313,10 @@
       this.current = 0;
       this.hours = 0;
       this.finished = false;
-      this.resolve();
+      // Hour 0 on both, so the first hour has nothing to dissolve from but itself.
+      this.resolve(0);
+      this.resolve(0);
+      this.shownAt = 0;
       this.active = true;
       this.restore();
       return true;
@@ -310,10 +330,15 @@
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 128, 64, gl.RGBA, gl.UNSIGNED_BYTE, this.airPixels);
     }
 
-    resolve() {
-      this.pass('resolve', this.display, { start: this.start0.texture, flow: this.flow[this.current].texture,
+    /// Puts the hour just reached on screen, the one before it becoming the previous.
+    resolve(now = (typeof performance !== 'undefined' ? performance.now() : Date.now())) {
+      const into = this.previous;
+      this.pass('resolve', into, { start: this.start0.texture, flow: this.flow[this.current].texture,
         stormCloud: this.cloud[this.current].texture, baseline: this.baseline.texture },
-        { relax: 1 - Math.exp(-this.hours / RELAX_HOURS) });
+        { relax: 1 - Math.exp(-Math.floor(this.hours) / RELAX_HOURS) });
+      this.showing = 1 - this.showing;
+      this.shownHours = Math.floor(this.hours + 1e-6);
+      this.shownAt = now;
     }
 
     /// Where a storm is at an hour of the simulation, between its hourly points; after its
@@ -366,7 +391,8 @@
           this.uploadAir();
         }
       }
-      this.resolve();
+      // A new hour reached is put on screen; within an hour nothing on screen changes.
+      if (Math.floor(this.hours + 1e-6) > this.shownHours) this.resolve();
       this.restore();
       // At the end it stays on screen as it is, until the page takes it away.
       if (this.hours >= this.horizon) { this.finished = true; return false; }
@@ -380,10 +406,11 @@
     marks() {
       if (!this.active) return [];
       return this.tracks.map(track => {
-        const now = this.stormAt(track, this.hours);
+        // The hour on screen, like the clouds: marks step with them.
+        const now = this.stormAt(track, this.shownHours);
         // On a forecast, the forecast's own hours; past it, and otherwise, a day apart.
         const knots = new Set(track.knotHours || []), until = track.forecastHours || 0;
-        const ahead = track.points.filter(p => p.t > this.hours + 3 && (p.t <= until ? knots.has(p.t) : (p.t - until) % 24 === 0));
+        const ahead = track.points.filter(p => p.t > this.shownHours + 3 && (p.t <= until ? knots.has(p.t) : (p.t - until) % 24 === 0));
         return { now, ahead, ended: !now.alive };
       });
     }

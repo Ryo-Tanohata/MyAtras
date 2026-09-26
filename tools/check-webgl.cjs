@@ -615,6 +615,30 @@ async function checkSimulation(page) {
   const day = await page.shot('12-simulation-a-day-on');
   const moved = png.changed(lastObservation, day);
   check(moved >= 0.02, 'the simulated clouds move', `${(moved * 100).toFixed(1)}% of pixels differ after a day`);
+  // Shown an hour at a time, like the observations it follows: within one simulated hour
+  // the clouds on screen do not change, and each new hour dissolves in.
+  // Watched at the slowest speed, an hour lasting two thirds of a second, so that each
+  // hour is seen several times over.
+  const steps = JSON.parse(await page.js(`new Promise(resolve => {
+    const sim = window.geoStormSim, out = [], t0 = performance.now(), sel = document.getElementById('weatherPlaybackSpeed');
+    const was = sel.value; sel.value = '1.5'; sel.dispatchEvent(new Event('change'));
+    const probe = () => sim.sample(35, 135, 3).mean + '|' + sim.sample(25, 127, 3).mean;
+    (function tick() {
+      out.push({ h: sim.shownHours, raw: sim.hours, f: window.geoSimFade(), px: probe() });
+      if (performance.now() - t0 < 4000) setTimeout(tick, 30);
+      else { sel.value = was; sel.dispatchEvent(new Event('change')); resolve(JSON.stringify(out)); }
+    })();
+  })`));
+  const byHour = new Map();
+  let changedWithin = 0, between = 0;
+  for (const st of steps) {
+    if (byHour.has(st.h) && byHour.get(st.h) !== st.px) changedWithin++;
+    if (!byHour.has(st.h)) byHour.set(st.h, st.px);
+    if (st.f > 0 && st.f < 1) between++;
+  }
+  check(changedWithin === 0 && byHour.size >= 2 && steps.length >= 2 * byHour.size && between > 0 && steps.every(st => Number.isInteger(st.h) && st.h <= st.raw + 1e-6),
+    'the simulation steps an hour at a time, dissolving like the observations',
+    `${byHour.size} hours shown over ${steps.length} samples, ${changedWithin} changes within an hour, ${between} caught mid-dissolve`);
   // The observations wait while it runs: nothing else is swapped in underneath.
   const held = await page.js(`JSON.stringify({ index: window.geoPlayback.index,
     active: window.geoStormSim.active })`);
