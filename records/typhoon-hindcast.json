@@ -1,0 +1,169 @@
+{
+ "method": "scripts/hindcast-typhoon.cjs: model built from 1980-2014, started on every storm of 2015-2026 at every twelfth hour at 64 kt or more, compared with the best track. Errors in km are great-circle distance at each lead, on the cases every method still had.",
+ "trainedOn": [
+  1980,
+  2014
+ ],
+ "testedOn": [
+  2015,
+  2026
+ ],
+ "starts": 0,
+ "tauScores48h": {
+  "0": null,
+  "6": null,
+  "12": null,
+  "24": null,
+  "48": null
+ },
+ "chosenTau": 0,
+ "track": [
+  {
+   "lead": 12,
+   "n": 0,
+   "cases": 0,
+   "aliveTruth": null,
+   "aliveModel": null,
+   "model": {
+    "median": null,
+    "mean": null
+   },
+   "climatology": {
+    "median": null,
+    "mean": null
+   },
+   "persistence": {
+    "median": null,
+    "mean": null
+   }
+  },
+  {
+   "lead": 24,
+   "n": 0,
+   "cases": 0,
+   "aliveTruth": null,
+   "aliveModel": null,
+   "model": {
+    "median": null,
+    "mean": null
+   },
+   "climatology": {
+    "median": null,
+    "mean": null
+   },
+   "persistence": {
+    "median": null,
+    "mean": null
+   }
+  },
+  {
+   "lead": 48,
+   "n": 0,
+   "cases": 0,
+   "aliveTruth": null,
+   "aliveModel": null,
+   "model": {
+    "median": null,
+    "mean": null
+   },
+   "climatology": {
+    "median": null,
+    "mean": null
+   },
+   "persistence": {
+    "median": null,
+    "mean": null
+   }
+  },
+  {
+   "lead": 72,
+   "n": 0,
+   "cases": 0,
+   "aliveTruth": null,
+   "aliveModel": null,
+   "model": {
+    "median": null,
+    "mean": null
+   },
+   "climatology": {
+    "median": null,
+    "mean": null
+   },
+   "persistence": {
+    "median": null,
+    "mean": null
+   }
+  },
+  {
+   "lead": 96,
+   "n": 0,
+   "cases": 0,
+   "aliveTruth": null,
+   "aliveModel": null,
+   "model": {
+    "median": null,
+    "mean": null
+   },
+   "climatology": {
+    "median": null,
+    "mean": null
+   },
+   "persistence": {
+    "median": null,
+    "mean": null
+   }
+  },
+  {
+   "lead": 120,
+   "n": 0,
+   "cases": 0,
+   "aliveTruth": null,
+   "aliveModel": null,
+   "model": {
+    "median": null,
+    "mean": null
+   },
+   "climatology": {
+    "median": null,
+    "mean": null
+   },
+   "persistence": {
+    "median": null,
+    "mean": null
+   }
+  }
+ ],
+ "lifetime": {
+  "n": 0,
+  "medianAbsErrorH": null,
+  "medianBiasH": null,
+  "constantBaselineAbsErrorH": null,
+  "typicalRemainingH": null
+ },
+ "intensity": [
+  {
+   "lead": 24,
+   "n": 0,
+   "modelMAE": null,
+   "persistenceMAE": null
+  },
+  {
+   "lead": 48,
+   "n": 0,
+   "modelMAE": null,
+   "persistenceMAE": null
+  },
+  {
+   "lead": 72,
+   "n": 0,
+   "modelMAE": null,
+   "persistenceMAE": null
+  }
+ ],
+ "plausibility": {
+  "crossedEquator": 0,
+  "recurvedModel": 0,
+  "recurvedTruth": 0,
+  "westwardStarts": 0
+ }
+}
