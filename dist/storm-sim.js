@@ -1,31 +1,34 @@
 'use strict';
-// What happens after the last observation: every storm the observations found, carried on
-// by dist/typhoon.js until it dies, with the clouds moving round it.
+// What happens after the last observation: the clouds carried on by the background flow,
+// and each typhoon the Japan Meteorological Agency forecasts carried along its forecast.
 //
-// Steps two and three of three. The clouds on screen are the last observation's clouds,
-// moved by three things added together:
+// Everything on screen is the last observation's own cloud, moved; nothing is drawn
+// that was not observed. Two things move it:
 // - the background flow (dist/background-flow.js): the motion the observations last
 //   showed, carried on by the vorticity equation so troughs and ridges travel and
-//   meander. Without it - with the typical circulation by latitude alone, as step two
-//   had it - every cloud in the westerlies was drawn out into an east-west streak;
-// - near each storm, the storm's own motion, so its cloud goes where it goes;
-// - the storm's spin - anticlockwise in the north, clockwise in the south - fastest a
-//   little way out from the centre and weaker further out, with a slight inflow.
-// Around each centre cloud builds in proportion to the storm's strength: a dense core and
-// two spiral bands of a typical pitch. The spin alone was meant to make the bands - cloud
-// nearer the centre goes round faster - but cloud that is built evenly has no pattern to
-// wind, and the first try showed only a small white dot. The spin winds the bands on,
-// and the observed cloud near the storm with them. When the storm ends the cloud stops
-// being made and thins away, and everything slowly tends to the average cloudiness of
-// its latitude.
+//   meander. Without it - with the typical circulation by latitude alone - every cloud in
+//   the westerlies was drawn out into an east-west streak;
+// - each typhoon: the cloud around it in the last observation, some 650 km across, is
+//   lifted as it is and carried along the storm's path, turning slowly the way the storm
+//   turns. Past its forecast, as it dies, it is drawn out ahead along its path and fades
+//   into whatever the flow has brought there.
+//
+// Until 2026-09-26 the typhoon's cloud was built instead - a dense core and two spiral
+// bands in proportion to its strength, wound on by a spin reaching 900 km out - and the
+// clouds tended to their latitude's average. Within a day the storm was a smooth white
+// disc three times the size of the observed one, its spin combed the clouds around into
+// rings, and the average laid a pale veil over clear sea: nothing like the observations
+// it followed, and the user found it unpleasant to watch.
 //
 // The observation is not pushed along frame by frame. Every resampling softens an image a
 // little, and a hundred of them a second leave only fog - the first version did exactly
 // that. What is carried along instead is, for every point, where its air was at the last
 // observation; the clouds are then read from the observation once, at that place. The
 // map of where things came from is smooth, so carrying it costs nothing visible, and the
-// cloud keeps the observation's own detail however long the scene runs. The storm's own
-// cloud, which is built rather than observed, is carried the ordinary way.
+// cloud keeps the observation's own detail however long the scene runs. Where that map
+// has been sheared out - a patch of the observation drawn into a streak many times longer
+// than it is wide - the cloud thins away, as a cloud stretched that far does, rather than
+// staying on as a combed streak.
 //
 // Not an observation and not a forecast. The strength of a storm cannot be read from these
 // images (the eye is smaller than a pixel), so every storm starts at ASSUMED_KT.
@@ -43,10 +46,16 @@
   const HORIZON_HOURS = 120;
   const MAX_HOURS = 240;
   const STEP_HOURS = 0.5;         // the largest step things are moved by at once
-  const RELAX_HOURS = 240;        // how slowly the clouds tend to their latitude's average
   const MAX_START_KMH = 45;       // a faster start is a detection hopping between systems
   const FLOW_STEP_HOURS = 2;      // how often the background flow is moved on
   const FLICKER = { amp: 0.55, cell: 1.8, tau: 1.5, birth: 0.05 };
+  // A typhoon's own cloud: taken whole out to PATCH_INNER km from its centre, blended out
+  // by PATCH_OUTER, and turned SPIN_DEG_PER_HOUR at full strength (a 100 kt storm).
+  const PATCH = { inner: 350, outer: 650 };
+  const SPIN_DEG_PER_HOUR = 6;
+  // Sheared this many times longer than wide, carried cloud starts to thin, and is gone by
+  // the second. See RESOLVE.
+  const STREAK = { from: 6, to: 14 };
 
   const VERTEX = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
   const COMMON = `precision highp float;
@@ -78,30 +87,7 @@
    a.y=clamp(a.y,.5/s.y,1.-.5/s.y);b.y=a.y;c.y=clamp(c.y,.5/s.y,1.-.5/s.y);d.y=c.y;
    return mix(mix(decodeW(texture2D(background,a)),decodeW(texture2D(background,b)),w.x),
               mix(decodeW(texture2D(background,c)),decodeW(texture2D(background,d)),w.x),w.y);}
-  uniform vec4 storm[${MAX_STORMS}];uniform vec4 motion[${MAX_STORMS}];uniform float count;
-  // The wind at a point in km/h, and how much storm cloud is being made there.
-  vec2 wind(float lat,float lon,out float source){
-   vec2 vel=backgroundWind(lat,lon);vec2 swirl=vec2(0.);source=0.;
-   for(int i=0;i<${MAX_STORMS};i++){if(float(i)>=count)break;
-    float dlon=mod(lon-storm[i].y+540.,360.)-180.;
-    vec2 d=vec2(dlon*KM*cos(radians(lat)),(lat-storm[i].x)*KM);float r=max(length(d),1.);
-    float s=storm[i].z,R=storm[i].w;
-    vel=mix(vel,motion[i].xy,exp(-(r*r)/(900.*900.))*motion[i].z);
-    float vt=s*80.*(r<R?r/R:pow(R/r,.6));
-    float hemi=storm[i].x>=0.?1.:-1.;
-    swirl+=vt*(hemi*vec2(-d.y,d.x)/r-.22*d/r);
-    // Where its cloud is made: a dense core some 250 km across and two bands spiralling in
-    // towards it the way the winds do, anticlockwise in the north. The spiral's pitch is a
-    // typical one; the spin then winds the carried cloud on from there.
-    float turn=hemi*atan(d.y,d.x)+2.5*log(r/100.);
-    float band=pow(.5+.5*cos(2.*turn),3.)*smoothstep(120.,260.,r)*exp(-(r*r)/(650.*650.));
-    // A storm dying past its forecast (w, 0..1) loses its bands, and its dense cloud is
-    // drawn out ahead of it along its path, the way recurving storms end in a streak.
-    float st=motion[i].w;vec2 dir=length(motion[i].xy)>1.?normalize(motion[i].xy):vec2(0.,1.);
-    vec2 e=d-dir*st*250.;
-    float re=length(vec2(dot(e,dir)/(1.+2.5*st),(dir.x*e.y-dir.y*e.x)/(1.+.3*st)));
-    source=max(source,s*max(exp(-(re*re)/(230.*230.)),.85*band*(1.-st)));}
-   return abs(lat)>80.?vec2(0.):vel+swirl;}
+  vec2 wind(float lat,float lon){return abs(lat)>80.?vec2(0.):backgroundWind(lat,lon);}
   vec2 degreesPerHour(vec2 kmh,float lat){return vec2(kmh.x/(KM*max(.15,cos(radians(lat)))),kmh.y/KM);}`;
 
   // The last observation's clouds, from its Mercator layout into latitude-longitude, by the
@@ -115,52 +101,46 @@
     c=smoothstep(.38,.82,dot(o.rgb,vec3(.299,.587,.114)))*o.a*(1.-mark);}
    gl_FragColor=vec4(c,c,c,1.);}`;
 
-  // The average cloudiness of each latitude, for the clouds to tend towards.
-  const BASELINE = COMMON + `
-  uniform sampler2D start;
-  void main(){float y=gl_FragCoord.y/size.y;float sum=0.;
-   for(int k=0;k<128;k++){sum+=texture2D(start,vec2((float(k)+.5)/128.,y)).r;}
-   gl_FragColor=vec4(pack(sum/128.),0.,1.);}`;
-
   // Zero displacement: every point's air is where it is.
   const ZERO = COMMON + `void main(){gl_FragColor=encodeD(vec2(0.));}`;
-  const CLEAR = COMMON + `void main(){gl_FragColor=vec4(0.,0.,0.,1.);}`;
 
   // Where each point's air was at the last observation, carried on by dt hours.
   const FLOW = COMMON + `
   uniform sampler2D prev;uniform float dt;
   void main(){vec2 uv=gl_FragCoord.xy/size;float lat=uv.y*180.-90.,lon=uv.x*360.-180.;
-   float source;vec2 move=degreesPerHour(wind(lat,lon,source),lat)*dt;
+   vec2 move=degreesPerHour(wind(lat,lon),lat)*dt;
    vec2 back=vec2(lon,lat)-move;
    vec2 d=displacement(prev,vec2((back.x+180.)/360.,(back.y+90.)/180.))-move;
    gl_FragColor=encodeD(d);}`;
 
-  // The storm's own cloud: carried the ordinary way, made near each centre, thinning after.
-  const STORM = COMMON + `
-  uniform sampler2D prev;uniform float dt;
-  void main(){vec2 uv=gl_FragCoord.xy/size;float lat=uv.y*180.-90.,lon=uv.x*360.-180.;
-   float source;vec2 move=degreesPerHour(wind(lat,lon,source),lat)*dt;
-   vec2 back=vec2(lon,lat)-move;
-   float s=field(prev,vec2((back.x+180.)/360.,(back.y+90.)/180.));
-   s*=exp(-dt/30.);
-   s+=(1.-s)*source*(1.-exp(-dt/1.5));
-   gl_FragColor=vec4(pack(s),0.,1.);}`;
-
   // For the globe to draw: the observation read once at where each point's air came from,
-  // tending to its latitude's average, with the storm cloud over it. One 8-bit channel,
-  // filtered by the hardware.
+  // thinned where that has been sheared into a streak, flickering, and each typhoon's own
+  // observed cloud carried with it. One 8-bit channel, filtered by the hardware.
   const RESOLVE = COMMON + `
-  uniform sampler2D start;uniform sampler2D flow;uniform sampler2D stormCloud;uniform sampler2D baseline;uniform float relax;
+  uniform sampler2D start;uniform sampler2D flow;
+  uniform vec4 storm[${MAX_STORMS}];uniform vec4 motion[${MAX_STORMS}];uniform vec4 origin[${MAX_STORMS}];uniform float count;
+  uniform float patchInner,patchOuter,streakFrom,streakTo;
   uniform float hour,flickerAmp,flickerCell,flickerTau,flickerBirth;
   float hash(vec3 p){p=fract(p*.3183099+vec3(.1,.2,.3));p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
   float vnoise(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);
    return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
               mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
+  float observed(vec2 ll){return texture2D(start,wrapUV(vec2((ll.x+180.)/360.,(ll.y+90.)/180.))).r;}
+  // Where the neighbouring point's air came from, in km east and north of this one's.
+  vec2 fromKm(vec2 uv,vec2 here){vec2 f=vec2(uv.x*360.-180.,uv.y*180.-90.)+decodeD(texture2D(flow,wrapUV(uv)));
+   vec2 g=f-here;g.x=mod(g.x+180.,360.)-180.;return vec2(g.x*KM*cos(radians(here.y)),g.y*KM);}
   void main(){vec2 uv=gl_FragCoord.xy/size;float lat=uv.y*180.-90.,lon=uv.x*360.-180.;
    vec2 d=decodeD(texture2D(flow,uv));
    vec2 from=vec2(lon,lat)+d;
-   float c=texture2D(start,wrapUV(vec2((from.x+180.)/360.,(from.y+90.)/180.))).r;
-   c=mix(c,unpack(texture2D(baseline,vec2(.5,uv.y))),relax);
+   float c=observed(from);
+   // How far the flow has sheared the observation here: the ratio of the longest to the
+   // shortest stretch of a small circle of it (singular values of the map's Jacobian).
+   if(abs(lat)<75.){vec2 px=1./size;
+    vec2 ex=fromKm(uv+vec2(px.x,0.),from)/(px.x*360.*KM*cos(radians(lat)));
+    vec2 ey=fromKm(uv+vec2(0.,px.y),from)/(px.y*180.*KM);
+    float a=dot(ex,ex),b=dot(ex,ey),e=dot(ey,ey);float h=sqrt(max(0.,(a-e)*(a-e)*.25+b*b));
+    float ratio=sqrt(max(1e-6,(a+e)*.5+h)/max(1e-6,(a+e)*.5-h));
+    c*=1.-smoothstep(streakFrom,streakTo,ratio);}
    // The flicker: cloud edges grown and eaten away a little every hour, and a little
    // cloud come and gone in the clear, as real cloud does and cloud only carried does
    // not. Drawn on where the air came from, so it moves with the cloud, and changing
@@ -168,9 +148,22 @@
    // detail match the observations', not a model of any weather.
    vec2 q=vec2(from.x*cos(radians(from.y)),from.y)/flickerCell;float t=hour/flickerTau;
    float n=(vnoise(vec3(q,t))*.6+vnoise(vec3(q*2.3+17.,t*1.4+5.))*.4)*2.-1.;
+   // Each typhoon: its own cloud as last observed around origin.xy, turned by origin.z,
+   // set down around where it is now. Past its forecast (motion.w, 0..1) it is drawn out
+   // ahead along its path and fades into what lies beneath.
+   for(int i=0;i<${MAX_STORMS};i++){if(float(i)>=count)break;
+    float dl=mod(lon-storm[i].y+540.,360.)-180.;
+    vec2 k=vec2(dl*KM*cos(radians(lat)),(lat-storm[i].x)*KM);
+    float st=motion[i].w;vec2 dir=length(motion[i].xy)>1.?normalize(motion[i].xy):vec2(0.,1.);
+    vec2 e=k-dir*st*250.;
+    vec2 rel=dir*(dot(e,dir)/(1.+2.5*st))+vec2(-dir.y,dir.x)*((dir.x*e.y-dir.y*e.x)/(1.+.3*st));
+    float w=(1.-smoothstep(patchInner,patchOuter,length(rel)))*motion[i].z*(1.-st);
+    if(w<=0.)continue;
+    float hemi=origin[i].x>=0.?1.:-1.,ang=-hemi*origin[i].z;
+    vec2 src=vec2(cos(ang)*rel.x-sin(ang)*rel.y,sin(ang)*rel.x+cos(ang)*rel.y);
+    vec2 at=vec2(origin[i].y+src.x/(KM*max(.15,cos(radians(origin[i].x)))),origin[i].x+src.y/KM);
+    c=mix(c,observed(at)*(1.-.3*st),w);}
    c=clamp(c+flickerAmp*n*(4.*c*(1.-c)+flickerBirth),0.,1.);
-   float s=unpack(texture2D(stormCloud,uv));
-   c=1.-(1.-c)*(1.-s);
    gl_FragColor=vec4(c,c,c,1.);}`;
 
   class StormSimulation {
@@ -185,6 +178,7 @@
       // See RESOLVE. Amplitude, cell size in degrees, correlation time in hours, and how
       // much of it reaches clear sky; chosen by scripts measuring the observations.
       this.flicker = Object.assign({}, FLICKER);
+      this.streak = Object.assign({}, STREAK);
       this.active = false;
       this.hours = 0;
       this.tracks = [];
@@ -208,8 +202,7 @@
         if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
         return p;
       };
-      this.programs = { init: program(INIT), baseline: program(BASELINE), zero: program(ZERO),
-        clear: program(CLEAR), flow: program(FLOW), storm: program(STORM), resolve: program(RESOLVE) };
+      this.programs = { init: program(INIT), zero: program(ZERO), flow: program(FLOW), resolve: program(RESOLVE) };
       this.quad = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
@@ -232,8 +225,6 @@
       };
       this.start0 = target(W, H, true);
       this.flow = [target(W, H, false), target(W, H, false)];
-      this.cloud = [target(W, H, false), target(W, H, false)];
-      this.baseline = target(1, H, false);
       // Two, the hour on screen and the one before: the scene is shown an hour at a time,
       // like the observations before it, not moving on every frame. Computed continuously
       // and shown in steps, it keeps the rhythm of what it follows on from.
@@ -326,12 +317,15 @@
         const run = model.run({ lat: s.lat, lon: s.lon, kt: ASSUMED_KT, u: s.u * k, v: s.v * k });
         return { from: s, points: run.points, end: run.end };
       });
+      // How far each storm's cloud has turned by each hour: by its strength that hour.
+      for (const t of this.tracks) {
+        t.spin = [0];
+        for (let h = 1; h < t.points.length; h++) t.spin.push(t.spin[h - 1] + SPIN_DEG_PER_HOUR * Math.PI / 180 * this.strengthOf(t, t.points[h - 1]));
+      }
       this.lastEnd = this.tracks.length ? Math.max(...this.tracks.map(t => t.end.t)) : 0;
       this.horizon = Math.min(MAX_HOURS, Math.max(HORIZON_HOURS, this.lastEnd + AFTER_END_HOURS));
       this.pass('init', this.start0, { obs: observation }, { watermark });
-      this.pass('baseline', this.baseline, { start: this.start0.texture });
       this.pass('zero', this.flow[0]);
-      this.pass('clear', this.cloud[0]);
       this.current = 0;
       this.hours = 0;
       this.finished = false;
@@ -356,10 +350,11 @@
     resolve(now = (typeof performance !== 'undefined' ? performance.now() : Date.now())) {
       const into = this.previous;
       const f = this.flicker;
-      this.pass('resolve', into, { start: this.start0.texture, flow: this.flow[this.current].texture,
-        stormCloud: this.cloud[this.current].texture, baseline: this.baseline.texture },
-        { relax: 1 - Math.exp(-Math.floor(this.hours) / RELAX_HOURS), hour: Math.floor(this.hours + 1e-6),
-          flickerAmp: f.amp, flickerCell: f.cell, flickerTau: f.tau, flickerBirth: f.birth });
+      const hour = Math.floor(this.hours + 1e-6);
+      this.pass('resolve', into, { start: this.start0.texture, flow: this.flow[this.current].texture },
+        Object.assign(this.uniformsAt(hour), { hour, patchInner: PATCH.inner, patchOuter: PATCH.outer,
+          streakFrom: this.streak.from, streakTo: this.streak.to,
+          flickerAmp: f.amp, flickerCell: f.cell, flickerTau: f.tau, flickerBirth: f.birth }));
       this.showing = 1 - this.showing;
       this.shownHours = Math.floor(this.hours + 1e-6);
       this.shownAt = now;
@@ -383,20 +378,29 @@
       };
     }
 
+    /// How strong a storm is, 0 at 34 kt to 1 at 100 kt. While dying past the forecast it
+    /// weakens from how strong it was when the forecast stopped all the way to nothing,
+    /// rather than dropping out once below a typhoon.
+    strengthOf(track, p) {
+      const at = track.points[track.forecastHours] || track.points[0];
+      return p.decay > 0 ? Math.max(0, Math.min(1, (at.kt - 34) / 66)) * (1 - p.decay)
+        : Math.max(0, Math.min(1, (p.kt - 34) / 66));
+    }
+
+    /// Each storm's centre and strength, its motion, how far past its forecast it is, and
+    /// where its cloud was last observed and how far that has turned.
     uniformsAt(hours) {
       const storm = new Float32Array(MAX_STORMS * 4), motion = new Float32Array(MAX_STORMS * 4);
+      const origin = new Float32Array(MAX_STORMS * 4);
       this.tracks.forEach((track, i) => {
-        const s = this.stormAt(track, hours);
-        // While dying past the forecast it weakens from how strong it was when the forecast
-        // stopped, all the way to nothing, rather than dropping out once below a typhoon.
-        const at = track.points[track.forecastHours] || track.points[0];
-        const strength = s.decay > 0
-          ? Math.max(0, Math.min(1, (at.kt - 34) / 66)) * (1 - s.decay) * s.fade
-          : Math.max(0, Math.min(1, (s.kt - 34) / 66)) * s.fade;
-        storm.set([s.lat, s.lon, strength, 90], i * 4);
+        const s = this.stormAt(track, hours), p0 = track.points[0];
+        const h = Math.max(0, Math.min(track.spin.length - 1, hours)), k = Math.floor(h);
+        const spin = track.spin[k] + ((track.spin[k + 1] ?? track.spin[k]) - track.spin[k]) * (h - k);
+        storm.set([s.lat, s.lon, this.strengthOf(track, s) * s.fade, 0], i * 4);
         motion.set([s.u, s.v, s.alive ? 1 : s.fade, s.decay], i * 4);
+        origin.set([p0.lat, p0.lon, spin, 0], i * 4);
       });
-      return { storm, motion, count: this.tracks.length };
+      return { storm, motion, origin, count: this.tracks.length };
     }
 
     /// Moves the scene on by some hours. Returns false once it has run its course.
@@ -406,11 +410,8 @@
       let left = Math.min(hours, 6);
       while (left > 1e-6) {
         const dt = Math.min(STEP_HOURS, left);
-        const u = Object.assign({ dt }, this.uniformsAt(this.hours + dt / 2));
         const next = 1 - this.current;
-        const air = this.background;
-        this.pass('flow', this.flow[next], { prev: this.flow[this.current].texture, background: air }, u);
-        this.pass('storm', this.cloud[next], { prev: this.cloud[this.current].texture, background: air }, u);
+        this.pass('flow', this.flow[next], { prev: this.flow[this.current].texture, background: this.background }, { dt });
         this.current = next;
         this.hours += dt;
         left -= dt;

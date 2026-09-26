@@ -654,12 +654,36 @@ async function checkSimulation(page) {
   check(past.every(p => !p.typhoon || (p.hours === 36 && p.poleward > 0 && p.east > 0 && p.kt[1] === 0)),
     past.length ? 'past the forecast a typhoon goes on north-east and dies' : 'no forecast to go on from', JSON.stringify(past));
   const lastObservation = await page.shot('11-simulation-start');
+  // Cloud on the simulation's grid, for comparing it with where it started: the mean near
+  // a place, how much is bright there, and over the world between 60S and 60N how much
+  // is cloud and how much a thin veil.
+  await page.js(`window.__simCloud = (lat0, lon0) => { const sim = window.geoStormSim, gl = sim.gl, W = 1024, H = 512, b = new Uint8Array(W * H * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, sim.display.fb); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, b); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    let near = 0, nearN = 0, bright = 0, cover = 0, veil = 0, n = 0;
+    for (let y = 0; y < H; y++) { const lat = (y + .5) / H * 180 - 90; if (Math.abs(lat) > 60) continue;
+      for (let x = 0; x < W; x++) { const lon = (x + .5) / W * 360 - 180, c = b[(y * W + x) * 4] / 255;
+        cover += c; n++; if (c > .08 && c < .35) veil++;
+        if (lat0 === undefined) continue;
+        const dl = ((lon - lon0 + 540) % 360) - 180, dx = dl * 111.195 * Math.cos(lat * Math.PI / 180), dy = (lat - lat0) * 111.195;
+        const r = Math.hypot(dx, dy); if (r < 600) { near += c; nearN++; } if (r < 900 && c > .6) bright++; } }
+    return { near: nearN ? near / nearN : 0, bright, cover: cover / n, veil: veil / n }; };
+    window.__simStart = (() => { const t = window.geoStormSim.tracks.find(t => t.from.jma);
+      return Object.assign({ track: !!t }, window.__simCloud(t && t.points[0].lat, t && t.points[0].lon)); })();`);
   await page.waitFor('window.geoStormSim.hours >= 24 || !window.geoStormSim.active', 30000).catch(() => {});
   const label = await page.js("document.getElementById('observationTime').textContent");
   check(/シミュレーション/.test(label) && /観測から/.test(label), 'the time says it is a simulation', label);
   const status = await page.js("document.getElementById('weatherPlaybackStatus').textContent");
   check(/予報ではありません/.test(status), 'the simulation says it is not a forecast', status);
   const day = await page.shot('12-simulation-a-day-on');
+  // A typhoon's cloud is the cloud observed around it, carried: a day on it is about as
+  // much cloud, and as little of it bright, as when it was last seen - not a disc built
+  // to its strength, which had tripled in size by now.
+  const carried = JSON.parse(await page.js(`(() => { const sim = window.geoStormSim, t = sim.tracks.find(t => t.from.jma);
+    if (!t) return JSON.stringify({ track: false });
+    const now = sim.stormAt(t, sim.shownHours), a = window.__simStart, b = window.__simCloud(now.lat, now.lon);
+    return JSON.stringify({ track: true, hours: sim.shownHours, near: [+a.near.toFixed(3), +b.near.toFixed(3)], bright: [a.bright, b.bright] }); })()`));
+  check(!carried.track || (carried.near[1] >= carried.near[0] * .6 && carried.near[1] <= carried.near[0] * 1.5 && carried.bright[1] <= carried.bright[0] * 2 + 50),
+    carried.track ? "a typhoon's cloud is its observed cloud, carried" : 'no typhoon to carry', JSON.stringify(carried));
   const moved = png.changed(lastObservation, day);
   check(moved >= 0.02, 'the simulated clouds move', `${(moved * 100).toFixed(1)}% of pixels differ after a day`);
   // Shown an hour at a time, like the observations it follows: within one simulated hour
@@ -749,6 +773,11 @@ async function checkSimulation(page) {
     playing: window.geoPlayback.playing, button: document.getElementById('weatherPlay').textContent,
     line: document.getElementById('weatherPlaybackStatus').textContent })`);
   const hd = JSON.parse(atEnd);
+  // Nor does a veil build up over clear sky: the clouds once tended to their latitude's
+  // average, and by the end a pale haze lay over the sea.
+  const veil = JSON.parse(await page.js(`JSON.stringify({ start: +window.__simStart.veil.toFixed(3), end: +window.__simCloud().veil.toFixed(3),
+    cover: [+window.__simStart.cover.toFixed(3), +window.__simCloud().cover.toFixed(3)] })`));
+  check(veil.end <= veil.start * 1.15 + .005, 'no veil builds up over the clear sky', JSON.stringify(veil));
   check(finished && hd.active && !hd.playing && /観測の最初から再生/.test(hd.button) && /シミュレーションの終わり/.test(hd.line),
     'at its end it stops and offers the observations from the start', atEnd);
   const still = await page.js('window.geoStormSim.hours');
