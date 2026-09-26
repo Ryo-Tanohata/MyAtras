@@ -10,6 +10,10 @@
 // threshold is applied to each of them separately before they are mixed - no
 // interpolated brightness is ever passed through the cloud threshold and shown as if
 // it had been observed. The timestamp keeps naming the observation being faded to.
+//
+// The same dissolve, slowed down, carries playback from the last observation back to the
+// first, days earlier. Cut, that swap read as the weather jumping; faded over seconds, with
+// the page saying where it is going, it reads as what it is - going back.
 (function (root) {
   class ObservationFade {
     constructor(duration = 380) {
@@ -17,26 +21,32 @@
       this.enabled = true;
       this.started = 0;
       this.progress = 1;
+      this.length = duration;
     }
 
     // Begin a dissolve towards the observation that has just been loaded. The first
     // observation has nothing to fade from, so callers pass hasPrevious = false and
     // it appears at once.
-    start(now, hasPrevious = true) {
+    // duration, when given, holds for this dissolve only: the slow return to the first
+    // observation, which smoothing switched off does not skip - it is not a dissolve
+    // between neighbours but the page going back, and cut it is a jump.
+    start(now, hasPrevious = true, duration) {
       this.started = now;
-      this.progress = this.enabled && hasPrevious && this.duration > 0 ? 0 : 1;
+      const back = duration > 0;
+      this.length = back ? duration : this.duration;
+      this.progress = (this.enabled || back) && hasPrevious && this.length > 0 ? 0 : 1;
       return this.progress;
     }
 
     // How far the dissolve has run, 0 (previous observation) to 1 (the new one).
     value(now) {
       if (this.progress >= 1) return 1;
-      if (!this.enabled || this.duration <= 0) {
+      if (this.length <= 0) {
         this.progress = 1;
         return 1;
       }
       const elapsed = now - this.started;
-      this.progress = elapsed <= 0 ? 0 : Math.min(1, elapsed / this.duration);
+      this.progress = elapsed <= 0 ? 0 : Math.min(1, elapsed / this.length);
       return this.progress;
     }
 

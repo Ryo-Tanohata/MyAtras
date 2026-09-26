@@ -564,16 +564,16 @@ async function checkSimulation(page) {
     check(!offered, 'the standalone page does not offer the simulation');
     return;
   }
-  check(offered, 'the simulation switch is offered');
+  check(offered && await page.js("document.getElementById('simulateStorms').checked"), 'the simulation switch is offered, and on');
   if (!offered) return;
   const speed = await page.js("document.getElementById('weatherPlaybackSpeed').value");
   await page.js(`(() => {
     const box = document.getElementById('simulateStorms');
     box.checked = true; box.dispatchEvent(new Event('change'));
   })()`);
-  const loaded = await page.waitFor("/観測が尽きたあと/.test(document.getElementById('simulateNote').textContent)", 20000)
+  const loaded = await page.waitFor("/最後の観測のあとも/.test(document.getElementById('simulateNote').textContent)", 20000)
     .then(() => true, () => false);
-  check(loaded, 'the typhoon model loads', await page.js("document.getElementById('simulateNote').textContent"));
+  check(loaded, 'the simulation data loads', await page.js("document.getElementById('simulateNote').textContent"));
   const lastShown = await page.js(`(() => {
     const p = window.geoPlayback, s = document.getElementById('weatherPlaybackSpeed');
     s.value = '9'; s.dispatchEvent(new Event('change'));
@@ -617,16 +617,38 @@ async function checkSimulation(page) {
   check(/"measured":6/.test(air) && JSON.parse(air).hours >= 20, 'the background flow starts from the measured motion and moves on', air);
   const marks = await page.js('window.geoStormSim.marks().filter(m => !m.ended).length');
   check(marks > 0, 'the simulated storms are marked', `${marks} alive a day on`);
-  // Played through to the end, it hands back to the observations rather than stopping.
+  // Played through to the end, it hands back to the observations rather than stopping -
+  // fading from the simulation to the first of them over seconds, and saying so, rather
+  // than cutting to weather days earlier.
   const ended = await page.waitFor('!window.geoStormSim.active', 90000).then(() => true, () => false);
+  const returning = await page.js(`JSON.stringify({ shown: +window.geoSimShown().toFixed(2),
+    line: document.getElementById('weatherPlaybackStatus').textContent })`);
+  const r = JSON.parse(returning);
+  check(ended && r.shown > 0 && r.shown < 1 && /最初の観測へ戻っています/.test(r.line),
+    'it fades back to the first observation, saying so', returning);
   await sleep(1500);
   const back = await page.js(`JSON.stringify({ playing: window.geoPlayback.playing,
     time: document.getElementById('observationTime').textContent })`);
   check(ended && /"playing":true/.test(back) && !/シミュレーション/.test(back),
     'the observations play again after it', back);
+  // With the simulation off, the loop still goes back slowly: the last observation fades
+  // into the first over seconds, with the page saying where it is going. Waited for once
+  // the return from the simulation has finished, whose words are the same.
+  await page.waitFor("!/最初の観測へ戻っています/.test(document.getElementById('weatherPlaybackStatus').textContent)", 10000).catch(() => {});
   await page.js(`(() => {
     const box = document.getElementById('simulateStorms');
     box.checked = false; box.dispatchEvent(new Event('change'));
+    const p = window.geoPlayback; p.index = p.frames.length - 1;
+  })()`);
+  const wrapped = await page.waitFor("/最初の観測へ戻っています/.test(document.getElementById('weatherPlaybackStatus').textContent)", 20000)
+    .then(() => true, () => false);
+  const fading = await page.js(`JSON.stringify({ length: window.geoFade.length, progress: +window.geoFade.progress.toFixed(2),
+    sim: window.geoStormSim.active })`);
+  const f = JSON.parse(fading);
+  check(wrapped && f.length >= 3000 && f.progress < 1 && !f.sim, 'without it, the loop fades back rather than cutting', fading);
+  await page.js(`(() => {
+    const box = document.getElementById('simulateStorms');
+    box.checked = true; box.dispatchEvent(new Event('change'));
     const s = document.getElementById('weatherPlaybackSpeed');
     s.value = ${JSON.stringify(speed)}; s.dispatchEvent(new Event('change'));
   })()`);

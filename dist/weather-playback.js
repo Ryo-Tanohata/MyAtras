@@ -2,10 +2,13 @@
 // Time-lapse of distinct SSEC observations. No image is translated or rotated to fake wind.
 (function(root){
 function bundledSequence(){try{return root.GeoData?root.GeoData.sequence():Promise.resolve(root.GEO_WEATHER_SEQUENCE||null);}catch(error){return Promise.resolve(null);}}
+// How long the globe takes to fade from the last observation (or the simulation after it)
+// back to the first.
+const RETURN_MS=3000;
 function parseStamp(value){const m=/^(\d{4})(\d{2})(\d{2})[._](\d{2})(\d{2})(\d{2})$/.exec(value||'');return m?Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]):null;}
 class WeatherPlayback{
  constructor(controller){this.controller=controller;this.playing=false;this.loading=false;this.timer=null;this.abort=null;this.hoursPerSecond=4.5;this.frames=[];this.index=0;this.generation=0;this.button=document.getElementById('weatherPlay');this.label=document.getElementById('weatherPlaybackStatus');this.button.onclick=()=>this.waiting?this.hold(this.playing):this.playing||this.loading?this.stop():this.prepare();document.getElementById('weatherPlaybackSpeed').onchange=e=>{this.hoursPerSecond=Number(e.target.value)||4.5;};this.frameCount=24;const frames=document.getElementById('weatherFrames');if(frames){this.frameCount=Number(frames.value)||24;frames.addEventListener('change',e=>{this.frameCount=Number(e.target.value)||24;this.stop();});}for(const id of ['weatherProduct','weatherTime'])document.getElementById(id).addEventListener('change',()=>this.stop());const refresh=controller.refresh.bind(controller);controller.refresh=async()=>{const wasPlaying=this.playing;this.stop();await refresh();if(wasPlaying&&!root.geoClouds?.enabled)await this.prepare();};}
- stop(){if(this.onStop)this.onStop();this.wrapped=false;this.waiting=false;this.generation++;this.abort?.abort();clearTimeout(this.timer);this.playing=false;this.loading=false;this.button.textContent='▶ 雲の流れを再生';this.button.setAttribute('aria-pressed','false');if(this.frames.length)this.label.textContent='一時停止 · '+(this.index+1)+' / '+this.frames.length+' 観測';}
+ stop(){if(this.onStop)this.onStop();this.wrapped=false;this.waiting=false;this.handedBack=false;this.generation++;this.abort?.abort();clearTimeout(this.timer);this.playing=false;this.loading=false;this.button.textContent='▶ 雲の流れを再生';this.button.setAttribute('aria-pressed','false');if(this.frames.length)this.label.textContent='一時停止 · '+(this.index+1)+' / '+this.frames.length+' 観測';}
  // While something else carries the scene on, the button pauses and resumes it where it
  // is rather than starting the observations again; onHold tells it which.
  hold(paused){this.playing=!paused;this.button.textContent=paused?'▶ 雲の流れを再生':'❚❚ 一時停止';this.button.setAttribute('aria-pressed',String(!paused));if(this.onHold)this.onHold(paused);}
@@ -17,8 +20,13 @@ class WeatherPlayback{
  // After the last frame has been held, something else may carry the scene on before the
  // first frame comes round again (dist/storm-sim.js): onLastFrame(time, resume) returns
  // true to take over and calls resume() when it is done.
- step(){if(!this.playing||this.waiting)return;if(document.hidden){this.timer=setTimeout(()=>this.step(),this.interval);return;}if(this.index===0&&this.wrapped&&this.onLastFrame){const last=this.frames[this.frames.length-1];this.wrapped=false;if(this.onLastFrame(last,()=>{if(!this.waiting)return;this.waiting=false;this.step();})){this.waiting=true;return;}}const c=this.controller,time=this.frames[this.index];const entry=c.cache.get(this.product+':'+time);if(!entry){this.stop();this.label.textContent='再生用の観測を再取得してください。';return;}this.continuing=this.index!==0;c.onImage(entry.image,time);this.continuing=false;c.onEnabled(true);c.current={product:this.product,time,saved:entry.saved};c.renderCurrent();c.done();this.label.textContent=`実観測を連続再生 · ${this.index+1} / ${this.frames.length} 時刻${this.index===0?' · 先頭から':''}`;const isLast=this.index===this.frames.length-1;this.index=(this.index+1)%this.frames.length;this.wrapped=isLast;this.timer=setTimeout(()=>this.step(),isLast?this.interval*2:this.interval);}
+ // Coming back to the first frame is a jump of days, not an hour: the page says so, the
+ // first frame is held for RETURN_MS while the globe fades to it (returning is true while
+ // it is shown), and only then does playback go on.
+ step(){if(!this.playing||this.waiting)return;if(document.hidden){this.timer=setTimeout(()=>this.step(),this.interval);return;}const back=this.index===0&&this.wrapped,handedBack=this.handedBack;this.wrapped=false;this.handedBack=false;if(back&&!handedBack&&this.onLastFrame){const last=this.frames[this.frames.length-1];if(this.onLastFrame(last,()=>{if(!this.waiting)return;this.waiting=false;this.wrapped=true;this.handedBack=true;this.step();})){this.waiting=true;return;}}this.returning=back;const c=this.controller,time=this.frames[this.index];const entry=c.cache.get(this.product+':'+time);if(!entry){this.stop();this.label.textContent='再生用の観測を再取得してください。';return;}this.continuing=this.index!==0;c.onImage(entry.image,time);this.continuing=false;this.returning=false;c.onEnabled(true);c.current={product:this.product,time,saved:entry.saved};c.renderCurrent();c.done();this.label.textContent=back?`最初の観測へ戻っています · 最後の観測より約${this.spanDays()}日前の観測です`:`実観測を連続再生 · ${this.index+1} / ${this.frames.length} 時刻${this.index===0?' · 先頭から':''}`;const isLast=this.index===this.frames.length-1;this.index=(this.index+1)%this.frames.length;this.wrapped=isLast;this.timer=setTimeout(()=>this.step(),back?Math.max(RETURN_MS,this.interval):isLast?this.interval*2:this.interval);}
+ // Days from the first frame to the last, to the half day.
+ spanDays(){const a=parseStamp(this.frames[0]),b=parseStamp(this.frames[this.frames.length-1]);return a&&b?Math.max(.5,Math.round((b-a)/43200000)/2):1;}
 }
-root.WeatherPlayback=WeatherPlayback;
+WeatherPlayback.RETURN_MS=RETURN_MS;root.WeatherPlayback=WeatherPlayback;
 if(typeof module!=='undefined')module.exports={WeatherPlayback};
 })(typeof window==='undefined'?globalThis:window);

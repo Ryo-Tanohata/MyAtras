@@ -36,9 +36,14 @@
   const W = 1024, H = 512;
   const ASSUMED_KT = 80;          // a typhoon, since strength cannot be measured here
   const MAX_STORMS = 4;
-  const AFTER_END_HOURS = 18;     // the scene keeps running this long after the last storm ends
+  const AFTER_END_HOURS = 18;     // the scene keeps running at least this long after the last storm ends
+  // How long the scene runs, storms or none: long enough that the clouds are seen to move
+  // on from the last observation rather than being snatched back to the first. Longer, and
+  // the clouds carried this far lose the observation's detail (see RELAX_HOURS).
+  const HORIZON_HOURS = 120;
+  const MAX_HOURS = 240;
   const STEP_HOURS = 0.5;         // the largest step things are moved by at once
-  const RELAX_HOURS = 120;        // how slowly the clouds tend to their latitude's average
+  const RELAX_HOURS = 240;        // how slowly the clouds tend to their latitude's average
   const MAX_START_KMH = 45;       // a faster start is a detection hopping between systems
   const FLOW_STEP_HOURS = 2;      // how often the background flow is moved on
 
@@ -266,7 +271,9 @@
     /// BarotropicFlow already started, from the measured motion or, without it, the
     /// typical circulation.
     start({ observation, watermark, storms, model, viewport, air }) {
-      if (!this.ready || !model || !storms.length || !air) return false;
+      // With no storm, or no model to move one, the clouds still ride the flow.
+      if (!this.ready || !air) return false;
+      if (!model) storms = [];
       this.viewport = viewport;
       this.air = air;
       this.airHours = 0;
@@ -278,7 +285,8 @@
         const run = model.run({ lat: s.lat, lon: s.lon, kt: ASSUMED_KT, u: s.u * k, v: s.v * k });
         return { from: s, points: run.points, end: run.end };
       });
-      this.lastEnd = Math.max(...this.tracks.map(t => t.end.t));
+      this.lastEnd = this.tracks.length ? Math.max(...this.tracks.map(t => t.end.t)) : 0;
+      this.horizon = Math.min(MAX_HOURS, Math.max(HORIZON_HOURS, this.lastEnd + AFTER_END_HOURS));
       this.pass('init', this.start0, { obs: observation }, { watermark });
       this.pass('baseline', this.baseline, { start: this.start0.texture });
       this.pass('zero', this.flow[0]);
@@ -357,7 +365,7 @@
       }
       this.resolve();
       this.restore();
-      if (this.hours > this.lastEnd + AFTER_END_HOURS) { this.active = false; return false; }
+      if (this.hours >= this.horizon) { this.active = false; return false; }
       return true;
     }
 

@@ -68,7 +68,7 @@ const vs=`attribute vec2 a;varying vec2 v;void main(){v=a;gl_Position=vec4(a,0.,
 // watermark region is drawn from the observation so the SSEC logo stays visible.
 const fs=`precision highp float;varying vec2 v;uniform sampler2D earth;uniform sampler2D weather;uniform sampler2D weatherPrev;uniform float fade;uniform float weatherActive;uniform vec2 resolution;uniform float yaw,pitch,zoom,mode,panels,rawObservation;uniform vec2 watermark;uniform sampler2D detailNow,detailPrev;uniform float detailNowOn,detailPrevOn;uniform vec4 detailBox;uniform vec2 detailWatermark;uniform sampler2D simCloud;uniform float simActive;
 const float PI=3.14159265359;
-void main(){vec2 p=v*resolution/min(resolution.x,resolution.y);p/=zoom*.77;float rr=dot(p,p);if(rr>1.){float halo=exp(-(sqrt(rr)-1.)*25.)*.11;gl_FragColor=vec4(.25,.55,.75,halo);return;}float z=sqrt(1.-rr);vec3 n=vec3(p.x,p.y,z);float cp=cos(pitch),sp=sin(pitch);vec3 q=vec3(n.x,n.y*cp+n.z*sp,-n.y*sp+n.z*cp);float cy=cos(yaw),sy=sin(yaw);q=vec3(q.x*cy+q.z*sy,q.y,-q.x*sy+q.z*cy);vec2 uv=vec2(atan(q.x,q.z)/(2.*PI)+.5,.5-asin(clamp(q.y,-1.,1.))/PI);vec3 color=texture2D(earth,uv).rgb;color=pow(color,vec3(.85));if(weatherActive>.5){float lat=(.5-uv.y)*PI;float limit=1.48442223;if(abs(lat)<limit){float my=.5-log(tan(PI*.25+lat*.5))/(2.*PI);vec4 observed=texture2D(weather,vec2(uv.x,my));vec4 earlier=texture2D(weatherPrev,vec2(uv.x,my));vec2 du=vec2((uv.x-detailBox.x)/max(detailBox.y-detailBox.x,1e-6),(my-detailBox.z)/max(detailBox.w-detailBox.z,1e-6));float within=step(0.,du.x)*step(du.x,1.)*step(0.,du.y)*step(du.y,1.);float near=min(min(du.x,1.-du.x),min(du.y,1.-du.y));float close=within*smoothstep(0.,.02,near);float closeNow=close*detailNowOn,closeWas=close*detailPrevOn;observed=mix(observed,texture2D(detailNow,du),closeNow);earlier=mix(earlier,texture2D(detailPrev,du),closeWas);if(rawObservation>.5&&simActive<.5){vec3 now=mix(vec3(.075,.10,.13),observed.rgb,observed.a);vec3 was=mix(vec3(.075,.10,.13),earlier.rgb,earlier.a);color=mix(was,now,fade);}else{float cloudNow=smoothstep(.38,.82,dot(observed.rgb,vec3(.299,.587,.114)))*observed.a;float cloudWas=smoothstep(.38,.82,dot(earlier.rgb,vec3(.299,.587,.114)))*earlier.a;float cloud=mix(cloudWas,cloudNow,fade);vec3 white=vec3(.95,.97,1.);if(simActive>.5){cloud=texture2D(simCloud,vec2(uv.x,1.-uv.y)).r;white=mix(white,vec3(.74,.64,.98),.3);}vec3 composite=mix(color,white,cloud);float mark=step(uv.x,watermark.x)*step(1.-watermark.y,my);mark=max(mark,closeNow*step(du.x,detailWatermark.x)*step(1.-detailWatermark.y,du.y));color=mix(composite,mix(color,observed.rgb,observed.a),mark);}}else if(rawObservation>.5){color=vec3(.075,.10,.13);}}float lum=.83+.17*z;if(mode>.5){float sun=dot(n,normalize(vec3(-.8,.45,.6)));lum=.06+.94*smoothstep(-.12,.3,sun);}float rows=90.;float cols=max(8.,floor(180.*sin(uv.y*PI)));vec2 cell=fract(vec2(uv.x*cols,uv.y*rows));float seam=min(min(cell.x,1.-cell.x),min(cell.y,1.-cell.y));float grid=mix(1.,smoothstep(.015,.065,seam)*.25+.75,panels);color*=lum*grid;float rim=pow(1.-z,3.)*.20;color+=vec3(.12,.35,.5)*rim;gl_FragColor=vec4(color,1.);}`;
+void main(){vec2 p=v*resolution/min(resolution.x,resolution.y);p/=zoom*.77;float rr=dot(p,p);if(rr>1.){float halo=exp(-(sqrt(rr)-1.)*25.)*.11;gl_FragColor=vec4(.25,.55,.75,halo);return;}float z=sqrt(1.-rr);vec3 n=vec3(p.x,p.y,z);float cp=cos(pitch),sp=sin(pitch);vec3 q=vec3(n.x,n.y*cp+n.z*sp,-n.y*sp+n.z*cp);float cy=cos(yaw),sy=sin(yaw);q=vec3(q.x*cy+q.z*sy,q.y,-q.x*sy+q.z*cy);vec2 uv=vec2(atan(q.x,q.z)/(2.*PI)+.5,.5-asin(clamp(q.y,-1.,1.))/PI);vec3 color=texture2D(earth,uv).rgb;color=pow(color,vec3(.85));if(weatherActive>.5){float lat=(.5-uv.y)*PI;float limit=1.48442223;if(abs(lat)<limit){float my=.5-log(tan(PI*.25+lat*.5))/(2.*PI);vec4 observed=texture2D(weather,vec2(uv.x,my));vec4 earlier=texture2D(weatherPrev,vec2(uv.x,my));vec2 du=vec2((uv.x-detailBox.x)/max(detailBox.y-detailBox.x,1e-6),(my-detailBox.z)/max(detailBox.w-detailBox.z,1e-6));float within=step(0.,du.x)*step(du.x,1.)*step(0.,du.y)*step(du.y,1.);float near=min(min(du.x,1.-du.x),min(du.y,1.-du.y));float close=within*smoothstep(0.,.02,near);float closeNow=close*detailNowOn,closeWas=close*detailPrevOn;observed=mix(observed,texture2D(detailNow,du),closeNow);earlier=mix(earlier,texture2D(detailPrev,du),closeWas);if(rawObservation>.5&&simActive<=0.){vec3 now=mix(vec3(.075,.10,.13),observed.rgb,observed.a);vec3 was=mix(vec3(.075,.10,.13),earlier.rgb,earlier.a);color=mix(was,now,fade);}else{float cloudNow=smoothstep(.38,.82,dot(observed.rgb,vec3(.299,.587,.114)))*observed.a;float cloudWas=smoothstep(.38,.82,dot(earlier.rgb,vec3(.299,.587,.114)))*earlier.a;float cloud=mix(cloudWas,cloudNow,fade);vec3 white=vec3(.95,.97,1.);if(simActive>0.){cloud=mix(cloud,texture2D(simCloud,vec2(uv.x,1.-uv.y)).r,simActive);white=mix(white,vec3(.74,.64,.98),.3*simActive);}vec3 composite=mix(color,white,cloud);float mark=step(uv.x,watermark.x)*step(1.-watermark.y,my);mark=max(mark,closeNow*step(du.x,detailWatermark.x)*step(1.-detailWatermark.y,du.y));color=mix(composite,mix(color,observed.rgb,observed.a),mark);}}else if(rawObservation>.5){color=vec3(.075,.10,.13);}}float lum=.83+.17*z;if(mode>.5){float sun=dot(n,normalize(vec3(-.8,.45,.6)));lum=.06+.94*smoothstep(-.12,.3,sun);}float rows=90.;float cols=max(8.,floor(180.*sin(uv.y*PI)));vec2 cell=fract(vec2(uv.x*cols,uv.y*rows));float seam=min(min(cell.x,1.-cell.x),min(cell.y,1.-cell.y));float grid=mix(1.,smoothstep(.015,.065,seam)*.25+.75,panels);color*=lum*grid;float rim=pow(1.-z,3.)*.20;color+=vec3(.12,.35,.5)*rim;gl_FragColor=vec4(color,1.);}`;
 function shader(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
 const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,vs));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fs));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error('link');gl.useProgram(program);
 const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);const a=gl.getAttribLocation(program,'a');gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);const uniforms={};for(const k of ['resolution','yaw','pitch','zoom','mode','panels','weatherActive','rawObservation','watermark','fade','detailNowOn','detailPrevOn','detailBox','detailWatermark','simActive'])uniforms[k]=gl.getUniformLocation(program,k);
@@ -85,7 +85,11 @@ const detail=new DetailLayer();window.geoDetail=detail;
 // After the last observation (step two of three): the storms carried on to their end,
 // with the clouds moved round them. Off unless asked for; see dist/storm-sim.js.
 const stormSim=new StormSimulation(gl,7);window.geoStormSim=stormSim;
-let simulate=false,typhoonModel=null,motionFields=null,simResume=null,simFrom=null,simLine='';
+let simulate=false,typhoonModel=null,motionFields=null,simResume=null,simFrom=null,simLine='',simBack=null,simUnder=false;
+// How much of the simulation is on screen: all of it while it runs, then fading out over the
+// return to the first observation, which is put underneath it at once.
+window.geoSimShown=()=>simShown(performance.now());
+function simShown(t){if(stormSim.active)return 1;if(simBack===null)return 0;const k=1-(t-simBack)/WeatherPlayback.RETURN_MS;if(k<=0){simBack=null;return 0;}return k;}
 let detailNowOn=0,detailPrevOn=0,detailBox=[0,1,0,1],detailWatermark=[0,0];
 // The close-up pair is swapped in step with the observation pair, so a dissolve mixes
 // two observations at one resolution rather than two resolutions of one observation.
@@ -149,7 +153,7 @@ const cloudSim=new CloudSimulation();const cloudRenderer=new CloudRenderer(gl,cl
 const stormTrack=new StormTrack();const stormOutlook=new StormOutlook();const stormRenderer=new StormRenderer(gl,stormTrack,stormOutlook);window.geoStorms=stormTrack;window.geoOutlook=stormOutlook;stormTrack.load().then(()=>showStormStatus());
 const texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
 let ready=false;const img=new Image();img.onload=()=>{gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,img);ready=true;status.hidden=true;};img.onerror=()=>fail('地球画像を読み込めませんでした。ページを再読み込みしてください。');img.src=window.GEO_EARTH_IMAGE||'assets/earth.jpg';
-window.geoWeather=new WeatherController({onImage(image,time){const target=previousTexture;previousTexture=weatherTexture;weatherTexture=target;gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,weatherTexture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,previousTexture);gl.activeTexture(gl.TEXTURE0);showDetail(time);fade.matchInterval(window.geoPlayback&&window.geoPlayback.interval);fade.start(performance.now(),observationsShown>0&&!!(window.geoPlayback&&window.geoPlayback.continuing));observationsShown++;watermark=[WATERMARK_PX[0]/(image.width||1024),WATERMARK_PX[1]/(image.height||1024)];weatherReady=true;beginIntro();},onEnabled(value){weatherEnabled=value;}});const playback=new WeatherPlayback(window.geoWeather);window.geoPlayback=playback;
+window.geoWeather=new WeatherController({onImage(image,time){const target=previousTexture;previousTexture=weatherTexture;weatherTexture=target;gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,weatherTexture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,previousTexture);gl.activeTexture(gl.TEXTURE0);showDetail(time);fade.matchInterval(window.geoPlayback&&window.geoPlayback.interval);const back=!!(window.geoPlayback&&window.geoPlayback.returning);const under=simUnder;simUnder=false;fade.start(performance.now(),observationsShown>0&&!under&&(back||!!(window.geoPlayback&&window.geoPlayback.continuing)),back?WeatherPlayback.RETURN_MS:undefined);observationsShown++;watermark=[WATERMARK_PX[0]/(image.width||1024),WATERMARK_PX[1]/(image.height||1024)];weatherReady=true;beginIntro();},onEnabled(value){weatherEnabled=value;}});const playback=new WeatherPlayback(window.geoWeather);window.geoPlayback=playback;
 // Where each storm was last seen, and how it moved over the twelve hours before: what the
 // typhoon object is started from. Only storms found in the last observation carry on.
 function stampHours(v){const m=/^(\d{4})(\d{2})(\d{2})[._](\d{2})(\d{2})/.exec(v||'');return m?Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5])/3600000:NaN;}
@@ -163,10 +167,11 @@ function startingStorms(time){
   return {lat:centre.lat,lon:centre.lon,u:dlon*111.195*Math.cos(centre.lat*Math.PI/180)/hours,v:(centre.lat-before.lat)*111.195/hours};
  });
 }
+// Once the observations run out, the scene goes on rather than jumping back days: the clouds
+// ride the background flow, and any storm the last observation holds is carried to its end.
 playback.onLastFrame=(time,resume)=>{
- if(!simulate||!typhoonModel||!stormSim.ready||cloudSim.enabled)return false;
- const storms=startingStorms(time);
- if(!storms.length)return false;
+ if(!simulate||!motionFields||!stormSim.ready||cloudSim.enabled)return false;
+ const storms=typhoonModel?startingStorms(time):[];
  if(!stormSim.start({observation:weatherTexture,watermark,storms,model:typhoonModel,viewport:[canvas.width,canvas.height],air:startingAir(time)}))return false;
  simResume=resume;simFrom=time;simLine='';showSimStatus();return true;
 };
@@ -186,13 +191,16 @@ async function loadMotion(){
 playback.onStop=()=>{if(stormSim.active)endSimulation(false);};
 // Paused, it stays where it is: the render loop only moves it on while playback plays.
 playback.onHold=()=>{simLine='';showSimStatus();};
+// carryOn: back to the observations, faded from the simulation to the first of them. Not
+// carrying on - stopped, seeked, switched off - the simulation simply goes.
 function endSimulation(carryOn){
  stormSim.stop();const next=simResume;simResume=null;simLine='';
+ simBack=carryOn&&next?performance.now():null;simUnder=simBack!==null;
  const note=document.querySelector('#simulateNote');if(note&&simulate)note.textContent=simIdle();
  if(window.geoWeather.current)window.geoWeather.renderCurrent();
  if(carryOn&&next)next();
 }
-function simIdle(){return `観測が尽きたあと、見つけた台風を過去の台風の動き方で消滅まで進めます。強さは画像から測れないため${StormSimulation.ASSUMED_KT}ktと仮定しています。予報ではありません。`;}
+function simIdle(){return `最後の観測のあとも、雲を背景の流れで、見つけた台風を過去の台風の動き方で消滅まで進め、そのあと最初の観測へゆっくり戻ります。台風の強さは画像から測れないため${StormSimulation.ASSUMED_KT}ktと仮定しています。予報ではありません。`;}
 // While it runs, the date says how far past the last observation it is, not a time that
 // was observed.
 function showSimStatus(){
@@ -202,11 +210,13 @@ function showSimStatus(){
  const text=`シミュレーション +${h}時間（${new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(from)} の観測から）`;
  if(text===simLine)return;simLine=text;
  document.querySelector('#observationTime').textContent=text;
- document.querySelector('#weatherPlaybackStatus').textContent=(playback.playing?'':'一時停止 · ')+'観測の後：過去の台風の動き方で進めたシミュレーション · 予報ではありません';
+ document.querySelector('#weatherPlaybackStatus').textContent=(playback.playing?'':'一時停止 · ')+'観測の後のシミュレーション（背景の流れ・過去の台風の動き方） · 予報ではありません';
  const alive=stormSim.marks().filter(m=>!m.ended).length;
  const note=document.querySelector('#simulateNote');
  const air=stormSim.air&&stormSim.air.measured?'':' 最後の観測の雲の動きを測ったデータが無いため、背景の流れは典型的な循環から始めています。';
- if(note)note.textContent=(alive?`シミュレーション中の台風 ${alive}個（紫の輪）。雲は観測ではなく計算です。`:'台風は消滅しました。まもなく最初の観測に戻ります。')+air;
+ const storms=!stormSim.tracks.length?'この観測では台風が見つかっていません。':alive?`シミュレーション中の台風 ${alive}個（紫の輪）。`:'台風は消滅しました。';
+ const soon=stormSim.horizon-stormSim.hours<=12?` まもなく最初の観測（最後の観測より約${playback.spanDays()}日前）へ戻ります。`:'';
+ if(note)note.textContent=storms+'雲は観測ではなく計算です。'+soon+air;
 }
 (()=>{
  const label=document.querySelector('#simulateToggle'),box=document.querySelector('#simulateStorms'),note=document.querySelector('#simulateNote');
@@ -214,23 +224,27 @@ function showSimStatus(){
  // switch is not offered there.
  if(!label||!box||window.GEO_STANDALONE||!stormSim.ready)return;
  label.hidden=false;
- box.addEventListener('change',async e=>{
-  simulate=e.target.checked;
-  if(note){note.hidden=!simulate;note.textContent=simulate?'台風のデータを読み込み中…':'';}
-  if(simulate&&!typhoonModel){
+ // On from the start: without it the last observation is followed at once by one days
+ // earlier, which reads as the weather jumping.
+ const turn=async on=>{
+  simulate=on;
+  if(note){note.hidden=!simulate;note.textContent=simulate?'シミュレーションのデータを読み込み中…':'';}
+  if(simulate&&!motionFields){
    const [data,motion]=await Promise.all([window.GeoData.typhoon(),loadMotion()]);
    motionFields=motion;
    if(data)typhoonModel=new Typhoon.TyphoonModel(data);
-   else{if(note)note.textContent='台風のデータを読み込めませんでした。';return;}
+   else if(note&&simulate){note.textContent='台風のデータを読み込めませんでした。雲だけを進めます。';return;}
   }
   if(!simulate&&stormSim.active)endSimulation(true);
   if(note&&simulate&&!stormSim.active)note.textContent=simIdle();
- });
+ };
+ box.addEventListener('change',e=>turn(e.target.checked));
+ turn(box.checked);
 })();let weatherStarted=true;
 (async()=>{await window.geoWeather.init(true);if(!cloudSim.enabled&&!matchMedia('(prefers-reduced-motion: reduce)').matches)await playback.prepare(true);})().catch(()=>{document.querySelector('#weatherPlaybackStatus').textContent='読み込めませんでした。「最新を取得」を押してください。';});
 document.querySelector('#rawObservation').onchange=e=>{rawObservation=e.target.checked;if(window.geoWeather.current)window.geoWeather.renderCurrent();};
 document.querySelectorAll('[data-cloud-mode]').forEach(button=>button.onclick=()=>{cloudSim.enabled=button.dataset.cloudMode==='3d';if(cloudSim.enabled)playback.stop();document.querySelectorAll('[data-cloud-mode]').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});document.querySelector('#cloudControls').hidden=!cloudSim.enabled;document.querySelector('#imageControls').hidden=cloudSim.enabled;if(!cloudSim.enabled){if(!weatherStarted){weatherStarted=true;window.geoWeather.init();}else if(window.geoWeather.current)window.geoWeather.renderCurrent();}else document.querySelector('#surfaceLabel').textContent='観測風による移動 · 雲の形は模型';});
-let previous=0;function render(t){requestAnimationFrame(render);if(!ready||document.hidden)return;const dt=Math.min((t-previous)/1000,.05);previous=t;if(intro&&intro.start){const k=Math.min(1,(t-intro.start)/(INTRO.seconds*1000));const ease=x=>{const c=Math.min(1,Math.max(0,x));return c*c*(3.-2.*c);};const turned=ease(k/INTRO.turnBy),closed=ease((k-INTRO.diveFrom)/(1-INTRO.diveFrom));yaw=HOME.yaw-TURN*(1-turned);pitch=INTRO.pitch+(HOME.pitch-INTRO.pitch)*closed;zoom=INTRO.zoom*Math.pow(HOME.zoom/INTRO.zoom,closed);if(k>=1)endIntro();}if(rotating&&!intro&&pointers.size===0)yaw-=dt*.065*speed;const rect=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,1.75);const w=Math.round(rect.width*dpr),h=Math.round(rect.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}if(stormSim.active&&window.geoPlayback&&window.geoPlayback.playing){if(!stormSim.advance(dt*window.geoPlayback.hoursPerSecond,[w,h]))endSimulation(true);}if(stormSim.active)showSimStatus();gl.useProgram(program);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);gl.uniform2f(uniforms.resolution,w,h);gl.uniform2f(uniforms.watermark,watermark[0],watermark[1]);for(const [k,val] of Object.entries({yaw,pitch,zoom,mode,panels:panels?1:0,rawObservation:rawObservation?1:0,fade:fade.value(t),weatherActive:weatherReady&&weatherEnabled&&!cloudSim.enabled?1:0,detailNowOn:stormSim.active?0:detailNowOn,detailPrevOn:stormSim.active?0:detailPrevOn,simActive:stormSim.active?1:0}))gl.uniform1f(uniforms[k],val);gl.uniform4f(uniforms.detailBox,detailBox[0],detailBox[1],detailBox[2],detailBox[3]);gl.uniform2f(uniforms.detailWatermark,detailWatermark[0],detailWatermark[1]);gl.drawArrays(gl.TRIANGLES,0,6);cloudSim.tick(dt);cloudRenderer.draw({width:w,height:h,yaw,pitch,zoom,mode});stormRenderer.draw({width:w,height:h,yaw,pitch,zoom,time:window.geoWeather&&window.geoWeather.current&&window.geoWeather.current.time,enabled:showStorms&&!cloudSim.enabled,outlook:showOutlook&&!stormSim.active,simulated:stormSim.active?stormSim.marks():null});if(showStorms)showStormStatus();}requestAnimationFrame(render);
+let previous=0;function render(t){requestAnimationFrame(render);if(!ready||document.hidden)return;const dt=Math.min((t-previous)/1000,.05);previous=t;if(intro&&intro.start){const k=Math.min(1,(t-intro.start)/(INTRO.seconds*1000));const ease=x=>{const c=Math.min(1,Math.max(0,x));return c*c*(3.-2.*c);};const turned=ease(k/INTRO.turnBy),closed=ease((k-INTRO.diveFrom)/(1-INTRO.diveFrom));yaw=HOME.yaw-TURN*(1-turned);pitch=INTRO.pitch+(HOME.pitch-INTRO.pitch)*closed;zoom=INTRO.zoom*Math.pow(HOME.zoom/INTRO.zoom,closed);if(k>=1)endIntro();}if(rotating&&!intro&&pointers.size===0)yaw-=dt*.065*speed;const rect=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,1.75);const w=Math.round(rect.width*dpr),h=Math.round(rect.height*dpr);if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}if(stormSim.active&&window.geoPlayback&&window.geoPlayback.playing){if(!stormSim.advance(dt*window.geoPlayback.hoursPerSecond,[w,h]))endSimulation(true);}if(stormSim.active)showSimStatus();gl.useProgram(program);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);gl.uniform2f(uniforms.resolution,w,h);gl.uniform2f(uniforms.watermark,watermark[0],watermark[1]);for(const [k,val] of Object.entries({yaw,pitch,zoom,mode,panels:panels?1:0,rawObservation:rawObservation?1:0,fade:fade.value(t),weatherActive:weatherReady&&weatherEnabled&&!cloudSim.enabled?1:0,detailNowOn:stormSim.active||simBack!==null?0:detailNowOn,detailPrevOn:stormSim.active||simBack!==null?0:detailPrevOn,simActive:simShown(t)}))gl.uniform1f(uniforms[k],val);gl.uniform4f(uniforms.detailBox,detailBox[0],detailBox[1],detailBox[2],detailBox[3]);gl.uniform2f(uniforms.detailWatermark,detailWatermark[0],detailWatermark[1]);gl.drawArrays(gl.TRIANGLES,0,6);cloudSim.tick(dt);cloudRenderer.draw({width:w,height:h,yaw,pitch,zoom,mode});stormRenderer.draw({width:w,height:h,yaw,pitch,zoom,time:window.geoWeather&&window.geoWeather.current&&window.geoWeather.current.time,enabled:showStorms&&!cloudSim.enabled,outlook:showOutlook&&!stormSim.active,simulated:stormSim.active?stormSim.marks():null});if(showStorms)showStormStatus();}requestAnimationFrame(render);
 canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();ready=false;fail('3D表示が中断されました。ページを再読み込みしてください。');});
 }
 const pointers=new Map();const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));function setZoom(z){zoom=clamp(z,.65,8);}canvas.addEventListener('pointerdown',e=>{endIntro();pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{const old=pointers.get(e.pointerId);if(!old)return;if(pointers.size===1){yaw-=(e.clientX-old.x)*.006;pitch=clamp(pitch+(e.clientY-old.y)*.006,-1.4,1.4);}else{const other=[...pointers.entries()].find(([id])=>id!==e.pointerId)[1];const before=Math.hypot(old.x-other.x,old.y-other.y),after=Math.hypot(e.clientX-other.x,e.clientY-other.y);if(before>0)setZoom(zoom*after/before);}pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});});for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,e=>pointers.delete(e.pointerId));canvas.addEventListener('wheel',e=>{e.preventDefault();endIntro();setZoom(zoom*Math.exp(-e.deltaY*.001));},{passive:false});canvas.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-'].includes(e.key)){e.preventDefault();endIntro();}if(e.key==='ArrowLeft')yaw+=.12;if(e.key==='ArrowRight')yaw-=.12;if(e.key==='ArrowUp')pitch=clamp(pitch+.1,-1.4,1.4);if(e.key==='ArrowDown')pitch=clamp(pitch-.1,-1.4,1.4);if(e.key==='+'||e.key==='=')setZoom(zoom*1.15);if(e.key==='-')setZoom(zoom/1.15);});

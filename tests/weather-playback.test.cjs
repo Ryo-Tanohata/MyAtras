@@ -197,7 +197,13 @@ s.test('the last frame is held longer before looping', async () => {
   assert.strictEqual(delays.length, n);
   assert.strictEqual(delays[0], playback.interval, 'ordinary frames use the chosen interval');
   assert.strictEqual(delays[n - 2], playback.interval * 2, 'the final observation is held twice as long');
-  assert.strictEqual(delays[n - 1], playback.interval, 'the restarted loop runs at normal speed');
+  // Back at the first frame, days before the last, it is held while the globe fades to it.
+  assert.strictEqual(delays[n - 1], Math.max(WeatherPlayback.RETURN_MS, playback.interval),
+    'the first frame, come back to, is held for the return');
+  assert.ok(env.document.getElementById('weatherPlaybackStatus').textContent.includes('最初の観測へ戻っています'));
+  global.setTimeout = (fn, ms) => { delays.push(ms); return realSetTimeout(() => {}, 0); };
+  try { playback.step(); } finally { global.setTimeout = realSetTimeout; }
+  assert.strictEqual(delays[n], playback.interval, 'and the loop then runs at normal speed');
   playback.stop();
   clearInterval(controller.timer);
 });
