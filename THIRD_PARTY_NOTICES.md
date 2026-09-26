@@ -88,6 +88,17 @@ the median heading and pace of the storms that passed through each cell, and how
 they differed, computed by `scripts/build-tendency.cjs` from 4,759 tropical cyclones and
 225,747 six-hourly legs since 1980. The archive's own SHA-256 is recorded in the file.
 
+`dist/data/typhoon.json` comes from the same archive, by `scripts/build-typhoon.cjs` in
+`.github/workflows/typhoon-model.yml`: for each 2.5-degree cell, the median motion of all
+storms and of those already turned east, the median six-hour change in strength over the
+sea by strength class, and how often per hour a storm's life as a tropical storm ended
+there (228,336 legs of motion, 136,783 of change in strength, 138,982 at sea with 2,643
+ends). With it goes a half-degree land mask made from `dist/assets/land.png` (Natural
+Earth, public domain) and Kaplan and DeMaria's inland decay (*J. Appl. Meteor.* 34,
+2499-2512, 1995). Again only grids ship, with the archive's SHA-256.
+`records/typhoon-hindcast.json` is how it scored on the storms of 2015 onward, built from
+1980-2014 only.
+
 - Source: https://www.ncei.noaa.gov/products/international-best-track-archive
 - File used: `ibtracs.since1980.list.v04r01.csv` (137 MB, not bundled)
 - Knapp, K. R., M. C. Kruk, D. H. Levinson, H. J. Diamond, and C. J. Neumann, 2010:
