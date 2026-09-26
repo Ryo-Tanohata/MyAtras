@@ -291,4 +291,25 @@ s.test('a path over the date line does not swing round the earth', () => {
   assert.ok(Math.abs(run.points[12].lon) > 179, `half way at ${run.points[12].lon}`);
 });
 
+s.test('past the forecast, a typhoon speeds off north-east and dies rather than stopping dead', () => {
+  const run = followForecast(FORECAST, START, { decay: true });
+  const last = 124;
+  assert.strictEqual(run.forecastHours, last);
+  assert.strictEqual(run.points.length, last + 1 + 36);
+  assert.strictEqual(run.end.t, last + 36);
+  const after = run.points.slice(last);
+  for (let i = 1; i < after.length; i++) {
+    assert.ok(after[i].kt < after[i - 1].kt, 'weakens every hour');
+    assert.ok(after[i].lat > after[i - 1].lat && after[i].lon > after[i - 1].lon, 'north-east all the way');
+  }
+  assert.strictEqual(Math.round(after[after.length - 1].kt), 0);
+  // Faster at the end than where the forecast left it, towards the typical 35 km/h.
+  const speed = i => distanceKm(after[i - 1], after[i]);
+  assert.ok(speed(after.length - 1) > speed(1) && speed(after.length - 1) > 25, `${speed(1).toFixed(1)} -> ${speed(after.length - 1).toFixed(1)} km/h`);
+  assert.ok(distanceKm(run.points[last], run.points[last + 1]) < 40, 'no jump where the forecast ends');
+  // A depression at the forecast's end simply ends there.
+  const weak = { points: FORECAST.points.map((p, i) => i === 4 ? Object.assign({}, p, { class: '熱帯低気圧（ＴＤ）', windKt: 30 }) : p) };
+  assert.strictEqual(followForecast(weak, START, { decay: true }).end.t, last);
+});
+
 s.run();

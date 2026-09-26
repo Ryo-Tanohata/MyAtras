@@ -34,6 +34,8 @@
   const HYSTERESIS = 2;         // km/h of eastward motion before a storm counts as recurved
   const CLASSES = [34, 64, 96]; // knots: tropical storm, typhoon, strong typhoon
   const JOIN_HOURS = 12;        // how long a storm seen off a forecast takes to join it
+  const DECAY_HOURS = 36;       // how long a typhoon takes to die after its forecast, typically
+  const DECAY_KMH = 35;         // the pace a recurving storm speeds up to, typically
 
   const toRad = d => d * Math.PI / 180;
   const wrapLon = lon => ((lon + 540) % 360) - 180;
@@ -233,10 +235,12 @@
   ///   analysis hour, a few hours on, the path overshot and doubled back.
   /// model: a TyphoonModel, to carry on past the last forecast hour if the forecast
   ///   still has a tropical storm there.
+  /// decay: with no model, instead of stopping at the last forecast hour a typhoon still
+  ///   blowing there fades out the way recurving storms do (points carry `decay`, 0..1).
   ///
   /// Returns { points, end, forecastHours, knotHours } like run(), with points every hour
   /// from the start, or null when the forecast does not cover the start.
-  function followForecast(forecast, startMs, { seen = null, model = null } = {}) {
+  function followForecast(forecast, startMs, { seen = null, model = null, decay = false } = {}) {
     const knots = [];
     for (const p of (forecast && forecast.points) || []) {
       const h = (Date.parse(p.time) - startMs) / 3600000;
@@ -280,6 +284,30 @@
     }
     const forecastHours = hours;
     let end = { t: hours, reason: 'the forecast ends' };
+    // Still a typhoon when the forecast stops, and asked to: it does not stop dead there,
+    // but goes on as recurving storms end - turning north-east (south-east in the south)
+    // and speeding up to a typical pace while it weakens to nothing over DECAY_HOURS. The
+    // heading starts from the forecast's own last one; only the pace it tends to and how
+    // long it takes to die are typical values, not this storm's. A storm still in the
+    // tropics and heading west keeps its heading: it has not recurved.
+    if (!model && decay && /台風/.test(last.cls) && last.kt >= END_KT && hours > 0) {
+      const a = points[points.length - 2], b = points[points.length - 1];
+      let u = wrapLon(b.lon - a.lon) * KM_PER_DEGREE * Math.cos(toRad(b.lat)), v = (b.lat - a.lat) * KM_PER_DEGREE;
+      const pole = b.lat >= 0 ? 1 : -1, recurved = u > 0 || Math.abs(b.lat) >= 25;
+      const pace = Math.max(Math.hypot(u, v), recurved ? DECAY_KMH : 0);
+      const tu = recurved ? pace * Math.SQRT1_2 : u * pace / Math.max(1e-6, Math.hypot(u, v));
+      const tv = recurved ? pole * pace * Math.SQRT1_2 : v * pace / Math.max(1e-6, Math.hypot(u, v));
+      const ease = 1 - Math.exp(-1 / 12);
+      let lat = b.lat, lon = b.lon;
+      for (let t = 1; t <= DECAY_HOURS; t++) {
+        u += (tu - u) * ease; v += (tv - v) * ease;
+        lat += v / KM_PER_DEGREE;
+        lon = wrapLon(lon + u / (KM_PER_DEGREE * Math.max(0.2, Math.cos(toRad(lat)))));
+        const k = t / DECAY_HOURS;
+        points.push({ t: hours + t, lat, lon, kt: b.kt * (1 - k), land: false, decay: k });
+      }
+      end = { t: hours + DECAY_HOURS, reason: 'weakened after the forecast, as recurving storms do' };
+    }
     // Still a tropical storm when the forecast stops: carried on by the record from there.
     if (model && /台風/.test(last.cls) && last.kt >= END_KT && hours > 0) {
       const a = points[points.length - 2] || points[points.length - 1], b = points[points.length - 1];

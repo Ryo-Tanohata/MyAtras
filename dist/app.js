@@ -187,14 +187,14 @@ playback.onLastFrame=(time,resume)=>{
 function simStorms(time){
  const startMs=stampHours(time)*3600000,seen=startingStorms(time),out=[];
  for(const f of (jmaForecasts&&jmaForecasts.storms)||[]){
-  const probe=Typhoon.followForecast(f,startMs);if(!probe)continue;
+  const probe=Typhoon.followForecast(f,startMs,{decay:true});if(!probe)continue;
   const at=probe.points[0],near=seen.find(s=>Typhoon.distanceKm(s,at)<600);
-  const track=near?Typhoon.followForecast(f,startMs,{seen:near}):probe;
+  const track=near?Typhoon.followForecast(f,startMs,{seen:near,decay:true}):probe;
   out.push({lat:track.points[0].lat,lon:track.points[0].lon,u:0,v:0,track,jma:{number:f.number,kana:f.kana,name:f.name,issued:f.issued}});
  }
  // Only the agency's forecasts move storms: a storm it has none for is not carried on by
- // a guess of ours - its cloud rides the flow with the rest - and a storm stops where
- // the forecast stops.
+ // a guess of ours - its cloud rides the flow with the rest. A typhoon still blowing when
+ // the forecast stops dies the way recurving storms do (dist/typhoon.js, decay).
  return out;
 }
 // The background flow, started from the cloud motion measured over the six hours before
@@ -244,8 +244,8 @@ function showSimStatus(){
  const note=document.querySelector('#simulateNote');
  const air=stormSim.air&&stormSim.air.measured?'':' 最後の観測の雲の動きを測ったデータが無いため、背景の流れは典型的な循環から始めています。';
  const jst=iso=>new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso));
- const named=jma.map(t=>`${t.from.jma.number?`台風${String(t.from.jma.number).slice(-2).replace(/^0/,'')}号${t.from.jma.kana?`（${t.from.jma.kana}）`:''}`:'熱帯低気圧'}は気象庁の予報（${jst(t.from.jma.issued)}発表）の進路と強さに沿って動かしています。予報の終わりで印は消えます。`).join('')+(jma.length?'出典：気象庁「台風解析・予報情報」を加工して作成。':'');
- const storms=!stormSim.tracks.length?'この観測の時点で気象庁が予報している台風はありません。':(alive?`シミュレーション中の台風 ${alive}個（紫の輪）。`:'台風は気象庁の予報の終わりに達しました。')+named;
+ const named=jma.map(t=>`${t.from.jma.number?`台風${String(t.from.jma.number).slice(-2).replace(/^0/,'')}号${t.from.jma.kana?`（${t.from.jma.kana}）`:''}`:'熱帯低気圧'}は気象庁の予報（${jst(t.from.jma.issued)}発表）の進路と強さに沿って動かしています。予報の終わりの後は、転向した台風の典型的な消え方（北東へ速度を上げながら36時間で弱まる）で延ばしています。`).join('')+(jma.length?'出典：気象庁「台風解析・予報情報」を加工して作成。':'');
+ const storms=!stormSim.tracks.length?'この観測の時点で気象庁が予報している台風はありません。':(alive?`シミュレーション中の台風 ${alive}個（紫の輪）。${stormSim.marks().some(m=>!m.ended&&m.now.decay>0)?'気象庁の予報の終わりを過ぎ、典型的な消え方で弱まっています。':''}`:'シミュレーションの台風は消えました。')+named;
  const soon=!stormSim.finished&&stormSim.horizon-stormSim.hours<=12?' まもなくシミュレーションの終わりです。':'';
  if(note)note.textContent=storms+'雲は観測ではなく計算です。'+soon+air;
 }

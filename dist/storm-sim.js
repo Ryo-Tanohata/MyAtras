@@ -95,7 +95,12 @@
     // typical one; the spin then winds the carried cloud on from there.
     float turn=hemi*atan(d.y,d.x)+2.5*log(r/100.);
     float band=pow(.5+.5*cos(2.*turn),3.)*smoothstep(120.,260.,r)*exp(-(r*r)/(650.*650.));
-    source=max(source,s*max(exp(-(r*r)/(230.*230.)),.85*band));}
+    // A storm dying past its forecast (w, 0..1) loses its bands, and its dense cloud is
+    // drawn out ahead of it along its path, the way recurving storms end in a streak.
+    float st=motion[i].w;vec2 dir=length(motion[i].xy)>1.?normalize(motion[i].xy):vec2(0.,1.);
+    vec2 e=d-dir*st*250.;
+    float re=length(vec2(dot(e,dir)/(1.+2.5*st),(dir.x*e.y-dir.y*e.x)/(1.+.3*st)));
+    source=max(source,s*max(exp(-(re*re)/(230.*230.)),.85*band*(1.-st)));}
    return abs(lat)>80.?vec2(0.):vel+swirl;}
   vec2 degreesPerHour(vec2 kmh,float lat){return vec2(kmh.x/(KM*max(.15,cos(radians(lat)))),kmh.y/KM);}`;
 
@@ -366,7 +371,7 @@
       const pts = track.points, last = pts[pts.length - 1];
       if (hours >= last.t) {
         const fade = Math.max(0, 1 - (hours - last.t) / 12);
-        return { lat: last.lat, lon: last.lon, kt: last.kt * fade, u: 0, v: 0, alive: false, fade };
+        return { lat: last.lat, lon: last.lon, kt: last.kt * fade, u: 0, v: 0, alive: false, fade, decay: last.decay || 0 };
       }
       const i = Math.floor(hours), f = hours - i;
       const a = pts[i], b = pts[Math.min(i + 1, pts.length - 1)];
@@ -374,7 +379,7 @@
       return {
         lat: a.lat + (b.lat - a.lat) * f, lon: a.lon + dlon * f, kt: a.kt + (b.kt - a.kt) * f,
         u: dlon * 111.195 * Math.cos(a.lat * Math.PI / 180), v: (b.lat - a.lat) * 111.195,
-        alive: true, fade: 1,
+        alive: true, fade: 1, decay: (a.decay || 0) + ((b.decay || 0) - (a.decay || 0)) * f,
       };
     }
 
@@ -382,9 +387,14 @@
       const storm = new Float32Array(MAX_STORMS * 4), motion = new Float32Array(MAX_STORMS * 4);
       this.tracks.forEach((track, i) => {
         const s = this.stormAt(track, hours);
-        const strength = Math.max(0, Math.min(1, (s.kt - 34) / 66)) * s.fade;
+        // While dying past the forecast it weakens from how strong it was when the forecast
+        // stopped, all the way to nothing, rather than dropping out once below a typhoon.
+        const at = track.points[track.forecastHours] || track.points[0];
+        const strength = s.decay > 0
+          ? Math.max(0, Math.min(1, (at.kt - 34) / 66)) * (1 - s.decay) * s.fade
+          : Math.max(0, Math.min(1, (s.kt - 34) / 66)) * s.fade;
         storm.set([s.lat, s.lon, strength, 90], i * 4);
-        motion.set([s.u, s.v, s.alive ? 1 : s.fade, 0], i * 4);
+        motion.set([s.u, s.v, s.alive ? 1 : s.fade, s.decay], i * 4);
       });
       return { storm, motion, count: this.tracks.length };
     }

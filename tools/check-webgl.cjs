@@ -642,6 +642,16 @@ async function checkSimulation(page) {
   })()`));
   check(jma.followed === jma.covering && jma.off.every(d => d !== null && d <= 5) && (!jma.covering || /気象庁の予報/.test(jma.note)),
     jma.covering ? "the storms follow the agency's forecast" : 'no agency forecast covers these observations', JSON.stringify(jma));
+  // A typhoon still blowing when the forecast stops is not left to stop dead there and
+  // fade: it goes on north-east (south-east in the south), weakening to nothing.
+  const past = JSON.parse(await page.js(`JSON.stringify(window.geoStormSim.tracks.filter(t => t.from.jma).map(t => {
+    const f = t.points[t.forecastHours], e = t.points[t.points.length - 1], pole = f.lat >= 0 ? 1 : -1;
+    return { typhoon: f.kt >= 34,
+      hours: t.points.length - 1 - t.forecastHours, poleward: +((e.lat - f.lat) * pole).toFixed(1),
+      east: +(((e.lon - f.lon + 540) % 360) - 180).toFixed(1), kt: [Math.round(f.kt), Math.round(e.kt)] };
+  }))`));
+  check(past.every(p => !p.typhoon || (p.hours === 36 && p.poleward > 0 && p.east > 0 && p.kt[1] === 0)),
+    past.length ? 'past the forecast a typhoon goes on north-east and dies' : 'no forecast to go on from', JSON.stringify(past));
   const lastObservation = await page.shot('11-simulation-start');
   await page.waitFor('window.geoStormSim.hours >= 24 || !window.geoStormSim.active', 30000).catch(() => {});
   const label = await page.js("document.getElementById('observationTime').textContent");
@@ -724,6 +734,14 @@ async function checkSimulation(page) {
   // Played through to the end, it stops there - the last simulated hour stays on screen,
   // paused - and the play button offers the observations from the start. Going back days
   // on its own read as the weather jumping.
+  // Past its forecast the page says the typhoon is dying the typical way, not forecast.
+  const dying = past.some(p => p.typhoon) && await page.waitFor(`(() => { const t = window.geoStormSim.tracks.find(t => t.from.jma);
+    return t && window.geoStormSim.shownHours >= t.forecastHours + 18; })()`, 90000).then(() => true, () => false);
+  if (dying) {
+    await page.shot('13-simulation-past-the-forecast');
+    const note = await page.js("document.getElementById('simulateNote').textContent");
+    check(/典型的な消え方で弱まっています/.test(note), 'the page says when a typhoon is past its forecast', note.slice(0, 80));
+  }
   const finished = await page.waitFor('window.geoStormSim.finished', 90000).then(() => true, () => false);
   await sleep(1200);
   const atEnd = await page.js(`JSON.stringify({ active: window.geoStormSim.active, hours: Math.round(window.geoStormSim.hours),
