@@ -14,8 +14,9 @@
 //
 // Strength changes over the sea the way past storms of the same strength changed in the
 // same place, which carries warm and cold water with it without needing a sea temperature.
-// Over land it decays by Kaplan and DeMaria's inland model. Below 34 knots it is no longer
-// a tropical storm, and the object ends.
+// Over land it decays by Kaplan and DeMaria's inland model. It ends when it falls below
+// 34 knots, or when it has gone as far along its path as half the storms there got before
+// turning extratropical or falling apart, or if it is carried to the equator.
 //
 // Not a forecast and not this storm: what past storms in this place did.
 (function (root) {
@@ -77,6 +78,16 @@
           flat[i + 3]);
       }
       this.defaultChange = typeof intensity.fallback === 'number' ? intensity.fallback : -4;
+      // How often a tropical storm here stopped being one - went extratropical or fell
+      // apart - per hour at sea. The median change in strength cannot carry this: an end is
+      // a rare event in any one six hours, so a median never sees it, and the storms still
+      // counted as tropical at 35 degrees are exactly the ones that did not end.
+      const hazard = data.hazard || {};
+      this.hazardCell = hazard.cell || 2.5;
+      this.hazardCols = Math.round(360 / this.hazardCell);
+      this.hazard = new Map();
+      const hz = hazard.cells || [];
+      for (let i = 0; i + 4 <= hz.length; i += 4) this.hazard.set(hz[i] * this.hazardCols + hz[i + 1], hz[i + 2]);
       const land = data.land;
       if (land && land.bits) {
         this.landCell = land.cell;
@@ -117,6 +128,14 @@
       return typeof found === 'number' ? found : null;
     }
 
+    /// The chance per hour, at sea here, that a tropical storm stops being one.
+    hazardAt(lat, lon) {
+      const row = Math.floor((lat + 90) / this.hazardCell);
+      const col = Math.floor((wrapLon(lon) + 180) / this.hazardCell) % this.hazardCols;
+      const found = this.hazard.get(row * this.hazardCols + col);
+      return typeof found === 'number' ? found : 0;
+    }
+
     isLand(lat, lon) {
       if (!this.landBits) return false;
       const row = Math.min(this.landHeight - 1, Math.max(0, Math.floor((90 - lat) / this.landCell)));
@@ -132,8 +151,14 @@
       const hours = Math.min(options.hours || MAX_HOURS, MAX_HOURS);
       const regimeFixed = options.regime || null;
       let { lat, lon, kt } = init;
-      const up = init.u || 0, vp = init.v || 0;
-      let u = up, v = vp;
+      let u = init.u || 0, v = init.v || 0;
+      // Persistence is a departure from how storms move here, and it fades: each hour the
+      // storm keeps exp(-1/tau) of how differently it was moving. Fading towards the local
+      // motion rather than holding the first hour's motion is what lets it turn - held,
+      // a storm running west keeps a share of that for days and runs straight past the
+      // place where storms turn.
+      const keep = p.tau > 0 ? Math.exp(-1 / p.tau) : 0;
+      let survival = 1;
       let regime = regimeFixed || (u > HYSTERESIS ? 'east' : 'west');
       let wasLand = this.isLand(lat, lon);
       const points = [{ t: 0, lat, lon, kt, land: wasLand, regime }];
@@ -141,15 +166,22 @@
       for (let t = 1; t <= hours; t++) {
         const here = this.motionAt(lat, lon, regime) || this.motionAt(lat, lon, 'all');
         if (!here) { reason = 'left the record'; break; }
-        const w = p.tau > 0 ? Math.exp(-(t - 1) / p.tau) : 0;
-        u = w * up + (1 - w) * here.u;
-        v = w * vp + (1 - w) * here.v;
+        u = here.u + (u - here.u) * keep;
+        v = here.v + (v - here.v) * keep;
         if (!regimeFixed) {
           if (regime === 'west' && u > HYSTERESIS) regime = 'east';
           else if (regime === 'east' && u < -HYSTERESIS) regime = 'west';
         }
+        const before = lat;
         lat += v / KM_PER_DEGREE;
         lon = wrapLon(lon + u / (KM_PER_DEGREE * Math.max(0.2, Math.cos(toRad(lat)))));
+        // No cyclone lives on the equator: the spin it needs comes from the earth's
+        // rotation, which is nothing there. An object carried that far has ended.
+        if (Math.abs(lat) < 4 || Math.sign(lat) !== Math.sign(before)) {
+          points.push({ t, lat: before, lon, kt, land: wasLand, regime });
+          reason = 'reached the equator';
+          break;
+        }
         const land = this.isLand(lat, lon);
         if (land) {
           if (!wasLand) kt *= p.R;                       // the step onto land
@@ -157,11 +189,15 @@
         } else {
           const change = this.intensityChangeAt(lat, lon, kt);
           kt += (change === null ? this.defaultChange : change) / 6;
+          survival *= Math.exp(-this.hazardAt(lat, lon));
         }
         kt = Math.min(kt, 185);
         wasLand = land;
         points.push({ t, lat, lon, kt, land, regime });
         if (kt < p.endKt) { reason = 'weakened'; break; }
+        // Past the point where half the storms on this path would have stopped being
+        // tropical, this one has too.
+        if (survival < 0.5) { reason = 'went extratropical or fell apart'; break; }
         if (Math.abs(lat) > 60) { reason = 'left the tropics'; break; }
         if (t === hours) reason = 'time';
       }

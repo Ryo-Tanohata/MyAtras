@@ -37,7 +37,7 @@ const TRAIN = [1980, 2014];
 const TUNE = [2005, 2014];      // older storms, to choose the persistence time on
 const TEST_FROM = 2015;
 const LEADS = [12, 24, 48, 72, 96, 120];
-const TAUS = [0, 6, 12, 24, 48];
+const TAUS = [0, 6, 12, 24, 48, 72, 96];
 const START_KT = 64;
 
 const toRad = d => d * Math.PI / 180;
@@ -201,20 +201,33 @@ function main() {
     return { lead, n: model.length, modelMAE: +mean(model).toFixed(1), persistenceMAE: +mean(still).toFixed(1) };
   });
 
-  // Things that would be plainly wrong on screen.
+  // Things that would be plainly wrong on screen. Recurving is judged the same way for
+  // the model and the real storm: somewhere before it ended, twelve hours in which it
+  // moved east by more than 5 km/h. A single three-hour wobble does not count.
+  // Points here carry t in hours from the start (the model's already do).
+  const recurves = pts => {
+    for (let k = 0; k < pts.length; k++) {
+      const later = pts.find(q => q.t >= pts[k].t + 12);
+      if (!later) break;
+      const hours = later.t - pts[k].t;
+      const east = wrap(later.lon - pts[k].lon) * KM_PER_DEGREE
+        * Math.cos(toRad((later.lat + pts[k].lat) / 2)) / hours;
+      if (east > 5) return true;
+    }
+    return false;
+  };
+  const inHours = (points, from) => points.map(q => ({ ...q, t: (q.t - from) / 3600000 }));
   let crossed = 0, modelRecurved = 0, trueRecurved = 0, counted = 0;
+  const reasons = {};
   cases.forEach((c, i) => {
     const pts = runs.model[i].points;
+    reasons[runs.model[i].end.reason] = (reasons[runs.model[i].end.reason] || 0) + 1;
     if (pts.some(p => Math.sign(p.lat) !== Math.sign(c.init.lat))) crossed++;
     if (c.init.u >= 0) return;                 // only storms still heading west can recurve
     counted++;
-    const until = c.end;
-    const truthPts = c.points.slice(c.i).filter(p => p.t <= until);
-    const eastward = (a, b) => B.velocity(a, b).u > 5;
-    if (truthPts.some((p, k) => k > 0 && eastward(truthPts[k - 1], p))) trueRecurved++;
-    const sampled = pts.filter(p => p.t % 6 === 0);
-    if (sampled.some((p, k) => k > 0 && (wrap(p.lon - sampled[k - 1].lon) * KM_PER_DEGREE
-      * Math.cos(toRad(p.lat)) / 6) > 5)) modelRecurved++;
+    const t0 = c.points[c.i].t;
+    if (recurves(inHours(c.points.slice(c.i).filter(q => q.t <= c.end), t0))) trueRecurved++;
+    if (recurves(pts)) modelRecurved++;
   });
 
   const report = {
@@ -229,7 +242,7 @@ function main() {
       typicalRemainingH: Math.round(typical) },
     intensity,
     plausibility: { crossedEquator: crossed, recurvedModel: modelRecurved, recurvedTruth: trueRecurved,
-      westwardStarts: counted },
+      westwardStarts: counted, endReasons: reasons },
   };
   const reportPath = path.resolve(opt('--report', path.join(ROOT, 'records', 'typhoon-hindcast.json')));
   fs.mkdirSync(path.dirname(reportPath), { recursive: true });
@@ -250,6 +263,7 @@ function main() {
   const P = report.plausibility;
   console.log(`equator crossings ${P.crossedEquator}; recurved ${P.recurvedModel} in the model, `
     + `${P.recurvedTruth} in reality, of ${P.westwardStarts} starts heading west`);
+  console.log(`how the model's storms ended: ${JSON.stringify(P.endReasons)}`);
 }
 
 if (require.main === module) main();

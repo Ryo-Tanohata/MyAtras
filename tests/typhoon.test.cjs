@@ -64,16 +64,17 @@ s.test('the land is where the land is', () => {
 
 s.test('a storm in the northern tropics runs west, turns, and leaves north-east', () => {
   // Far enough east that it turns over open sea: started further west, the same storm
-  // reaches Taiwan before the turning zone and dies over land, which is also right.
-  const run = madeUpModel().run({ lat: 18, lon: 160, kt: 90, u: -18, v: 6 });
+  // reaches Taiwan before the turning zone and dies over land, which is also right. The
+  // sea neither feeds nor starves it here - this is about the turn, not the strength.
+  const flat = [];
+  for (let row = 0; row < 72; row++) for (let col = 0; col < 144; col++) for (let c = 0; c < 3; c++) flat.push(row, col, c, 0, 50);
+  const run = madeUpModel({ intensity: { cell: 2.5, cells: flat } }).run({ lat: 18, lon: 160, kt: 90, u: -18, v: 6 });
   const p = run.points;
   const at = t => p[Math.min(t, p.length - 1)];
   assert.ok(at(24).lon < 160, 'it goes west first');
   const westmost = p.reduce((m, q) => (q.lon < m.lon ? q : m));
   assert.ok(westmost.t > 24 && westmost.lat > 22, `it turns in the turning zone (at ${westmost.lat.toFixed(1)}N)`);
-  // The made-up sea weakens it quickly past 25 degrees, so it dies soon after turning;
-  // what matters is that it had turned, and that it was counted as recurved.
-  assert.ok(p[p.length - 1].lon > westmost.lon, 'and is heading east when it ends');
+  assert.ok(p[p.length - 1].lon > westmost.lon + 3, 'and ends up well east of where it turned');
   assert.strictEqual(p[p.length - 1].regime, 'east', 'moving as recurved storms do');
   assert.ok(p.every(q => q.lat > 0), 'it never reaches the equator');
   const switches = p.filter((q, i) => i && q.regime !== p[i - 1].regime).length;
@@ -105,6 +106,31 @@ s.test('over warm sea it strengthens, over cold sea it fades and ends', () => {
   assert.ok(peak > 70, `it grows in the tropics (to ${peak.toFixed(0)} kt)`);
   assert.ok(['weakened', 'left the tropics', 'left the record'].includes(run.end.reason), run.end.reason);
   assert.ok(run.end.t < 360, 'and it does end');
+});
+
+s.test('it ends where past storms stopped being tropical', () => {
+  // A band at 30-40N where one storm in ten ends each hour: the object gets about seven
+  // hours in (half-life) and stops, well before any wind limit.
+  const hazard = [];
+  for (let row = 0; row < 72; row++) {
+    const lat = -90 + (row + 0.5) * 2.5;
+    for (let col = 0; col < 144; col++) hazard.push(row, col, lat > 30 && lat < 40 ? 0.1 : 0, 100);
+  }
+  const model = madeUpModel({ hazard: { cell: 2.5, cells: hazard } });
+  const run = model.run({ lat: 31, lon: 160, kt: 120, u: 25, v: 12 });
+  assert.strictEqual(run.end.reason, 'went extratropical or fell apart');
+  assert.ok(run.end.t >= 5 && run.end.t <= 9, `after ${run.end.t} h`);
+  assert.ok(run.points[run.points.length - 1].kt > 60, 'while still strong');
+});
+
+s.test('it never lives on the equator', () => {
+  // A made-up world that pushes everything towards the equator.
+  const cell = 2.5, south = [];
+  for (let row = 0; row < 72; row++) for (let col = 0; col < 144; col++) south.push(row, col, -10, -30, 100);
+  const model = madeUpModel({ motion: { cell, west: south, east: south, all: south } });
+  const run = model.run({ lat: 12, lon: 150, kt: 90, u: -10, v: -30 });
+  assert.strictEqual(run.end.reason, 'reached the equator');
+  assert.ok(run.points.every(q => q.lat >= 4), 'it stops before 4 degrees');
 });
 
 s.test('an object it has no record for ends rather than guessing', () => {

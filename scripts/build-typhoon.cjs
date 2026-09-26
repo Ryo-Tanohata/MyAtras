@@ -18,6 +18,9 @@
 // - Strength over the sea: the median change in six hours of storms of the same strength
 //   class in the same place. Warm and cold water are in there without a sea temperature:
 //   the cold water off Mexico and north of 30 degrees shows up as places storms weaken.
+// - Ends at sea: how often, per hour, a tropical storm in each place went extratropical
+//   or fell apart. A median change in strength never shows this - an end is rare in any
+//   one six hours - and without it the storms that survive to 35 degrees look typical.
 // - The land, at half a degree, from dist/assets/land.png (Natural Earth), for the step
 //   onto land and Kaplan and DeMaria's inland decay. Its rate is also measured here from
 //   the storms that crossed land, and reported beside the published value.
@@ -104,7 +107,7 @@ function velocity(a, b) {
 /// Six-hourly legs of the tropical part of every storm in the seasons asked for, each with
 /// the regime the storm was in during the leg before it.
 function legs(storms, fromSeason, toSeason) {
-  const motion = [], change = [], landDecay = [];
+  const motion = [], change = [], landDecay = [], ends = [];
   for (const s of storms) {
     if (s.season < fromSeason || s.season > toSeason) continue;
     const p = s.points;
@@ -121,6 +124,11 @@ function legs(storms, fromSeason, toSeason) {
         }
         motion.push({ ...mid, u: vel.u, v: vel.v, regime });
       }
+      // Ends at sea: every hour a tropical storm of at least 34 kt spent over the sea, and
+      // whether the leg is where it went extratropical or fell apart.
+      if (a.nature === 'TS' && a.landKm > 0 && a.kt >= CLASSES[0]) {
+        ends.push({ ...mid, hours: vel.hours, ended: b.nature === 'ET' || b.nature === 'DS' });
+      }
       // Strength: tropical at the start, a measured wind at both ends.
       if (a.nature !== 'TS' || !isFinite(a.kt) || !isFinite(b.kt) || a.kt < CLASSES[0]) continue;
       const per6 = (b.kt - a.kt) * 6 / vel.hours;
@@ -131,7 +139,7 @@ function legs(storms, fromSeason, toSeason) {
       }
     }
   }
-  return { motion, change, landDecay };
+  return { motion, change, landDecay, ends };
 }
 
 /// Buckets things with a lat/lon by 2.5-degree cell, for the widening search below.
@@ -168,9 +176,11 @@ function gather(index, lat, lon, min, keep) {
 
 /// The model data from the seasons asked for. Returned as the object dist/typhoon.js reads.
 function buildModel(storms, { fromSeason = 1980, toSeason = 9999, tau = 12, land = null } = {}) {
-  const { motion, change, landDecay } = legs(storms, fromSeason, toSeason);
+  const { motion, change, landDecay, ends } = legs(storms, fromSeason, toSeason);
   const motionIndex = bucket(motion);
   const changeIndex = bucket(change);
+  const endIndex = bucket(ends);
+  const hazard = [];
   const grids = { west: [], east: [], all: [] };
   const intensity = [];
   for (let row = 0; row < 180 / CELL; row++) {
@@ -190,6 +200,12 @@ function buildModel(storms, { fromSeason = 1980, toSeason = 9999, tau = 12, land
         if (!found) continue;
         intensity.push(row, col, cls, +median(found.map(f => f.per6)).toFixed(2), found.length);
       }
+      const seen = gather(endIndex, lat, lon, MIN_MOTION, () => true);
+      if (seen) {
+        const hours = seen.reduce((sum, e) => sum + e.hours, 0);
+        const ended = seen.filter(e => e.ended).length;
+        hazard.push(row, col, +(ended / hours).toFixed(5), seen.length);
+      }
     }
   }
   const measuredAlpha = median(landDecay.filter(a => isFinite(a)));
@@ -198,7 +214,8 @@ function buildModel(storms, { fromSeason = 1980, toSeason = 9999, tau = 12, land
       + 'whether they were heading west or already east; median six-hour change in strength over the '
       + 'sea by strength class; Kaplan and DeMaria inland decay. What past storms did, not a forecast.',
     seasons: [fromSeason, Math.min(toSeason, Math.max(...storms.map(s => s.season)))],
-    counts: { motionLegs: motion.length, changeLegs: change.length, landLegs: landDecay.length },
+    counts: { motionLegs: motion.length, changeLegs: change.length, landLegs: landDecay.length,
+      seaLegs: ends.length, endsAtSea: ends.filter(e => e.ended).length },
     params: {
       tau, alpha: KD.alpha, R: KD.R, Vb: KD.Vb, endKt: CLASSES[0],
       measuredAlpha: isFinite(measuredAlpha) ? +measuredAlpha.toFixed(4) : null,
@@ -206,6 +223,7 @@ function buildModel(storms, { fromSeason = 1980, toSeason = 9999, tau = 12, land
     motion: { cell: CELL, fields: ['row', 'col', 'uKmH', 'vKmH', 'n'], ...grids },
     intensity: { cell: CELL, classes: CLASSES, fields: ['row', 'col', 'class', 'ktPer6h', 'n'],
       fallback: -4, cells: intensity },
+    hazard: { cell: CELL, fields: ['row', 'col', 'perHour', 'n'], cells: hazard },
     land,
   };
 }
@@ -265,6 +283,8 @@ if (require.main === module) {
   console.log(`${model.source.storms} storms from ${model.seasons[0]} to ${model.seasons[1]}`);
   console.log(`motion cells: west ${model.motion.west.length / 5}, east ${model.motion.east.length / 5}, `
     + `all ${model.motion.all.length / 5}; strength cells ${model.intensity.cells.length / 5}`);
+  console.log(`ends at sea: ${model.counts.endsAtSea} in ${model.counts.seaLegs} legs; `
+    + `hazard cells ${model.hazard.cells.length / 4}`);
   console.log(`inland decay: published ${KD.alpha}/h, measured ${model.params.measuredAlpha}/h `
     + `from ${model.counts.landLegs} legs over land; persistence ${tau} h`);
   console.log(`wrote ${path.relative(ROOT, outPath)} (${(fs.statSync(outPath).size / 1024).toFixed(0)} KB)`);
