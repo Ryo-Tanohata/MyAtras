@@ -117,7 +117,7 @@
   // thinned where that has been sheared into a streak, flickering, and each typhoon's own
   // observed cloud carried with it. One 8-bit channel, filtered by the hardware.
   const RESOLVE = COMMON + `
-  uniform sampler2D start;uniform sampler2D flow;
+  uniform sampler2D start;uniform sampler2D flow;uniform sampler2D fronts;uniform float frontShift,frontShiftEast,frontsOn;
   uniform vec4 storm[${MAX_STORMS}];uniform vec4 motion[${MAX_STORMS}];uniform vec4 origin[${MAX_STORMS}];uniform float count;
   uniform float patchInner,patchOuter,streakFrom,streakTo;
   uniform float hour,flickerAmp,flickerCell,flickerTau,flickerBirth;
@@ -141,6 +141,15 @@
     float a=dot(ex,ex),b=dot(ex,ey),e=dot(ey,ey);float h=sqrt(max(0.,(a-e)*(a-e)*.25+b*b));
     float ratio=sqrt(max(1e-6,(a+e)*.5+h)/max(1e-6,(a+e)*.5-h));
     c*=1.-smoothstep(streakFrom,streakTo,ratio);}
+   // Near a front on the agency's charts, the cloud the observation had along the first
+   // chart's fronts, moved as far as the front has moved (dist/fronts.js): a stationary
+   // front's cloud forms again as fast as it is carried off, and carried only it streamed
+   // away and left the band broken. Never thinner than what was carried there.
+   if(frontsOn>0.){vec4 fr=texture2D(fronts,uv);
+    // East in b and a, 16 bits: filtered by the hardware, the high byte's steps would
+    // show, but a cell's move changes little from one cell to the next.
+    vec2 back=vec2((fr.b*255.*256.+fr.a*255.-32768.)/32767.*frontShiftEast,(fr.g*255.-128.)/127.*frontShift);
+    c=mix(c,max(c,observed(vec2(lon,lat)-back)),fr.r);}
    // The flicker: cloud edges grown and eaten away a little every hour, and a little
    // cloud come and gone in the clear, as real cloud does and cloud only carried does
    // not. Drawn on where the air came from, so it moves with the cloud, and changing
@@ -186,6 +195,8 @@
       // much of it reaches clear sky; chosen by scripts measuring the observations.
       this.flicker = Object.assign({}, FLICKER);
       this.streak = Object.assign({}, STREAK);
+      this.frontsOn = true;
+      this.fronts = null;
       this.active = false;
       this.hours = 0;
       this.tracks = [];
@@ -232,6 +243,15 @@
       };
       this.start0 = target(W, H, true);
       this.flow = [target(W, H, false), target(W, H, false)];
+      // The agency's fronts (dist/fronts.js), 256 x 128, refreshed each hour shown.
+      this.frontTexture = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE0 + 5);
+      gl.bindTexture(gl.TEXTURE_2D, this.frontTexture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 128, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       // Two, the hour on screen and the one before: the scene is shown an hour at a time,
       // like the observations before it, not moving on every frame. Computed continuously
       // and shown in steps, it keeps the rhythm of what it follows on from.
@@ -307,13 +327,15 @@
     /// last seen and its motion over the last twelve hours, in km/h. air: a
     /// BarotropicFlow already started, from the measured motion or, without it, the
     /// typical circulation.
-    start({ observation, watermark, storms, model, viewport, air }) {
+    start({ observation, watermark, storms, model, viewport, air, fronts = null }) {
       // With no storm, or no model to move one, the clouds still ride the flow.
       if (!this.ready || !air) return false;
       // A storm that comes with its own track (a forecast it follows) needs no model.
       if (!model) storms = storms.filter(s => s.track);
       this.viewport = viewport;
       this.air = air;
+      // A FrontField (dist/fronts.js), or none: the clouds are then only carried.
+      this.fronts = fronts && !fronts.empty ? fronts : null;
       this.airHours = 0;
       this.uploadAir();
       this.tracks = storms.slice(0, MAX_STORMS).map(s => {
@@ -358,8 +380,16 @@
       const into = this.previous;
       const f = this.flicker;
       const hour = Math.floor(this.hours + 1e-6);
-      this.pass('resolve', into, { start: this.start0.texture, flow: this.flow[this.current].texture },
-        Object.assign(this.uniformsAt(hour), { hour, patchInner: PATCH.inner, patchOuter: PATCH.outer,
+      const useFronts = this.fronts && this.frontsOn;
+      if (useFronts) {
+        const gl = this.gl;
+        this.frontPixels = this.fronts.pixels(hour, this.frontPixels);
+        gl.activeTexture(gl.TEXTURE0 + 5);
+        gl.bindTexture(gl.TEXTURE_2D, this.frontTexture);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 128, gl.RGBA, gl.UNSIGNED_BYTE, this.frontPixels);
+      }
+      this.pass('resolve', into, { start: this.start0.texture, flow: this.flow[this.current].texture, fronts: this.frontTexture },
+        Object.assign(this.uniformsAt(hour), { hour, frontsOn: useFronts ? 1 : 0, frontShift: root.FrontField ? root.FrontField.SHIFT_DEG : 12, frontShiftEast: root.FrontField ? root.FrontField.SHIFT_EAST_DEG : 48, patchInner: PATCH.inner, patchOuter: PATCH.outer,
           streakFrom: this.streak.from, streakTo: this.streak.to,
           flickerAmp: f.amp, flickerCell: f.cell, flickerTau: f.tau, flickerBirth: f.birth }));
       this.showing = 1 - this.showing;

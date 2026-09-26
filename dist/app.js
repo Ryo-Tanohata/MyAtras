@@ -85,7 +85,7 @@ const detail=new DetailLayer();window.geoDetail=detail;
 // After the last observation (step two of three): the storms carried on to their end,
 // with the clouds moved round them. Off unless asked for; see dist/storm-sim.js.
 const stormSim=new StormSimulation(gl,7);window.geoStormSim=stormSim;
-let simulate=false,motionFields=null,jmaForecasts=null,simResume=null,simFrom=null,simLine='',simBack=null,simUnder=false;
+let simulate=false,motionFields=null,jmaForecasts=null,jmaFronts=null,simResume=null,simFrom=null,simLine='',simBack=null,simUnder=false;
 // How much of the simulation is on screen: all of it while it runs, then fading out over the
 // return to the first observation, which is put underneath it at once.
 window.geoSimShown=()=>simShown(performance.now());
@@ -177,7 +177,9 @@ function startingStorms(time){
 playback.onLastFrame=(time,resume)=>{
  if(!simulate||!motionFields||!stormSim.ready||cloudSim.enabled)return false;
  const storms=simStorms(time);
- if(!stormSim.start({observation:weatherTexture,watermark,storms,model:null,viewport:[canvas.width,canvas.height],air:startingAir(time)}))return false;
+ // The agency's fronts, when its charts were fetched for these observations.
+ const fronts=jmaFronts&&jmaFronts.for===time&&window.FrontField?new FrontField(jmaFronts,stampHours(time)*3600000):null;
+ if(!stormSim.start({observation:weatherTexture,watermark,storms,model:null,viewport:[canvas.width,canvas.height],air:startingAir(time),fronts}))return false;
  simResume=resume;simFrom=time;simLine='';showSimStatus();return true;
 };
 // The storms to carry on: every typhoon the Japan Meteorological Agency has a forecast for
@@ -244,10 +246,16 @@ function showSimStatus(){
  const note=document.querySelector('#simulateNote');
  const air=stormSim.air&&stormSim.air.measured?'':' 最後の観測の雲の動きを測ったデータが無いため、背景の流れは典型的な循環から始めています。';
  const jst=iso=>new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso));
- const named=jma.map(t=>`${t.from.jma.number?`台風${String(t.from.jma.number).slice(-2).replace(/^0/,'')}号${t.from.jma.kana?`（${t.from.jma.kana}）`:''}`:'熱帯低気圧'}は気象庁の予報（${jst(t.from.jma.issued)}発表）の進路と強さに沿って動かしています。予報の終わりの後は、転向した台風の典型的な消え方（北東へ速度を上げながら36時間で弱まる）で延ばしています。`).join('')+(jma.length?'出典：気象庁「台風解析・予報情報」を加工して作成。':'');
+ const named=jma.map(t=>`${t.from.jma.number?`台風${String(t.from.jma.number).slice(-2).replace(/^0/,'')}号${t.from.jma.kana?`（${t.from.jma.kana}）`:''}`:'熱帯低気圧'}は気象庁の予報（${jst(t.from.jma.issued)}発表）の進路と強さに沿って動かしています。予報の終わりの後は、転向した台風の典型的な消え方（北東へ速度を上げながら36時間で弱まる）で延ばしています。`).join('');
+ // The fronts: where the agency's surface charts put them, the front's cloud is kept.
+ const fr=stormSim.fronts,shownH=stormSim.shownHours;
+ const fronts=!fr?'':`前線の雲は、気象庁の地上天気図（${jst(fr.charts[0].valid)}の実況と${fr.charts.filter(c=>c.kind==='forecast').map(c=>c.hours+'時間').join('・')}予想）の前線の位置に、最後の観測の前線の雲を保っています。`+
+  (shownH>fr.lastHours+FrontField.HOLD_HOURS?'予想図の先なので薄れていきます。':shownH>fr.lastHours?'今は最後の予想図の前線をそのまま保っています。':'');
+ const credits=[...(jma.length?['「台風解析・予報情報」']:[]),...(fr?[...new Set(fr.charts.map(c=>`「${c.title}」`))]:[])];
+ const sources=credits.length?`出典：気象庁${credits.join('')}を加工して作成。`:'';
  const storms=!stormSim.tracks.length?'この観測の時点で気象庁が予報している台風はありません。':(alive?`シミュレーション中の台風 ${alive}個（紫の輪）。${stormSim.marks().some(m=>!m.ended&&m.now.decay>0)?'気象庁の予報の終わりを過ぎ、典型的な消え方で弱まっています。':''}`:'シミュレーションの台風は消えました。')+named;
  const soon=!stormSim.finished&&stormSim.horizon-stormSim.hours<=12?' まもなくシミュレーションの終わりです。':'';
- if(note)note.textContent=storms+'雲は観測ではなく計算です。'+soon+air;
+ if(note)note.textContent=storms+fronts+'雲は観測ではなく計算です。'+sources+soon+air;
 }
 (()=>{
  const label=document.querySelector('#simulateToggle'),box=document.querySelector('#simulateStorms'),note=document.querySelector('#simulateNote');
@@ -261,8 +269,8 @@ function showSimStatus(){
   simulate=on;
   if(note){note.hidden=!simulate;note.textContent=simulate?'シミュレーションのデータを読み込み中…':'';}
   if(simulate&&!motionFields){
-   const [motion,jma]=await Promise.all([loadMotion(),window.GeoData.jmaTyphoon()]);
-   motionFields=motion;jmaForecasts=jma;
+   const [motion,jma,fronts]=await Promise.all([loadMotion(),window.GeoData.jmaTyphoon(),window.GeoData.jmaFronts()]);
+   motionFields=motion;jmaForecasts=jma;jmaFronts=fronts;
   }
   if(!simulate&&stormSim.active)endSimulation(true);
   if(note&&simulate&&!stormSim.active)note.textContent=simIdle();

@@ -759,6 +759,28 @@ async function checkSimulation(page) {
   // Played through to the end, it stops there - the last simulated hour stays on screen,
   // paused - and the play button offers the observations from the start. Going back days
   // on its own read as the weather jumping.
+  // Along the fronts on the agency's last chart, east of 140E where the band once broke
+  // off: with the fronts kept, cloud lies along them; carried only, it had streamed away.
+  // The same hour drawn both ways. With no charts for these observations, nothing to hold.
+  const frontCloud = JSON.parse(await page.js(`(async () => { const sim = window.geoStormSim, f = sim.fronts;
+    if (!f) return JSON.stringify({ charts: 0 });
+    const last = f.charts[f.charts.length - 1];
+    await new Promise(r => { (function wait() { sim.shownHours >= last.t || sim.finished ? r() : setTimeout(wait, 50); })(); });
+    const play = document.getElementById('weatherPlay'); play.click();
+    const gl = sim.gl, W = 1024, H = 512, b = new Uint8Array(W * H * 4);
+    const along = () => { sim.resolve(); sim.resolve(); sim.restore();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, sim.display.fb); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, b); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      let sum = 0, n = 0;
+      for (const line of last.lines) for (const [lat, lon] of line) { if (lon < 140 || lon > 170) continue;
+        for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+          const x = (Math.round((lon + 180) / 360 * W) + dx + W) % W, y = Math.round((lat + 90) / 180 * H) + dy;
+          sum += b[(y * W + x) * 4] / 255; n++; } }
+      return n ? sum / n : 0; };
+    const kept = along(); sim.frontsOn = false; const carried = along(); sim.frontsOn = true; along();
+    play.click();
+    return JSON.stringify({ charts: f.charts.length, hours: sim.shownHours, kept: +kept.toFixed(3), carried: +carried.toFixed(3) }); })()`));
+  check(!frontCloud.charts || (frontCloud.kept >= frontCloud.carried * 1.25 && frontCloud.kept >= 0.15),
+    frontCloud.charts ? "a front's cloud stays along the agency's front" : 'no surface charts for these observations', JSON.stringify(frontCloud));
   // Past its forecast the page says the typhoon is dying the typical way, not forecast.
   const dying = past.some(p => p.typhoon) && await page.waitFor(`(() => { const t = window.geoStormSim.tracks.find(t => t.from.jma);
     return t && window.geoStormSim.shownHours >= t.forecastHours + 18; })()`, 90000).then(() => true, () => false);

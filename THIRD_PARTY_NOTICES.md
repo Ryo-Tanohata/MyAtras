@@ -124,6 +124,19 @@ and does not present itself as its forecast service.
   processed data marked as processed. Checked against the page on 2026-09-26 only as far
   as quoted here; confirm before any use beyond this page.
 
+### Surface charts (fronts)
+
+`dist/data/jma-fronts.json` holds the fronts - their type and their line of latitude and
+longitude points - from the agency's surface analysis and its 24 and 48 hour surface
+forecasts (「地上実況図」 or 「アジア太平洋地上実況図」, 「地上２４時間予想図」, 「地上４８時間予想図」;
+VZSA50/VZSA60, VZSF50, VZSF51), from the initial time nearest the last bundled
+observation, read by `scripts/fetch-jma-fronts.cjs` from the regular feed
+(https://www.data.jma.go.jp/developer/xml/feed/regular_l.xml). Isobars and pressure
+centres are not kept. The publishing workflow fetches them when the observations change,
+a few files of 140-300 KB, and commits the result with them. The page keeps the last
+observation's frontal cloud along these fronts and says so, with 「出典：気象庁「地上実況図」
+「地上２４時間予想図」「地上４８時間予想図」を加工して作成」.
+
 ## NASA — ground reference texture
 
 `dist/assets/earth.jpg` is NASA's Blue Marble *Land Surface, Shallow Water, and

@@ -5,7 +5,7 @@
 // both builds show identical data. Failure returns null and the UI keeps running
 // with whatever it already shows; nothing is substituted for a missing observation.
 (function(root){
-const SNAPSHOT='weather/snapshot.json',SEQUENCE='weather/sequence/manifest.json',REGION='weather/region/manifest.json',TYPHOON='data/typhoon.json',AMV='data/amv.json',STORMS='data/storms.json',TENDENCY='data/tendency.json',MOTION='data/motion/manifest.json',JMA='data/jma-typhoon.json';
+const SNAPSHOT='weather/snapshot.json',SEQUENCE='weather/sequence/manifest.json',REGION='weather/region/manifest.json',TYPHOON='data/typhoon.json',AMV='data/amv.json',STORMS='data/storms.json',TENDENCY='data/tendency.json',MOTION='data/motion/manifest.json',JMA='data/jma-typhoon.json',FRONTS='data/jma-fronts.json';
 const pending=new Map();
 function loadJSON(path){if(pending.has(path))return pending.get(path);const request=(async()=>{const response=await fetch(path,{credentials:'omit'});if(!response.ok)throw Error('HTTP '+response.status);return response.json();})();pending.set(path,request);return request;}
 function beside(path,file){return path.slice(0,path.lastIndexOf('/')+1)+file;}
@@ -28,6 +28,9 @@ const GeoData={
  // The Japan Meteorological Agency's typhoon forecasts, fetched when the site was last
  // published (scripts/fetch-jma-typhoon.cjs). Not in the standalone export.
  async jmaTyphoon(){if(root.GEO_STANDALONE)return null;try{const data=await loadJSON(JMA);return data&&Array.isArray(data.storms)?data:null;}catch(error){return null;}},
+ // The agency's surface charts for the bundled observations, for the fronts on them
+ // (scripts/fetch-jma-fronts.cjs). Not in the standalone export.
+ async jmaFronts(){if(root.GEO_STANDALONE)return null;try{const data=await loadJSON(FRONTS);return data&&Array.isArray(data.charts)?data:null;}catch(error){return null;}},
  async amv(){if(root.GEO_AMV_SNAPSHOT)return root.GEO_AMV_SNAPSHOT;try{const bundle=await loadJSON(AMV);root.GEO_AMV_SNAPSHOT=bundle;return bundle;}catch(error){return null;}},
  async storms(){if(root.GEO_STORMS)return root.GEO_STORMS;try{const bundle=await loadJSON(STORMS);root.GEO_STORMS=bundle;return bundle;}catch(error){return null;}},
  async tendency(){if(root.GEO_TENDENCY)return root.GEO_TENDENCY;try{const bundle=await loadJSON(TENDENCY);root.GEO_TENDENCY=bundle;return bundle;}catch(error){return null;}}

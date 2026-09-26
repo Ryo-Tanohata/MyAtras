@@ -142,6 +142,15 @@ Unity版は観測を独自取得せず、`dist/weather/` と `dist/data/` の同
 - 計算中の色は紫を0.3から0.12へ弱めた（`dist/app.js` の `simTint`）。
 - 検査：`tools/check-webgl.cjs` の「台風の雲は観測の雲を運んだもの」（24時間後の中心600km以内の平均雲量が最初の0.6〜1.5倍、900km以内の明るい画素が2倍＋50以内。実測 0.180→0.206・118→139）と「晴れた空にもやが増えない」（0.08〜0.35の画素の割合が最初の1.15倍＋0.005以内。実測 0.158→0.097）。**元のコードではどちらも落ちる**（0.242→0.480・111→370、0.158→0.378）ことを確認済み。`--desktop` の導入の検査はこの変更の前から落ちている（開始56色、未調査）。
 
+## 前線の雲を気象庁の地上天気図に沿って保つ（2026-09-27・JS版のみ）
+ユーザー：スマホで+70時間ごろ「関東から東の雲が切れている、予報ではどうか」。予報（日本気象協会などの解説）は秋雨前線が本州の南岸に停滞。計算は雲を運ぶだけで作らないので、前線の東側の雲は偏西風で流れ去り、引き伸ばされて薄れる処理で消えていた。ユーザーの選択は「A：気象庁の予想天気図の前線に沿わせる」。
+- **取得**：`scripts/fetch-jma-fronts.cjs` が気象防災情報XMLの定時フィード（`regular_l.xml`・`regular.xml`）から地上実況図（VZSA50、アジア太平洋はVZSA60）・地上24時間予想図（VZSF50）・48時間予想図（VZSF51）を取り、前線（種類と緯度経度の線）だけを `dist/data/jma-fronts.json` に書く。等圧線は捨てる。**Headの `TargetDateTime` は初期時刻**で、予想の対象時刻は本文の `DateTime`（「予想　４８時間後」）。最初の版は逆に読んで、9/27 12Z の図を 9/26 12Z のものとした。選ぶのは最後の観測に一番近い初期時刻（00Z/12Z）の予想図とその時刻の実況図（同じ時刻の実況が2枚あれば前線の点が多い方）。ダウンロードは前後2つの初期時刻の発表時間帯に絞る（`wanted`：予想は初期時刻の2〜14時間後、実況は0〜6時間後の更新）。実測で1回11リクエスト・約5.6MB（最初の版は絞らず31回・9.3MB）。
+- **公開ワークフロー**：台風の予報と同じく、コミット済みの `jma-fronts.json` の `for` が同梱観測の最後の時刻と違うときだけ取り、「Keep the typhoon forecast and surface charts …」の手順が単独でcommitする。手動入力 `jma_charts_again` で地上天気図だけ取り直せる（**台風の予報は取り直さない** — フィードに報が残っていないと台風が消えるため）。
+- **表示**：`dist/fronts.js` の `FrontField` が256×128の格子に、前線からの距離による重み（150kmまで全部・380kmで0）と、雲を借りる場所へのずれを作り、`dist/storm-sim.js` の RESOLVE が `c=mix(c,max(c,観測(ここ−ずれ)),重み)` で重ねる（運んだ雲より薄くはしない）。ずれの決め方：各前線を、最初の図（実況）で最も長く近くを走る前線に対応させ、2本が一番近づく点から**線に沿った距離**で対応づける。最初の図の前線の端より先へ延びた部分は端で**鏡のように折り返して**帯の内側の雲を使う（端の1点から取ると1列が筋に伸びる）。**セルごとに一番近い前線を選ぶ最初の版は、2本の前線の中間で借りる場所が跳んで縦の切れ目ができた**。予想図の間は時間で線形に混ぜ、最後の図（+52時間）の先は24時間そのまま、その後48時間で0へ（`HOLD_HOURS`・`FADE_HOURS`）。東西のずれは±48°を16bit（b・a）、南北は±12°を8bit（g）。
+- 同梱（9/25 20Z）では実況（9/26 00Z、+4時間）の停滞前線が 112〜144°E（関東付近で終わる）で観測の帯と一致、24・48時間予想では 108〜167°E まで延びる。
+- 画面：注記に「前線の雲は、気象庁の地上天気図（…の実況と24時間・48時間予想）の前線の位置に、最後の観測の前線の雲を保っています」と予想図の先かどうか、出典に「地上実況図」「地上２４時間予想図」「地上４８時間予想図」。「この表示について」にも追記。`DATA_POLICY.md`・`THIRD_PARTY_NOTICES.md` も更新。
+- 検査：`tests/fronts.test.cjs`（10件：重み、動いた前線、新しい前線、端の先の折り返し、保持と薄れ、日付変更線、**実際の図の頭部で時刻の読み方**、図の選び方、取る範囲）。`tools/check-webgl.cjs` の「前線の雲が気象庁の前線に沿って残る」（最後の図の前線の140〜170°Eの点で、保つ場合と運ぶだけの場合を同じ時刻で描き比べ、1.25倍以上かつ0.15以上。実測 0.444 対 0.315）。
+
 ## 地域の高解像度（2026-09-20・JS版のみ）
 ユーザーの希望「関東だけのように地域までズームしてもよく見えるように」。全球512×512は日本付近で約64 km/画素なので、拡大すると雲が四角くなる。**同じ観測・同じ時刻を、SSECが持っている解像度のまま切り出した画像を別レイヤーとして重ねる**方式にした。拡大・補間・生成は一切しない。
 - 取得：`node scripts/fetch-observations.cjs --span 72 --frames 72 --every 60 --winds --region`。既定は日本（南24°・西122°・北46°・東148°）、幅1280px（約2 km/画素＝赤外線band13の限界）、**最新12時刻だけ**（1枚が全球の数倍あるため）。`--region-bounds S,W,N,E`・`--region-width`・`--region-frames`・`--region-name` で変えられる。`dist/weather/region/manifest.json` に bounds・width・height・km/画素・各ファイルのURLとSHA-256を記録。**SSECに到達できる機械でのみ実行**。
@@ -201,7 +210,7 @@ SSEC RealEarth の Terms of Use（原文を取得して確認）は「Public use
 4. 単なるテクスチャ平行移動や生成した雲を実観測として見せない。出典とロゴを維持する。
 
 ## 検証済みと未検証
-`node tests/weather.test.cjs`（9件）、`node tests/weather-playback.test.cjs`（19件）、`node tests/cloud-model.test.cjs`（9件）、`node tests/cloud-simulation.test.cjs`（10件）、`node tests/observation-fade.test.cjs`（8件）、`node tests/fetch-observations.test.cjs`（14件・API模擬サーバー）、`node tests/build-motion.test.cjs`（6件）、`node tests/find-storms.test.cjs`（8件）、`node tests/storms.test.cjs`（15件・画面が何を描いてよいかの判定）、`node tests/build-tendency.test.cjs`（11件）、`node tests/region.test.cjs`（7件）、`node tests/typhoon.test.cjs`（19件）、`node tests/background-flow.test.cjs`（7件）、`node tests/fetch-jma-typhoon.test.cjs`（5件）の計148件（weather-playback 20件を含む）はこの環境で成功（2026-09-26）。同梱の動きと同梱の台風が、いずれも同梱の観測から作られたことも含む。同梱3,333ベクトルすべてが3時間後まで有限であることも確認済み。
+`node tests/weather.test.cjs`（9件）、`node tests/weather-playback.test.cjs`（19件）、`node tests/cloud-model.test.cjs`（9件）、`node tests/cloud-simulation.test.cjs`（10件）、`node tests/observation-fade.test.cjs`（8件）、`node tests/fetch-observations.test.cjs`（14件・API模擬サーバー）、`node tests/build-motion.test.cjs`（6件）、`node tests/find-storms.test.cjs`（8件）、`node tests/storms.test.cjs`（15件・画面が何を描いてよいかの判定）、`node tests/build-tendency.test.cjs`（11件）、`node tests/region.test.cjs`（7件）、`node tests/typhoon.test.cjs`（19件）、`node tests/background-flow.test.cjs`（7件）、`node tests/fetch-jma-typhoon.test.cjs`（5件）、`node tests/fronts.test.cjs`（10件）の計158件（weather-playback 20件を含む）はこの環境で成功（2026-09-26）。同梱の動きと同梱の台風が、いずれも同梱の観測から作られたことも含む。同梱3,333ベクトルすべてが3時間後まで有限であることも確認済み。
 Windows上のChrome（`--headless=new` + SwiftShader）で実描画を確認：配信版の合成表示・13時刻の再生、白黒観測モード、立体の模型モード（3,333地点）、および単体HTMLのfile://単体起動。地球・雲模型のGLSLは実ブラウザでコンパイル・リンク成功。
 2026-09-17、Linuxコンテナの同梱Chromium（SwiftShader）とAndroid幅412×915のタッチ操作エミュレーションでも再確認：地球描画、13時刻が一巡してループ、一時停止で時刻が止まること、白黒観測トグル、可視光への切替（追加取得は失敗し、設計どおり表示中の観測を保持）、立体の模型（3,333地点の移流）、昼夜モード。約56fps。
 Android実機でのUI QA、実機のタッチ操作、実ネットワークでの「最新を取得」は未検証。エミュレーションのタッチは実機の代わりにならない。
