@@ -9,7 +9,7 @@ const { install, suite } = require('./harness.cjs');
 
 const env = install([
   'weatherProduct', 'weatherStatus', 'weatherDescription', 'observationTime',
-  'weatherTime', 'refreshWeather', 'autoWeather', 'surfaceLabel', 'flatWeather',
+  'weatherTime', 'refreshWeather', 'surfaceLabel', 'flatWeather',
   'rawObservation', 'weatherPlay', 'weatherPlaybackStatus', 'weatherPlaybackSpeed',
   'weatherFrames'
 ]);
@@ -35,7 +35,6 @@ function setup() {
   env.responses.set('api/products', PRODUCTS_JSON);
   env.responses.set('api/image', { image: true });
   env.document.getElementById('weatherProduct').value = 'globalir';
-  env.document.getElementById('autoWeather').checked = false;
   env.document.getElementById('weatherFrames').value = '24';
   env.reset();
   const shown = [];

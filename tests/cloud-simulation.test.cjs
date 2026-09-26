@@ -9,7 +9,7 @@ const { install, suite } = require('./harness.cjs');
 
 const env = install([
   'cloudPlay', 'cloudReset', 'cloudTime', 'cloudSpeed', 'cloudHeight', 'cloudHeightValue',
-  'cloudLayer', 'refreshClouds', 'cloudStatus', 'cloudObserved', 'cloudCount',
+  'cloudLayer', 'cloudStatus', 'cloudObserved', 'cloudCount',
   'cloudElapsed', 'cloudProgress',
 ]);
 global.CloudModel = require('../dist/cloud-model.js');

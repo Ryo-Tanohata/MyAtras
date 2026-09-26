@@ -181,6 +181,7 @@ async function connect(port) {
   await send('Page.enable');
   await send('Runtime.enable');
   await send('Log.enable');
+  await send('Network.enable');
 
   const js = async expr => {
     const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true });
@@ -1190,6 +1191,11 @@ async function main() {
     check(problems.length === 0, 'no console errors from the site',
       problems.length ? problems[0] : '');
     for (const p of problems.slice(1)) console.log(`       ${p}`);
+    // Visitors' browsers are not to fetch from SSEC by themselves (DATA_POLICY.md): the
+    // observations come from the site. Only pressing 「最新を取得」 may, and no check does.
+    const asked = page.events.filter(e => e.method === 'Network.requestWillBeSent' &&
+      /realearth\.ssec\.wisc\.edu/.test(e.params.request.url)).map(e => e.params.request.url);
+    check(asked.length === 0, 'nothing is fetched from SSEC unasked', asked.length ? `${asked.length}: ${asked[0]}` : '');
     if (!LIVE_URL) {
       check(missing.length === 0, 'every requested file was served',
         missing.length ? missing.slice(0, 3).join(' ') : '');

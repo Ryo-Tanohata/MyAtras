@@ -5,7 +5,7 @@ const { install, suite } = require('./harness.cjs');
 
 const env = install([
   'weatherProduct', 'weatherStatus', 'weatherDescription', 'observationTime',
-  'weatherTime', 'refreshWeather', 'autoWeather', 'surfaceLabel', 'flatWeather',
+  'weatherTime', 'refreshWeather', 'surfaceLabel', 'flatWeather',
   'rawObservation'
 ]);
 const W = require('../dist/weather.js');
@@ -18,7 +18,6 @@ const PRODUCTS_JSON = JSON.stringify([
 function controller() {
   const ui = env.document;
   ui.getElementById('weatherProduct').value = 'globalir';
-  ui.getElementById('autoWeather').checked = false;
   for (const id of ['weatherStatus', 'observationTime', 'surfaceLabel']) {
     ui.getElementById(id).textContent = '';
   }
@@ -84,16 +83,19 @@ s.test('the bundled observation is shown without any network call', async () => 
   env.responses.set('weather/snapshot/', { image: true });
   env.reset();
   const { c, images, enabled } = controller();
-  await atTime('2026-09-16T18:00:00Z', () => c.init(true));  // one hour after the observation
-  clearInterval(c.timer);
+  const listened = [], listen = env.document.addEventListener;
+  env.document.addEventListener = type => listened.push(type);
+  try { await atTime('2026-09-16T18:00:00Z', () => c.init(true)); }  // one hour after the observation
+  finally { env.document.addEventListener = listen; }
   assert.strictEqual(images.length, 1, 'one observation uploaded');
   assert.deepStrictEqual(enabled, [true]);
   assert.strictEqual(c.current.time, '20260916.170000');
   assert.strictEqual(c.current.saved, true);
   assert.ok(env.loads.every(u => !u.includes('api/products')), 'no product listing was requested');
-  // The hour before the automatic check starts at opening, not at 0: from 0, the first
-  // return to the page replaced the bundled observations straight away.
-  assert.strictEqual(c.lastCheck, Date.parse('2026-09-16T18:00:00Z'));
+  // Nothing asks SSEC by itself: no hourly timer, and coming back to the page fetches
+  // nothing. That check, on by default, had every visitor fetching from the university.
+  assert.strictEqual(c.timer, undefined, 'no automatic refresh');
+  assert.ok(!listened.includes('visibilitychange'), 'coming back to the page does not fetch');
   const shown = env.document.getElementById('observationTime').textContent;
   assert.ok(shown.includes('2026/09/17') && shown.includes('02:00') && shown.includes('日本時間'),
     'timestamp is shown in Japan time: ' + shown);
