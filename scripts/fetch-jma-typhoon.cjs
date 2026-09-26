@@ -3,7 +3,8 @@
 // The Japan Meteorological Agency's current typhoon forecasts, for the simulation to follow.
 //
 //   node scripts/fetch-jma-typhoon.cjs                 # -> dist/data/jma-typhoon.json
-//   node scripts/fetch-jma-typhoon.cjs --dump          # also prints the newest report
+//   node scripts/fetch-jma-typhoon.cjs --dump          # also prints the first report read
+//   node scripts/fetch-jma-typhoon.cjs --for 20260925.200000   # for other observations
 //
 // The typhoon object of dist/typhoon.js moves the way past storms moved through the same
 // place, and knows nothing of this week's pressure pattern: on 2026-09-26 it carried
@@ -13,13 +14,20 @@
 // Read from the agency's disaster-information XML (気象防災情報XML), the documented feed
 // its own services are built on: the long-term feed lists every "台風解析・予報情報" issued
 // over the past days, and each report holds the analysed centre and the forecast centres,
-// forecast circles, central pressure and maximum wind out to five days. Only the newest
-// report of each typhoon is kept.
+// forecast circles, central pressure and maximum wind out to five days.
+//
+// Not the newest report: the one for the bundled observations. The simulation starts at
+// the last observation, so the forecast it follows is the one issued at that time - the
+// report whose analysis is nearest the last observation, of each typhoon. The newest was
+// what this first took, fetched every three hours; within a day of the observations it
+// no longer covered their last hour, and the storm stopped following the agency at all.
+// The file names the observation time it was chosen for (`for`), and the publishing
+// workflow fetches again only when the observations change.
 //
 // Run where the agency can be reached - the GitHub runner, from the publishing workflow;
 // agent containers get 403. Best effort: a failure writes a file with no storms and the
-// reason, and exits 0, so the site is still published and the simulation falls back to
-// the typhoon object's own motion. The page says whose forecast it is following.
+// reason, and exits 0, so the site is still published; the simulation then moves no
+// storm. The page says whose forecast it is following.
 const fs = require('fs');
 const path = require('path');
 
@@ -29,7 +37,7 @@ const FEEDS = [
 ];
 const OUT = path.join(__dirname, '..', 'dist', 'data', 'jma-typhoon.json');
 const TITLE = /台風解析・予報情報/;
-const MAX_REPORTS = 40;
+const SEQUENCE = path.join(__dirname, '..', 'dist', 'weather', 'sequence', 'manifest.json');
 const KNOTS_PER_MS = 1 / 0.514444;
 
 /// Undoes the XML escapes a text node can hold.
@@ -111,21 +119,33 @@ function parseReport(xml) {
   };
 }
 
-/// The newest usable report of each typhoon, from reports already parsed. Cancellations
-/// and drills are left out, as is a report with no centre in it, and - given now - one
-/// issued more than a day before or whose forecast has already run out: the feed keeps
-/// days of reports, and a storm that stopped being reported has ended.
-function newestPerTyphoon(reports, now = null) {
+/// "20260925.200000" as milliseconds.
+function stampMs(t) {
+  const m = /^(\d{4})(\d\d)(\d\d)[._](\d\d)(\d\d)(\d\d)$/.exec(t || '');
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : NaN;
+}
+
+/// For each typhoon, the report the simulation starting at `at` (ms, the last observation)
+/// should follow: of those whose forecast covers that start - analysed no more than a day
+/// after it, running at least twelve hours past it, as dist/typhoon.js requires - the one
+/// analysed nearest it, the later issue on a tie. Cancellations and drills are left out,
+/// as is a report with no centre in it. A typhoon with no such report is left out: it had
+/// ended, or had not begun, when the observations stop.
+function forObservations(reports, at) {
   const best = new Map();
   for (const r of reports) {
-    if (!r.issued || !r.points.some(p => p.kind === 'analysis')) continue;
-    if (now !== null && (Date.parse(r.issued) < now - 24 * 3600000 || Date.parse(r.points[r.points.length - 1].time) < now)) continue;
+    const analysis = r.points.find(p => p.kind === 'analysis');
+    if (!r.issued || !analysis) continue;
     if (r.status && r.status !== '通常') continue;
     if (r.infoType && /取消/.test(r.infoType)) continue;
+    const a = Date.parse(analysis.time), last = Date.parse(r.points[r.points.length - 1].time);
+    if (a - at > 24 * 3600000 || last - at < 12 * 3600000) continue;
     const key = r.eventId || r.number || `${r.name}|${r.points[0].lat}`;
-    if (!best.has(key) || best.get(key).issued < r.issued) best.set(key, r);
+    const off = Math.abs(a - at), held = best.get(key);
+    if (!held || off < held.off || (off === held.off && r.issued > held.r.issued)) best.set(key, { r, off });
   }
-  return [...best.values()].sort((a, b) => (a.eventId || a.number || '').localeCompare(b.eventId || b.number || ''));
+  return [...best.values()].map(b => b.r)
+    .sort((a, b) => (a.eventId || a.number || '').localeCompare(b.eventId || b.number || ''));
 }
 
 async function get(url) {
@@ -136,7 +156,12 @@ async function get(url) {
 
 async function main() {
   const dump = process.argv.includes('--dump');
-  const out = { source: '気象庁 気象防災情報XML（台風解析・予報情報）', feed: FEEDS[0], fetched: new Date().toISOString(), storms: [] };
+  const i = process.argv.indexOf('--for');
+  const forTime = i > 0 ? process.argv[i + 1] : JSON.parse(fs.readFileSync(SEQUENCE, 'utf8')).globalir.at(-1).time;
+  const at = stampMs(forTime);
+  if (!Number.isFinite(at)) throw new Error(`not an observation time: ${forTime}`);
+  const out = { source: '気象庁 気象防災情報XML（台風解析・予報情報）', feed: FEEDS[0], for: forTime,
+    fetched: new Date().toISOString(), storms: [] };
   try {
     const seen = new Set(), entries = [];
     for (const feed of FEEDS) {
@@ -144,10 +169,11 @@ async function main() {
         for (const e of parseFeed(await get(feed))) if (TITLE.test(e.title) && !seen.has(e.link)) { seen.add(e.link); entries.push(e); }
       } catch (error) { console.log(`feed ${feed}: ${error.message}`); }
     }
-    entries.sort((a, b) => b.updated.localeCompare(a.updated));
-    console.log(`${entries.length} typhoon reports listed`);
+    // Only reports issued around the observations' end can be the one for them.
+    const near = entries.filter(e => { const u = Date.parse(e.updated); return u > at - 6 * 3600000 && u < at + 30 * 3600000; });
+    console.log(`${entries.length} typhoon reports listed, ${near.length} issued around ${forTime}`);
     const reports = [];
-    for (const e of entries.slice(0, MAX_REPORTS)) {
+    for (const e of near) {
       try {
         const xml = await get(e.link);
         const r = parseReport(xml);
@@ -156,7 +182,7 @@ async function main() {
         if (dump && reports.length === 1) console.log(xml.slice(0, 12000));
       } catch (error) { console.log(`report ${e.link}: ${error.message}`); }
     }
-    out.storms = newestPerTyphoon(reports, Date.now());
+    out.storms = forObservations(reports, at);
     for (const s of out.storms) {
       const a = s.points.find(p => p.kind === 'analysis');
       console.log(`${s.eventId} typhoon ${s.number} ${s.kana || s.name || ''}: issued ${s.issued}, centre ${a.lat}N ${a.lon}E at ${a.time}, ` +
@@ -171,4 +197,4 @@ async function main() {
 }
 
 if (require.main === module) main();
-module.exports = { parseFeed, parseReport, newestPerTyphoon, coordinate };
+module.exports = { parseFeed, parseReport, forObservations, stampMs, coordinate };

@@ -107,17 +107,15 @@ Earth, public domain) and Kaplan and DeMaria's inland decay (*J. Appl. Meteor.* 
 
 ## Japan Meteorological Agency — typhoon forecasts
 
-`dist/data/jma-typhoon.json` holds the agency's current typhoon analyses and forecasts
-(centre, central pressure, maximum wind and forecast circle out to five days), read by
-`scripts/fetch-jma-typhoon.cjs` from its disaster-information XML
-(気象防災情報XML, 「台風解析・予報情報」). The publishing workflow fetches it on every
-publish and every three hours; it is published with the site and never committed (the
-committed file is empty). The page moves each typhoon the agency has a forecast for along
-it, joining the forecast centres smoothly in time, and says so:
-「出典：気象庁「台風解析・予報情報」を加工して作成」. Past the last forecast hour, and for
-storms the agency does not forecast, the page's own model moves the storm, and the page
-says that too. The page is not the agency's and does not present itself as its forecast
-service.
+`dist/data/jma-typhoon.json` holds the agency's typhoon analyses and forecasts (centre,
+central pressure, maximum wind and forecast circle out to five days) as issued when the
+bundled observations end, read by `scripts/fetch-jma-typhoon.cjs` from its
+disaster-information XML (気象防災情報XML, 「台風解析・予報情報」). The publishing workflow
+fetches it when the observations change and commits it with them. The page moves each
+typhoon the agency has a forecast for along it, joining the forecast centres smoothly in
+time, until the forecast ends, and says so: 「出典：気象庁「台風解析・予報情報」を加工して
+作成」. Storms the agency does not forecast are not moved. The page is not the agency's
+and does not present itself as its forecast service.
 
 - Source: 気象庁 気象防災情報XML, https://xml.kishou.go.jp/ (feed
   https://www.data.jma.go.jp/developer/xml/feed/extra_l.xml).

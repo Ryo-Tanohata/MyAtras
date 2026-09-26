@@ -40,19 +40,26 @@ s.test('coordinates read in all four quarters of the globe', () => {
   assert.strictEqual(J.coordinate(''), null);
 });
 
-s.test('the newest report of each disturbance is kept, and stale ones are dropped', () => {
-  const r = J.parseReport(XML);
-  const older = Object.assign({}, r, { issued: '2026-09-25T21:45:00.000Z', points: r.points.map(p => Object.assign({}, p, { lat: p.lat - 1 })) });
-  const depression = Object.assign({}, r, { eventId: 'TC2633', number: null, kana: null });
-  const cancelled = Object.assign({}, r, { eventId: 'TC2634', infoType: '取消' });
-  const drill = Object.assign({}, r, { eventId: 'TC2635', status: '訓練' });
-  const now = Date.parse('2026-09-26T02:30:00Z');
-  const kept = J.newestPerTyphoon([older, r, depression, cancelled, drill], now);
+s.test('for each disturbance, the report nearest the last observation that covers it', () => {
+  const r = J.parseReport(XML);   // analysed 2026-09-26 00:00Z, forecast to 12:00Z
+  const shift = (report, hours, extra = {}) => Object.assign({}, report, extra, {
+    issued: new Date(Date.parse(report.issued) + hours * 3600000).toISOString(),
+    points: report.points.map(p => Object.assign({}, p, { time: new Date(Date.parse(p.time) + hours * 3600000).toISOString() })),
+  });
+  const lastObs = J.stampMs('20260925.200000');
+  const earlier = shift(r, -9), later = shift(r, 6);
+  const depression = shift(r, 0, { eventId: 'TC2633', number: null, kana: null });
+  const cancelled = shift(r, 0, { eventId: 'TC2634', infoType: '取消' });
+  const drill = shift(r, 0, { eventId: 'TC2635', status: '訓練' });
+  const kept = J.forObservations([later, r, earlier, depression, cancelled, drill], lastObs);
   assert.deepStrictEqual(kept.map(k => k.eventId), ['TC2632', 'TC2633']);
+  // Analysed 4 h after the last observation beats 10 h after (later) and 5 h before
+  // (earlier, whose forecast runs out 7 h after it - less than the 12 needed).
   assert.strictEqual(kept[0].issued, r.issued);
-  // A report whose forecast has run out, or one issued over a day ago, is a storm that ended.
-  assert.deepStrictEqual(J.newestPerTyphoon([r], Date.parse('2026-09-26T13:00:00Z')), []);
-  assert.deepStrictEqual(J.newestPerTyphoon([r], Date.parse('2026-09-27T01:00:00Z')), []);
+  // Not the newest: a day on, the newest no longer covers these observations.
+  assert.deepStrictEqual(J.forObservations([shift(r, 30)], lastObs), []);
+  // Observations a day older than every report: nothing covers them.
+  assert.deepStrictEqual(J.forObservations([r], J.stampMs('20260924.200000')), []);
 });
 
 s.test('the feed lists entries with title, link and time', () => {

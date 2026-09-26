@@ -33,22 +33,22 @@ name: Publish site
 # The standalone single-file build is produced here rather than committed, so the
 # published copy is always rebuilt from the same observations the site serves.
 #
-# The Japan Meteorological Agency's typhoon forecasts are fetched on every run - a few
-# small XML files - and every three hours on a schedule, which publishes the bundled
-# observations again with the newest forecasts. The schedule never touches SSEC: the
-# observation fetch runs only when started by hand. The forecasts are published, not
-# committed, since they change every few hours.
+# The Japan Meteorological Agency's typhoon forecast goes with the observations: the one
+# issued when they end, which is where the simulation starts. It is fetched when the
+# observations change - fetched ones, or bundled ones the committed forecast was not
+# chosen for - and kept with them: committed with a `commit` fetch, and on its own when
+# it was fetched for the bundled set. There is no schedule. Fetching the newest forecast
+# every three hours, as this first did, replaced the one that fitted the observations
+# with ones that no longer did, and the storm stopped following the agency.
 
 on:
   push:
     branches: [main]
     # The record this workflow writes must not start it again.
     paths-ignore: ['records/**']
-  # A day of observations is a full turn of the Earth, which is what this set out to
-  # show, so observations are fetched when someone asks for them rather than every
-  # morning for ever. The schedule is for the typhoon forecasts alone (see above).
-  schedule:
-    - cron: '23 */3 * * *'
+  # No schedule. A day of observations is a full turn of the Earth, which is what this
+  # set out to show, so it is fetched when someone asks for it rather than every
+  # morning for ever; the typhoon forecast goes with it (see above).
   workflow_dispatch:
     inputs:
       fetch:
@@ -148,12 +148,22 @@ jobs:
             console.log(`${m.length} frames, ${m[0].time} to ${m.at(-1).time}`);
           ' | tee -a "$GITHUB_STEP_SUMMARY"
 
-      # After the step above, which can put dist/data back as committed. Best effort: a
-      # failure leaves a file with no storms, and the simulation moves storms by the
-      # typhoon object alone.
-      - name: Fetch the Japan Meteorological Agency's typhoon forecasts
+      # After the step above, which can put dist/data back as committed. Only when the
+      # observations are not the ones the committed forecast was chosen for. Best effort:
+      # a failure leaves a file with no storms, and the simulation moves no storm.
+      - name: Fetch the Japan Meteorological Agency's typhoon forecast for the observations
+        id: jma
         continue-on-error: true
-        run: node scripts/fetch-jma-typhoon.cjs --dump | tee jma.log
+        run: |
+          WANT="$(node -p 'require("./dist/weather/sequence/manifest.json").globalir.at(-1).time')"
+          HAVE="$(node -p 'require("./dist/data/jma-typhoon.json").for || ""')"
+          if [ "$WANT" = "$HAVE" ]; then
+            echo "The committed forecast was chosen for $WANT; not fetched again." | tee jma.log
+            echo "fetched=false" >> "$GITHUB_OUTPUT"
+          else
+            node scripts/fetch-jma-typhoon.cjs --dump | tee jma.log
+            echo "fetched=true" >> "$GITHUB_OUTPUT"
+          fi
 
       # The measured motion belongs to the observations it was measured from, so it is
       # rebuilt whenever they are replaced. No network: scripts/build-motion.cjs reads
@@ -242,8 +252,6 @@ jobs:
           # which is why it is not what a fetch does by default.
           if [ "$COMMIT_OBSERVATIONS" = "true" ]; then
             git add -A dist/weather dist/data
-            # Published, never bundled: it is out of date within hours.
-            git reset -q dist/data/jma-typhoon.json
           fi
           git status --short
           if git diff --cached --quiet; then
@@ -261,6 +269,25 @@ jobs:
             echo "Recorded."
           else
             echo "::warning::Could not push the record; the publish itself succeeded."
+          fi
+
+      # The forecast fetched for the bundled observations - on a push after they were
+      # committed, say - is kept with them, so the next publish need not find it again:
+      # the agency's feed holds only a few days of reports.
+      - name: Keep the typhoon forecast with the bundled observations
+        if: steps.fetch.outcome != 'success' && steps.jma.outputs.fetched == 'true'
+        run: |
+          set -x
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist/data/jma-typhoon.json
+          if git diff --cached --quiet; then exit 0; fi
+          FOR="$(node -p 'require("./dist/data/jma-typhoon.json").for')"
+          git commit -m "Keep the agency's typhoon forecast for the observations ending $FOR"
+          if git pull --rebase origin main && git push origin HEAD:main; then
+            echo "Kept."
+          else
+            echo "::warning::Could not push the forecast; the publish itself succeeded."
           fi
 
       - name: Keep the screenshots and the log

@@ -85,7 +85,7 @@ const detail=new DetailLayer();window.geoDetail=detail;
 // After the last observation (step two of three): the storms carried on to their end,
 // with the clouds moved round them. Off unless asked for; see dist/storm-sim.js.
 const stormSim=new StormSimulation(gl,7);window.geoStormSim=stormSim;
-let simulate=false,typhoonModel=null,motionFields=null,jmaForecasts=null,simResume=null,simFrom=null,simLine='',simBack=null,simUnder=false;
+let simulate=false,motionFields=null,jmaForecasts=null,simResume=null,simFrom=null,simLine='',simBack=null,simUnder=false;
 // How much of the simulation is on screen: all of it while it runs, then fading out over the
 // return to the first observation, which is put underneath it at once.
 window.geoSimShown=()=>simShown(performance.now());
@@ -177,7 +177,7 @@ function startingStorms(time){
 playback.onLastFrame=(time,resume)=>{
  if(!simulate||!motionFields||!stormSim.ready||cloudSim.enabled)return false;
  const storms=simStorms(time);
- if(!stormSim.start({observation:weatherTexture,watermark,storms,model:typhoonModel,viewport:[canvas.width,canvas.height],air:startingAir(time)}))return false;
+ if(!stormSim.start({observation:weatherTexture,watermark,storms,model:null,viewport:[canvas.width,canvas.height],air:startingAir(time)}))return false;
  simResume=resume;simFrom=time;simLine='';showSimStatus();return true;
 };
 // The storms to carry on: every typhoon the Japan Meteorological Agency has a forecast for
@@ -185,15 +185,17 @@ playback.onLastFrame=(time,resume)=>{
 // observation, moved by the typhoon object. A storm the observations found near a forecast
 // centre is that typhoon: its path starts where it was seen and joins the forecast.
 function simStorms(time){
- const startMs=stampHours(time)*3600000,seen=typhoonModel?startingStorms(time):[],out=[];
+ const startMs=stampHours(time)*3600000,seen=startingStorms(time),out=[];
  for(const f of (jmaForecasts&&jmaForecasts.storms)||[]){
   const probe=Typhoon.followForecast(f,startMs);if(!probe)continue;
   const at=probe.points[0],near=seen.find(s=>Typhoon.distanceKm(s,at)<600);
-  const track=near?Typhoon.followForecast(f,startMs,{seen:near,model:typhoonModel}):Typhoon.followForecast(f,startMs,{model:typhoonModel});
-  if(near)seen.splice(seen.indexOf(near),1);
+  const track=near?Typhoon.followForecast(f,startMs,{seen:near}):probe;
   out.push({lat:track.points[0].lat,lon:track.points[0].lon,u:0,v:0,track,jma:{number:f.number,kana:f.kana,name:f.name,issued:f.issued}});
  }
- return out.concat(seen);
+ // Only the agency's forecasts move storms: a storm it has none for is not carried on by
+ // a guess of ours - its cloud rides the flow with the rest - and a storm stops where
+ // the forecast stops.
+ return out;
 }
 // The background flow, started from the cloud motion measured over the six hours before
 // the last observation. Motion from more than twelve hours earlier - after a refresh brought
@@ -224,7 +226,7 @@ function endSimulation(carryOn){
  if(window.geoWeather.current)window.geoWeather.renderCurrent();
  if(carryOn&&next)next();
 }
-function simIdle(){return `最後の観測のあとも、雲を背景の流れで進め、台風は気象庁の予報があればその進路に、無ければ過去の台風の動き方に沿って消滅まで進めます。終わるとその場で止まります。`;}
+function simIdle(){return `最後の観測のあとも、雲を背景の流れで進め、台風は気象庁の予報の進路に沿って進めます。気象庁の予報が無い台風は動かしません。終わるとその場で止まります。`;}
 // While it runs, the date says how far past the last observation it is, not a time that
 // was observed.
 function showSimStatus(){
@@ -234,7 +236,7 @@ function showSimStatus(){
  const text=`シミュレーション +${h}時間（${new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(from)} の観測から）`;
  if(text===simLine)return;simLine=text;
  document.querySelector('#observationTime').textContent=text;
- const jma=stormSim.tracks.filter(t=>t.from.jma),record=stormSim.tracks.length-jma.length;
+ const jma=stormSim.tracks.filter(t=>t.from.jma);
  const line=stormSim.finished?`シミュレーションの終わり（+${h}時間） · 「観測の最初から再生」で最初の観測に戻ります`:
   (playback.playing?'':'一時停止 · ')+'観測の後のシミュレーション · '+(jma.length?'台風は気象庁の予報進路に沿って動き、':'')+'雲は計算です · このアプリの予報ではありません';
  document.querySelector('#weatherPlaybackStatus').textContent=line;
@@ -242,9 +244,8 @@ function showSimStatus(){
  const note=document.querySelector('#simulateNote');
  const air=stormSim.air&&stormSim.air.measured?'':' 最後の観測の雲の動きを測ったデータが無いため、背景の流れは典型的な循環から始めています。';
  const jst=iso=>new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso));
- const named=jma.map(t=>`台風${String(t.from.jma.number||'').slice(-2).replace(/^0/,'')}号${t.from.jma.kana?`（${t.from.jma.kana}）`:''}は気象庁の予報（${jst(t.from.jma.issued)}発表）の進路と強さに沿って動かしています（予報の先は過去の台風の動き方）。出典：気象庁「台風解析・予報情報」を加工して作成。`).join('');
- const others=record?`${jma.length?'ほかの':''}${record}個は過去の台風の動き方で動かしています。`:'';
- const storms=!stormSim.tracks.length?'この観測では台風が見つかっていません。':(alive?`シミュレーション中の台風 ${alive}個（紫の輪）。`:'台風は消滅しました。')+named+others;
+ const named=jma.map(t=>`${t.from.jma.number?`台風${String(t.from.jma.number).slice(-2).replace(/^0/,'')}号${t.from.jma.kana?`（${t.from.jma.kana}）`:''}`:'熱帯低気圧'}は気象庁の予報（${jst(t.from.jma.issued)}発表）の進路と強さに沿って動かしています。予報の終わりで印は消えます。`).join('')+(jma.length?'出典：気象庁「台風解析・予報情報」を加工して作成。':'');
+ const storms=!stormSim.tracks.length?'この観測の時点で気象庁が予報している台風はありません。':(alive?`シミュレーション中の台風 ${alive}個（紫の輪）。`:'台風は気象庁の予報の終わりに達しました。')+named;
  const soon=!stormSim.finished&&stormSim.horizon-stormSim.hours<=12?' まもなくシミュレーションの終わりです。':'';
  if(note)note.textContent=storms+'雲は観測ではなく計算です。'+soon+air;
 }
@@ -260,10 +261,8 @@ function showSimStatus(){
   simulate=on;
   if(note){note.hidden=!simulate;note.textContent=simulate?'シミュレーションのデータを読み込み中…':'';}
   if(simulate&&!motionFields){
-   const [data,motion,jma]=await Promise.all([window.GeoData.typhoon(),loadMotion(),window.GeoData.jmaTyphoon()]);
+   const [motion,jma]=await Promise.all([loadMotion(),window.GeoData.jmaTyphoon()]);
    motionFields=motion;jmaForecasts=jma;
-   if(data)typhoonModel=new Typhoon.TyphoonModel(data);
-   else if(note&&simulate){note.textContent='台風のデータを読み込めませんでした。雲だけを進めます。';return;}
   }
   if(!simulate&&stormSim.active)endSimulation(true);
   if(note&&simulate&&!stormSim.active)note.textContent=simIdle();

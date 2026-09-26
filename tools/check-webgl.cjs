@@ -554,6 +554,42 @@ async function checkJavaScriptGlobe(page) {
 
 }
 
+/// The last thirteen bundled observations over Japan, as the globe draws their cloud, on
+/// the simulation's 1024 x 512 grid: what the simulation's hours are held to.
+function observedGrain() {
+  const dir = path.join(SERVE_ROOT, 'weather', 'sequence');
+  const frames = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')).globalir.slice(-13);
+  const W = 1024, H = 512, x0 = Math.round(300 / 360 * W), x1 = Math.round(330 / 360 * W), y0 = Math.round(110 / 180 * H), y1 = Math.round(135 / 180 * H);
+  const ss = x => { const t = Math.min(1, Math.max(0, (x - 0.38) / 0.44)); return t * t * (3 - 2 * t); };
+  return frames.map(f => {
+    const im = png.decode(fs.readFileSync(path.join(dir, f.file)));
+    return Array.from({ length: y1 - y0 }, (_, j) => {
+      const lat = (y0 + j + 0.5) / H * 180 - 90, my = 0.5 - Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)) / (2 * Math.PI);
+      return Array.from({ length: x1 - x0 }, (_, i) => {
+        const px = Math.min(im.width - 1, Math.floor((x0 + i + 0.5) / W * im.width)), py = Math.min(im.height - 1, Math.floor(my * im.height));
+        const k = (py * im.width + px) * im.channels;
+        return ss((0.299 * im.data[k] + 0.587 * im.data[k + 1] + 0.114 * im.data[k + 2]) / 255) * (im.channels === 4 ? im.data[k + 3] / 255 : 1);
+      });
+    });
+  });
+}
+
+/// How much a sequence of cloud grids changes from one to the next, and how much fine
+/// detail each holds (its difference from its own 3 x 3 average), both on average.
+function grainOf(grids) {
+  let change = 0, n = 0, detail = 0, m = 0;
+  for (let g = 0; g < grids.length; g++) {
+    const a = grids[g];
+    for (let y = 1; y < a.length - 1; y++) for (let x = 1; x < a[0].length - 1; x++) {
+      let box = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) box += a[y + dy][x + dx];
+      detail += Math.abs(a[y][x] - box / 9); m++;
+      if (g) { change += Math.abs(a[y][x] - grids[g - 1][y][x]); n++; }
+    }
+  }
+  return { change: change / Math.max(1, n), detail: detail / Math.max(1, m) };
+}
+
 /// After the last observation, the storms found in it carried on to their end by the typhoon
 /// object, the clouds with them - and then back to the observations. Run at the fastest
 /// playback so the whole scene, some four simulated days, passes in under a minute.
@@ -639,6 +675,29 @@ async function checkSimulation(page) {
   check(changedWithin === 0 && byHour.size >= 2 && steps.length >= 2 * byHour.size && between > 0 && steps.every(st => Number.isInteger(st.h) && st.h <= st.raw + 1e-6),
     'the simulation steps an hour at a time, dissolving like the observations',
     `${byHour.size} hours shown over ${steps.length} samples, ${changedWithin} changes within an hour, ${between} caught mid-dissolve`);
+  // And an hour of it changes about as much, in as fine a grain, as an hour of the
+  // observations: cloud only carried hardly changes shape, which read as smooth where the
+  // observations flicker, so the edges are made to come and go (storm-sim.js, RESOLVE).
+  // Both measured the same way, over Japan on the simulation's grid.
+  const grain = JSON.parse(await page.js(`new Promise(resolve => {
+    const sim = window.geoStormSim, gl = sim.gl, W = 1024, H = 512, sel = document.getElementById('weatherPlaybackSpeed');
+    const x0 = Math.round(300 / 360 * W), x1 = Math.round(330 / 360 * W), y0 = Math.round(110 / 180 * H), y1 = Math.round(135 / 180 * H), w = x1 - x0, h = y1 - y0;
+    const was = sel.value; sel.value = '4.5'; sel.dispatchEvent(new Event('change'));
+    const read = () => { const px = new Uint8Array(w * h * 4); gl.bindFramebuffer(gl.FRAMEBUFFER, sim.display.fb);
+      gl.readPixels(x0, y0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return Array.from({ length: h }, (_, y) => Array.from({ length: w }, (_, x) => px[(y * w + x) * 4] / 255)); };
+    const grids = []; let last = sim.shownHours;
+    (function tick() {
+      if (sim.shownHours !== last) { grids.push(read()); last = sim.shownHours; }
+      if (grids.length < 7 && !sim.finished) return setTimeout(tick, 10);
+      sel.value = was; sel.dispatchEvent(new Event('change'));
+      resolve(JSON.stringify(grids));
+    })();
+  })`));
+  const sim = grainOf(grain), obs = grainOf(observedGrain());
+  check(grain.length >= 5 && Math.abs(sim.change / obs.change - 1) < 0.4 && Math.abs(sim.detail / obs.detail - 1) < 0.4,
+    'an hour of it changes as much, as finely, as an hour of the observations',
+    `change an hour ${sim.change.toFixed(3)} against ${obs.change.toFixed(3)} observed, fine detail ${sim.detail.toFixed(3)} against ${obs.detail.toFixed(3)}`);
   // The observations wait while it runs: nothing else is swapped in underneath.
   const held = await page.js(`JSON.stringify({ index: window.geoPlayback.index,
     active: window.geoStormSim.active })`);
@@ -659,8 +718,9 @@ async function checkSimulation(page) {
   const air = await page.js(`JSON.stringify({ measured: window.geoStormSim.air.measured,
     hours: window.geoStormSim.air.hours })`);
   check(/"measured":6/.test(air) && JSON.parse(air).hours >= 20, 'the background flow starts from the measured motion and moves on', air);
+  // Only storms the agency forecasts are moved, so the marks are those.
   const marks = await page.js('window.geoStormSim.marks().filter(m => !m.ended).length');
-  check(marks > 0, 'the simulated storms are marked', `${marks} alive a day on`);
+  check(marks === jma.covering, 'the storms the agency forecasts are marked, and no others', `${marks} alive a day on, ${jma.covering} forecast`);
   // Played through to the end, it stops there - the last simulated hour stays on screen,
   // paused - and the play button offers the observations from the start. Going back days
   // on its own read as the weather jumping.

@@ -46,6 +46,7 @@
   const RELAX_HOURS = 240;        // how slowly the clouds tend to their latitude's average
   const MAX_START_KMH = 45;       // a faster start is a detection hopping between systems
   const FLOW_STEP_HOURS = 2;      // how often the background flow is moved on
+  const FLICKER = { amp: 0.55, cell: 1.8, tau: 1.5, birth: 0.05 };
 
   const VERTEX = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
   const COMMON = `precision highp float;
@@ -145,11 +146,24 @@
   // filtered by the hardware.
   const RESOLVE = COMMON + `
   uniform sampler2D start;uniform sampler2D flow;uniform sampler2D stormCloud;uniform sampler2D baseline;uniform float relax;
+  uniform float hour,flickerAmp,flickerCell,flickerTau,flickerBirth;
+  float hash(vec3 p){p=fract(p*.3183099+vec3(.1,.2,.3));p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+  float vnoise(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);
+   return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+              mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
   void main(){vec2 uv=gl_FragCoord.xy/size;float lat=uv.y*180.-90.,lon=uv.x*360.-180.;
    vec2 d=decodeD(texture2D(flow,uv));
    vec2 from=vec2(lon,lat)+d;
    float c=texture2D(start,wrapUV(vec2((from.x+180.)/360.,(from.y+90.)/180.))).r;
    c=mix(c,unpack(texture2D(baseline,vec2(.5,uv.y))),relax);
+   // The flicker: cloud edges grown and eaten away a little every hour, and a little
+   // cloud come and gone in the clear, as real cloud does and cloud only carried does
+   // not. Drawn on where the air came from, so it moves with the cloud, and changing
+   // with the hour. For the look alone: sized so the change an hour and the fine
+   // detail match the observations', not a model of any weather.
+   vec2 q=vec2(from.x*cos(radians(from.y)),from.y)/flickerCell;float t=hour/flickerTau;
+   float n=(vnoise(vec3(q,t))*.6+vnoise(vec3(q*2.3+17.,t*1.4+5.))*.4)*2.-1.;
+   c=clamp(c+flickerAmp*n*(4.*c*(1.-c)+flickerBirth),0.,1.);
    float s=unpack(texture2D(stormCloud,uv));
    c=1.-(1.-c)*(1.-s);
    gl_FragColor=vec4(c,c,c,1.);}`;
@@ -163,6 +177,9 @@
       this.previousUnit = previousUnit;
       this.shownHours = 0;
       this.shownAt = 0;
+      // See RESOLVE. Amplitude, cell size in degrees, correlation time in hours, and how
+      // much of it reaches clear sky; chosen by scripts measuring the observations.
+      this.flicker = Object.assign({}, FLICKER);
       this.active = false;
       this.hours = 0;
       this.tracks = [];
@@ -333,9 +350,11 @@
     /// Puts the hour just reached on screen, the one before it becoming the previous.
     resolve(now = (typeof performance !== 'undefined' ? performance.now() : Date.now())) {
       const into = this.previous;
+      const f = this.flicker;
       this.pass('resolve', into, { start: this.start0.texture, flow: this.flow[this.current].texture,
         stormCloud: this.cloud[this.current].texture, baseline: this.baseline.texture },
-        { relax: 1 - Math.exp(-Math.floor(this.hours) / RELAX_HOURS) });
+        { relax: 1 - Math.exp(-Math.floor(this.hours) / RELAX_HOURS), hour: Math.floor(this.hours + 1e-6),
+          flickerAmp: f.amp, flickerCell: f.cell, flickerTau: f.tau, flickerBirth: f.birth });
       this.showing = 1 - this.showing;
       this.shownHours = Math.floor(this.hours + 1e-6);
       this.shownAt = now;
