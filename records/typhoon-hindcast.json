@@ -8,162 +8,162 @@
   2015,
   2026
  ],
- "starts": 0,
+ "starts": 3684,
  "tauScores48h": {
-  "0": null,
-  "6": null,
-  "12": null,
-  "24": null,
-  "48": null
+  "0": 449,
+  "6": 415,
+  "12": 389,
+  "24": 361,
+  "48": 350
  },
- "chosenTau": 0,
+ "chosenTau": 48,
  "track": [
   {
    "lead": 12,
-   "n": 0,
-   "cases": 0,
-   "aliveTruth": null,
-   "aliveModel": null,
+   "n": 3671,
+   "cases": 3673,
+   "aliveTruth": 0.995,
+   "aliveModel": 0.999,
    "model": {
-    "median": null,
-    "mean": null
+    "median": 58,
+    "mean": 71
    },
    "climatology": {
-    "median": null,
-    "mean": null
+    "median": 120,
+    "mean": 146
    },
    "persistence": {
-    "median": null,
-    "mean": null
+    "median": 57,
+    "mean": 72
    }
   },
   {
    "lead": 24,
-   "n": 0,
-   "cases": 0,
-   "aliveTruth": null,
-   "aliveModel": null,
+   "n": 3513,
+   "cases": 3629,
+   "aliveTruth": 0.956,
+   "aliveModel": 0.973,
    "model": {
-    "median": null,
-    "mean": null
+    "median": 135,
+    "mean": 177
    },
    "climatology": {
-    "median": null,
-    "mean": null
+    "median": 237,
+    "mean": 294
    },
    "persistence": {
-    "median": null,
-    "mean": null
+    "median": 143,
+    "mean": 179
    }
   },
   {
    "lead": 48,
-   "n": 0,
-   "cases": 0,
-   "aliveTruth": null,
-   "aliveModel": null,
+   "n": 2981,
+   "cases": 3382,
+   "aliveTruth": 0.825,
+   "aliveModel": 0.901,
    "model": {
-    "median": null,
-    "mean": null
+    "median": 340,
+    "mean": 434
    },
    "climatology": {
-    "median": null,
-    "mean": null
+    "median": 459,
+    "mean": 574
    },
    "persistence": {
-    "median": null,
-    "mean": null
+    "median": 370,
+    "mean": 459
    }
   },
   {
    "lead": 72,
-   "n": 0,
-   "cases": 0,
-   "aliveTruth": null,
-   "aliveModel": null,
+   "n": 2348,
+   "cases": 2970,
+   "aliveTruth": 0.715,
+   "aliveModel": 0.833,
    "model": {
-    "median": null,
-    "mean": null
+    "median": 545,
+    "mean": 705
    },
    "climatology": {
-    "median": null,
-    "mean": null
+    "median": 664,
+    "mean": 826
    },
    "persistence": {
-    "median": null,
-    "mean": null
+    "median": 622,
+    "mean": 774
    }
   },
   {
    "lead": 96,
-   "n": 0,
-   "cases": 0,
-   "aliveTruth": null,
-   "aliveModel": null,
+   "n": 1710,
+   "cases": 2504,
+   "aliveTruth": 0.62,
+   "aliveModel": 0.746,
    "model": {
-    "median": null,
-    "mean": null
+    "median": 747,
+    "mean": 974
    },
    "climatology": {
-    "median": null,
-    "mean": null
+    "median": 864,
+    "mean": 1064
    },
    "persistence": {
-    "median": null,
-    "mean": null
+    "median": 907,
+    "mean": 1105
    }
   },
   {
    "lead": 120,
-   "n": 0,
-   "cases": 0,
-   "aliveTruth": null,
-   "aliveModel": null,
+   "n": 1171,
+   "cases": 2044,
+   "aliveTruth": 0.532,
+   "aliveModel": 0.648,
    "model": {
-    "median": null,
-    "mean": null
+    "median": 963,
+    "mean": 1243
    },
    "climatology": {
-    "median": null,
-    "mean": null
+    "median": 1055,
+    "mean": 1295
    },
    "persistence": {
-    "median": null,
-    "mean": null
+    "median": 1208,
+    "mean": 1447
    }
   }
  ],
  "lifetime": {
-  "n": 0,
-  "medianAbsErrorH": null,
-  "medianBiasH": null,
-  "constantBaselineAbsErrorH": null,
-  "typicalRemainingH": null
+  "n": 3680,
+  "medianAbsErrorH": 45,
+  "medianBiasH": 29,
+  "constantBaselineAbsErrorH": 39,
+  "typicalRemainingH": 84
  },
  "intensity": [
   {
    "lead": 24,
-   "n": 0,
-   "modelMAE": null,
-   "persistenceMAE": null
+   "n": 3395,
+   "modelMAE": 18.1,
+   "persistenceMAE": 22.4
   },
   {
    "lead": 48,
-   "n": 0,
-   "modelMAE": null,
-   "persistenceMAE": null
+   "n": 2631,
+   "modelMAE": 24,
+   "persistenceMAE": 29.4
   },
   {
    "lead": 72,
-   "n": 0,
-   "modelMAE": null,
-   "persistenceMAE": null
+   "n": 1912,
+   "modelMAE": 26.4,
+   "persistenceMAE": 31.7
   }
  ],
  "plausibility": {
-  "crossedEquator": 0,
-  "recurvedModel": 0,
-  "recurvedTruth": 0,
-  "westwardStarts": 0
+  "crossedEquator": 1,
+  "recurvedModel": 117,
+  "recurvedTruth": 1330,
+  "westwardStarts": 2743
  }
 }
