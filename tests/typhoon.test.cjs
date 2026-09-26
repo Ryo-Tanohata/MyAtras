@@ -172,9 +172,12 @@ s.test('the builder recovers the motion of the storms it was given', () => {
   assert.strictEqual(storms.length, 400);
   const data = B.buildModel(storms, { land: LAND });
   const model = new TyphoonModel(data);
-  const tropics = model.motionAt(14, 145, 'west');
+  const tropics = model.motionAt(14, 145, 'all');
   assert.ok(tropics && Math.abs(tropics.u + 18) < 3 && Math.abs(tropics.v - 6) < 3,
-    `west-moving storms at 14N run west-north-west (${JSON.stringify(tropics)})`);
+    `storms at 14N run west-north-west (${JSON.stringify(tropics)})`);
+  const zone = [22.5, 25, 27.5, 30, 32.5].map(lat => model.motionAt(lat, 142, 'all'));
+  assert.ok(zone[0].u < 0 && zone[zone.length - 1].u > 2,
+    `and all storms together turn east going north (${zone.map(z => z.u.toFixed(0)).join(' → ')})`);
   const turned = model.motionAt(35, 150, 'east');
   assert.ok(turned && turned.u > 15 && turned.v > 5, `recurved storms run north-east (${JSON.stringify(turned)})`);
   assert.ok(data.intensity.cells.length > 0, 'strength changes were measured');
@@ -203,7 +206,7 @@ s.test('the bundled model, when there is one, is whole', () => {
   const file = path.join(ROOT, 'dist', 'data', 'typhoon.json');
   if (!fs.existsSync(file)) return;   // written by .github/workflows/typhoon-model.yml
   const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-  for (const regime of ['west', 'east', 'all']) {
+  for (const regime of ['east', 'all']) {
     assert.ok(data.motion[regime].length > 500, `a ${regime} motion grid`);
   }
   assert.ok(data.intensity.cells.length > 500, 'a strength grid');

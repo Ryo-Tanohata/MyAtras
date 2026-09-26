@@ -3,10 +3,18 @@
 // carried forward from the last hour it was observed until it dies.
 //
 // This is the first of three steps. Here the object moves the way past storms moved
-// through the same place, split by which way they were already heading: storms still
-// running west in one set, storms already turned east (recurved) in the other. So the
+// through the same place - all of them, until its own motion turns east, and from then on
+// the ones that had already turned (recurved), which run north-east and faster. So the
 // turn from west-north-west through north to north-east is not drawn. It happens where
-// past storms turned, and the object switches sets when its own motion turns east. The
+// past storms turned.
+//
+// Not "the storms still heading west" before the turn: that set can never turn, because
+// a storm that turns leaves it the moment it does, so its median runs west at every
+// latitude (-5 km/h at 35N in the real record) and an object following it never turns
+// either. The first real backtest caught that - 117 turns against 1,330 real ones. The
+// median of a fork cannot show the fork; the median of all storms turns where most do.
+//
+// The
 // beta effect - the drift a vortex makes on a rotating sphere, north-west in the northern
 // hemisphere and south-west in the southern - is inside that record, because the real
 // storms made it. Step three replaces the record with a live flow and adds the drift
@@ -60,7 +68,7 @@
       this.motionCell = motion.cell || 2.5;
       this.motionCols = Math.round(360 / this.motionCell);
       this.motion = {};
-      for (const regime of ['west', 'east', 'all']) {
+      for (const regime of ['east', 'all']) {
         const flat = motion[regime] || [];
         const map = new Map();
         for (let i = 0; i + 5 <= flat.length; i += 5) {
@@ -159,7 +167,7 @@
       // place where storms turn.
       const keep = p.tau > 0 ? Math.exp(-1 / p.tau) : 0;
       let survival = 1;
-      let regime = regimeFixed || (u > HYSTERESIS ? 'east' : 'west');
+      let regime = regimeFixed || (u > HYSTERESIS ? 'east' : 'all');
       let wasLand = this.isLand(lat, lon);
       const points = [{ t: 0, lat, lon, kt, land: wasLand, regime }];
       let reason = 'time';
@@ -169,8 +177,8 @@
         u = here.u + (u - here.u) * keep;
         v = here.v + (v - here.v) * keep;
         if (!regimeFixed) {
-          if (regime === 'west' && u > HYSTERESIS) regime = 'east';
-          else if (regime === 'east' && u < -HYSTERESIS) regime = 'west';
+          if (regime === 'all' && u > HYSTERESIS) regime = 'east';
+          else if (regime === 'east' && u < -HYSTERESIS) regime = 'all';
         }
         const before = lat;
         lat += v / KM_PER_DEGREE;

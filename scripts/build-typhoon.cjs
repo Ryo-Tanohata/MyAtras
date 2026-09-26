@@ -8,13 +8,12 @@
 //
 // Three things, all from IBTrACS (NOAA NCEI) except the coastline:
 //
-// - Motion: for each 2.5-degree cell, the median motion of storms passing through it,
-//   kept separately for storms that were still heading west and storms already heading
-//   east. The split is what lets a storm recurve: in the turning zone, west-moving storms
-//   start drifting north and then east, and once one is moving east it is read against
-//   the storms that had already turned - which accelerate north-east. The condition is
-//   the previous six hours' motion, so the record answers "given it was going this way,
-//   what did it do next", not "what did it do".
+// - Motion: for each 2.5-degree cell, the median motion of all storms passing through it,
+//   and separately of the storms that were already heading east (recurved), judged by the
+//   leg before - "given it had turned, what did it do next". The object follows the first
+//   until its own motion turns east and the second after, which accelerates it north-east
+//   as recurved storms do. There is deliberately no set for storms still heading west:
+//   a storm leaves that set the moment it turns, so its median never turns anywhere.
 // - Strength over the sea: the median change in six hours of storms of the same strength
 //   class in the same place. Warm and cold water are in there without a sea temperature:
 //   the cold water off Mexico and north of 30 degrees shows up as places storms weaken.
@@ -181,14 +180,14 @@ function buildModel(storms, { fromSeason = 1980, toSeason = 9999, tau = 12, land
   const changeIndex = bucket(change);
   const endIndex = bucket(ends);
   const hazard = [];
-  const grids = { west: [], east: [], all: [] };
+  const grids = { east: [], all: [] };
   const intensity = [];
   for (let row = 0; row < 180 / CELL; row++) {
     const lat = -90 + (row + 0.5) * CELL;
     if (Math.abs(lat) > 60) continue;
     for (let col = 0; col < COLS; col++) {
       const lon = -180 + (col + 0.5) * CELL;
-      for (const regime of ['west', 'east', 'all']) {
+      for (const regime of ['east', 'all']) {
         const found = gather(motionIndex, lat, lon, MIN_MOTION,
           regime === 'all' ? () => true : it => it.regime === regime);
         if (!found) continue;
@@ -281,8 +280,8 @@ if (require.main === module) {
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, JSON.stringify(model) + '\n');
   console.log(`${model.source.storms} storms from ${model.seasons[0]} to ${model.seasons[1]}`);
-  console.log(`motion cells: west ${model.motion.west.length / 5}, east ${model.motion.east.length / 5}, `
-    + `all ${model.motion.all.length / 5}; strength cells ${model.intensity.cells.length / 5}`);
+  console.log(`motion cells: east ${model.motion.east.length / 5}, all ${model.motion.all.length / 5}; `
+    + `strength cells ${model.intensity.cells.length / 5}`);
   console.log(`ends at sea: ${model.counts.endsAtSea} in ${model.counts.seaLegs} legs; `
     + `hazard cells ${model.hazard.cells.length / 4}`);
   console.log(`inland decay: published ${KD.alpha}/h, measured ${model.params.measuredAlpha}/h `

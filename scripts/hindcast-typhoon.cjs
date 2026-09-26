@@ -19,7 +19,7 @@
 // The model has to beat both to be worth drawing.
 //
 // The one number chosen here, the persistence time, is chosen on the older storms
-// (2005-2014), never on the ones it is then scored on. Written to
+// (2005-2014), never on the ones it is then scored on, by the error over 24 to 120 hours. Written to
 // records/typhoon-hindcast.json; scripts/build-typhoon.cjs reads the choice from there.
 const fs = require('fs');
 const path = require('path');
@@ -150,17 +150,23 @@ function main() {
 
   const trained = new TyphoonModel(B.buildModel(storms, { fromSeason: TRAIN[0], toSeason: TRAIN[1], land }));
 
-  // The persistence time, chosen on older storms by the 48-hour median error.
+  // The persistence time, chosen on older storms by the median error averaged over 24 to
+  // 120 hours. Scored at 48 hours alone, a long persistence wins - carrying on as it was
+  // is good for two days - and then carries a storm straight past where it should turn,
+  // which the later hours see and the 48-hour score does not.
   const tune = starts(storms, TUNE[0], TUNE[1]);
   const tauScores = {};
+  const TUNE_LEADS = [24, 48, 72, 96, 120];
   for (const tau of TAUS) {
-    const errors = [];
+    const byLead = TUNE_LEADS.map(() => []);
     for (const c of tune) {
-      const truth = truthAt(c, 48);
-      const run = trained.run(c.init, { tau, hours: 48 });
-      if (truth && run.points[48]) errors.push(km(run.points[48], truth));
+      const run = trained.run(c.init, { tau, hours: 120 });
+      TUNE_LEADS.forEach((lead, k) => {
+        const truth = truthAt(c, lead);
+        if (truth && run.points[lead]) byLead[k].push(km(run.points[lead], truth));
+      });
     }
-    tauScores[tau] = Math.round(median(errors));
+    tauScores[tau] = Math.round(mean(byLead.map(median)));
   }
   const chosenTau = +Object.entries(tauScores).sort((a, b) => a[1] - b[1])[0][0];
 
@@ -235,7 +241,7 @@ function main() {
       + `storm of ${TEST_FROM}-${latest} at every twelfth hour at ${START_KT} kt or more, compared with the `
       + 'best track. Errors in km are great-circle distance at each lead, on the cases every method still had.',
     trainedOn: TRAIN, testedOn: [TEST_FROM, latest], starts: cases.length,
-    tauScores48h: tauScores, chosenTau,
+    tauScoresMeanOfLeads: tauScores, chosenTau,
     track: trackErrors(cases, runs),
     lifetime: { n: lifetimes.length, medianAbsErrorH: Math.round(median(lifetimes.map(Math.abs))),
       medianBiasH: Math.round(median(lifetimes)), constantBaselineAbsErrorH: Math.round(median(constant)),
@@ -249,7 +255,7 @@ function main() {
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 1) + '\n');
 
   console.log(`trained ${TRAIN.join('-')}, tested ${TEST_FROM}-${latest}: ${cases.length} starts at >= ${START_KT} kt`);
-  console.log(`persistence time chosen on ${TUNE.join('-')}: ${chosenTau} h  (48 h median km by tau: ${JSON.stringify(tauScores)})`);
+  console.log(`persistence time chosen on ${TUNE.join('-')}: ${chosenTau} h  (median km over 24-120 h by tau: ${JSON.stringify(tauScores)})`);
   console.log('\nlead   n     model  climatology  persistence   alive model/truth');
   for (const r of report.track) {
     console.log(`${String(r.lead).padStart(4)}h ${String(r.n).padStart(5)}  ${String(r.model.median).padStart(6)}`
