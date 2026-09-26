@@ -19,7 +19,8 @@
 // The model has to beat both to be worth drawing.
 //
 // The one number chosen here, the persistence time, is chosen on the older storms
-// (2005-2014), never on the ones it is then scored on, by the error over 24 to 120 hours. Written to
+// (2005-2014), never on the ones it is then scored on: the smallest error over 24 to 120
+// hours among those that turn at least 70% as many storms as really turned. Written to
 // records/typhoon-hindcast.json; scripts/build-typhoon.cjs reads the choice from there.
 const fs = require('fs');
 const path = require('path');
@@ -37,7 +38,8 @@ const TRAIN = [1980, 2014];
 const TUNE = [2005, 2014];      // older storms, to choose the persistence time on
 const TEST_FROM = 2015;
 const LEADS = [12, 24, 48, 72, 96, 120];
-const TAUS = [0, 6, 12, 24, 48, 72, 96];
+const TAUS = [0, 3, 6, 12, 24, 48, 72, 96];
+const RECURVE_FLOOR = 0.7;      // of the real storms' turns, how many the model must make
 const START_KT = 64;
 
 const toRad = d => d * Math.PI / 180;
@@ -141,6 +143,24 @@ function trackErrors(cases, runs) {
   return rows;
 }
 
+/// Whether a track recurved: somewhere before it ended, twelve hours in which it moved
+/// east faster than 5 km/h. Judged the same way for the model and the real storm, so a
+/// single three-hour wobble in a real track does not count. Points carry t in hours.
+function recurves(pts) {
+  for (let k = 0; k < pts.length; k++) {
+    const later = pts.find(q => q.t >= pts[k].t + 12);
+    if (!later) break;
+    const hours = later.t - pts[k].t;
+    const east = wrap(later.lon - pts[k].lon) * KM_PER_DEGREE
+      * Math.cos(toRad((later.lat + pts[k].lat) / 2)) / hours;
+    if (east > 5) return true;
+  }
+  return false;
+}
+const inHours = (points, from) => points.map(q => ({ ...q, t: (q.t - from) / 3600000 }));
+/// The real storm from a start until it ended, in hours from the start.
+const realTrack = c => inHours(c.points.slice(c.i).filter(q => q.t <= c.end), c.points[c.i].t);
+
 function main() {
   const tracks = opt('--tracks', null);
   if (!tracks) { console.error('need --tracks <ibtracs csv>'); process.exit(2); }
@@ -150,13 +170,20 @@ function main() {
 
   const trained = new TyphoonModel(B.buildModel(storms, { fromSeason: TRAIN[0], toSeason: TRAIN[1], land }));
 
-  // The persistence time, chosen on older storms by the median error averaged over 24 to
-  // 120 hours. Scored at 48 hours alone, a long persistence wins - carrying on as it was
-  // is good for two days - and then carries a storm straight past where it should turn,
-  // which the later hours see and the 48-hour score does not.
+  // The persistence time, chosen on older storms. Two things are asked of it.
+  // Position: the median error averaged over 24 to 120 hours - scored at 48 hours alone,
+  // a long persistence wins, carrying on as it was being good for two days.
+  // Turning: of the storms still heading west when started, the model must turn at least
+  // RECURVE_FLOOR as many as really did. Scored on position alone the fifth backtest chose
+  // 48 h and turned 384 storms against 1,227 real turns: each track looked natural, but
+  // the storms that should swing north-east past Japan mostly ran on into China. Among the
+  // persistence times that turn enough, the one with the smallest error is chosen; if none
+  // do, the one that turns most.
   const tune = starts(storms, TUNE[0], TUNE[1]);
   const tauScores = {};
   const TUNE_LEADS = [24, 48, 72, 96, 120];
+  const westward = tune.filter(c => c.init.u < 0);
+  const realTurns = westward.filter(c => recurves(realTrack(c))).length;
   for (const tau of TAUS) {
     const byLead = TUNE_LEADS.map(() => []);
     for (const c of tune) {
@@ -166,9 +193,14 @@ function main() {
         if (truth && run.points[lead]) byLead[k].push(km(run.points[lead], truth));
       });
     }
-    tauScores[tau] = Math.round(mean(byLead.map(median)));
+    const turns = westward.filter(c => recurves(trained.run(c.init, { tau }).points)).length;
+    tauScores[tau] = { km: Math.round(mean(byLead.map(median))),
+      turnRatio: realTurns ? +(turns / realTurns).toFixed(3) : 0 };
   }
-  const chosenTau = +Object.entries(tauScores).sort((a, b) => a[1] - b[1])[0][0];
+  const ranked = Object.entries(tauScores).map(([tau, sc]) => ({ tau: +tau, ...sc }));
+  const turning = ranked.filter(r => r.turnRatio >= RECURVE_FLOOR).sort((a, b) => a.km - b.km);
+  const chosenTau = turning.length ? turning[0].tau
+    : ranked.sort((a, b) => b.turnRatio - a.turnRatio || a.km - b.km)[0].tau;
 
   const cases = starts(storms, TEST_FROM, latest);
   // A backtest with nothing in it must fail loudly rather than write an empty score -
@@ -207,22 +239,7 @@ function main() {
     return { lead, n: model.length, modelMAE: +mean(model).toFixed(1), persistenceMAE: +mean(still).toFixed(1) };
   });
 
-  // Things that would be plainly wrong on screen. Recurving is judged the same way for
-  // the model and the real storm: somewhere before it ended, twelve hours in which it
-  // moved east by more than 5 km/h. A single three-hour wobble does not count.
-  // Points here carry t in hours from the start (the model's already do).
-  const recurves = pts => {
-    for (let k = 0; k < pts.length; k++) {
-      const later = pts.find(q => q.t >= pts[k].t + 12);
-      if (!later) break;
-      const hours = later.t - pts[k].t;
-      const east = wrap(later.lon - pts[k].lon) * KM_PER_DEGREE
-        * Math.cos(toRad((later.lat + pts[k].lat) / 2)) / hours;
-      if (east > 5) return true;
-    }
-    return false;
-  };
-  const inHours = (points, from) => points.map(q => ({ ...q, t: (q.t - from) / 3600000 }));
+  // Things that would be plainly wrong on screen.
   let crossed = 0, modelRecurved = 0, trueRecurved = 0, counted = 0;
   const reasons = {};
   cases.forEach((c, i) => {
@@ -231,8 +248,7 @@ function main() {
     if (pts.some(p => Math.sign(p.lat) !== Math.sign(c.init.lat))) crossed++;
     if (c.init.u >= 0) return;                 // only storms still heading west can recurve
     counted++;
-    const t0 = c.points[c.i].t;
-    if (recurves(inHours(c.points.slice(c.i).filter(q => q.t <= c.end), t0))) trueRecurved++;
+    if (recurves(realTrack(c))) trueRecurved++;
     if (recurves(pts)) modelRecurved++;
   });
 
@@ -241,7 +257,7 @@ function main() {
       + `storm of ${TEST_FROM}-${latest} at every twelfth hour at ${START_KT} kt or more, compared with the `
       + 'best track. Errors in km are great-circle distance at each lead, on the cases every method still had.',
     trainedOn: TRAIN, testedOn: [TEST_FROM, latest], starts: cases.length,
-    tauScoresMeanOfLeads: tauScores, chosenTau,
+    tauScores: tauScores, recurveFloor: RECURVE_FLOOR, chosenTau,
     track: trackErrors(cases, runs),
     lifetime: { n: lifetimes.length, medianAbsErrorH: Math.round(median(lifetimes.map(Math.abs))),
       medianBiasH: Math.round(median(lifetimes)), constantBaselineAbsErrorH: Math.round(median(constant)),
@@ -255,7 +271,10 @@ function main() {
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 1) + '\n');
 
   console.log(`trained ${TRAIN.join('-')}, tested ${TEST_FROM}-${latest}: ${cases.length} starts at >= ${START_KT} kt`);
-  console.log(`persistence time chosen on ${TUNE.join('-')}: ${chosenTau} h  (median km over 24-120 h by tau: ${JSON.stringify(tauScores)})`);
+  console.log(`persistence time chosen on ${TUNE.join('-')}: ${chosenTau} h`);
+  for (const [tau, sc] of Object.entries(tauScores)) {
+    console.log(`  tau ${String(tau).padStart(2)} h: ${sc.km} km over 24-120 h, turns ${(sc.turnRatio * 100).toFixed(0)}% as often as real storms`);
+  }
   console.log('\nlead   n     model  climatology  persistence   alive model/truth');
   for (const r of report.track) {
     console.log(`${String(r.lead).padStart(4)}h ${String(r.n).padStart(5)}  ${String(r.model.median).padStart(6)}`
