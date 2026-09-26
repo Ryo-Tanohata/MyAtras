@@ -1,0 +1,87 @@
+name: Build the typhoon model
+
+# Builds dist/data/typhoon.json - what the typhoon object in dist/typhoon.js moves and
+# weakens by - from IBTrACS, the international best track archive, and scores it on
+# storms it was not built from before building the version that is published.
+#
+# The archive is 137 MB and is not bundled, and neither the agent containers nor a phone
+# can reach NOAA, so this runs here, by hand. It changes as decades pass; once a year is
+# plenty. What it commits is the model (a few hundred KB) and the score, in
+# records/typhoon-hindcast.json, so the numbers the page stands on can be read by anyone.
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Commit the model and its score to main'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: typhoon-model
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The behaviour on a made-up world whose answer is known, before any real data.
+      - name: Test the model
+        run: node tests/typhoon.test.cjs
+
+      - name: Download IBTrACS
+        run: |
+          curl -fsSL --retry 3 -o ibtracs.csv \
+            https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.since1980.list.v04r01.csv
+          ls -l ibtracs.csv
+          sha256sum ibtracs.csv
+
+      # Built from 1980-2014, scored on 2015 onward. Also chooses the one tuned number,
+      # the persistence time, on 2005-2014 - never on the storms it is scored on.
+      - name: Score it on storms it was not built from
+        run: node scripts/hindcast-typhoon.cjs --tracks ibtracs.csv | tee hindcast.log
+
+      # The published model is built from every season, with the persistence time the
+      # backtest chose.
+      - name: Build the model from every storm since 1980
+        run: node scripts/build-typhoon.cjs --tracks ibtracs.csv | tee -a hindcast.log
+
+      - name: Test it again with the real model in place
+        run: node tests/typhoon.test.cjs
+
+      - name: Put the score on the run's page
+        if: always()
+        run: |
+          { echo '```'; cat hindcast.log 2>/dev/null; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the model and its score
+        if: inputs.commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist/data/typhoon.json records/typhoon-hindcast.json
+          git status --short
+          if git diff --cached --quiet; then
+            echo "Nothing new to commit."
+            exit 0
+          fi
+          git commit -m "Build the typhoon model from IBTrACS and score it on unseen storms"
+          git pull --rebase origin main && git push origin HEAD:main
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: typhoon-model
+          path: |
+            hindcast.log
+            records/typhoon-hindcast.json
+            dist/data/typhoon.json
+          if-no-files-found: ignore

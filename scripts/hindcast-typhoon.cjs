@@ -1,0 +1,241 @@
+#!/usr/bin/env node
+'use strict';
+// Tries dist/typhoon.js on storms it has never seen, and says how far wrong it was.
+//
+//   node scripts/hindcast-typhoon.cjs --tracks ibtracs.since1980.list.v04r01.csv
+//   node scripts/hindcast-typhoon.cjs --tracks FILE --report somewhere/else.json
+//
+// The model is built from the storms of 1980-2014 only, then started on every storm of
+// 2015 onward at every twelfth hour it was at typhoon strength (64 kt or more) - the
+// point at which a storm is plain to anyone living under it - with its true position,
+// strength and last twelve hours of motion, and let run until it dies. Its position is
+// compared with where the storm really was 12 to 120 hours later, and its end with the
+// storm's real end.
+//
+// Two baselines run on the same cases:
+// - persistence: carry on in a straight line at the last twelve hours' motion
+// - climatology: the same model but ignoring which way the storm was heading, which is
+//   what the page's current outlook does (dist/storms.js, tendency.json)
+// The model has to beat both to be worth drawing.
+//
+// The one number chosen here, the persistence time, is chosen on the older storms
+// (2005-2014), never on the ones it is then scored on. Written to
+// records/typhoon-hindcast.json; scripts/build-typhoon.cjs reads the choice from there.
+const fs = require('fs');
+const path = require('path');
+const B = require('./build-typhoon.cjs');
+const { TyphoonModel, KM_PER_DEGREE } = require('../dist/typhoon.js');
+
+const ROOT = path.resolve(__dirname, '..');
+const ARGS = process.argv.slice(2);
+const opt = (name, fallback) => {
+  const i = ARGS.indexOf(name);
+  return i >= 0 && ARGS[i + 1] !== undefined ? ARGS[i + 1] : fallback;
+};
+
+const TRAIN = [1980, 2014];
+const TUNE = [2005, 2014];      // older storms, to choose the persistence time on
+const TEST_FROM = 2015;
+const LEADS = [12, 24, 48, 72, 96, 120];
+const TAUS = [0, 6, 12, 24, 48];
+const START_KT = 64;
+
+const toRad = d => d * Math.PI / 180;
+const wrap = lon => ((lon + 540) % 360) - 180;
+const km = (a, b) => {
+  const dy = (a.lat - b.lat) * KM_PER_DEGREE;
+  const dx = wrap(a.lon - b.lon) * KM_PER_DEGREE * Math.cos(toRad((a.lat + b.lat) / 2));
+  return Math.hypot(dx, dy);
+};
+const median = v => { if (!v.length) return NaN; const s = v.slice().sort((a, b) => a - b); return s[s.length >> 1]; };
+const mean = v => v.length ? v.reduce((a, b) => a + b, 0) / v.length : NaN;
+
+/// When a storm stops being a tropical storm: it goes extratropical or dissipates, or its
+/// wind drops below 34 kt. The last point if neither happens before the record stops.
+function trueEnd(points, from) {
+  for (let i = from + 1; i < points.length; i++) {
+    const p = points[i];
+    if (p.nature === 'ET' || p.nature === 'DS' || (isFinite(p.kt) && p.kt < B.CLASSES[0])) return p.t;
+  }
+  return points[points.length - 1].t;
+}
+
+/// Every twelfth hour a storm spent at typhoon strength with twelve hours of track behind it.
+function starts(storms, fromSeason, toSeason) {
+  const out = [];
+  for (const s of storms) {
+    if (s.season < fromSeason || s.season > toSeason) continue;
+    let last = -Infinity;
+    for (let i = 2; i < s.points.length; i++) {
+      const p = s.points[i], before = s.points[i - 2];
+      if (p.nature !== 'TS' || !(p.kt >= START_KT)) continue;
+      const hours = (p.t - before.t) / 3600000;
+      if (hours < 11 || hours > 13) continue;
+      if (p.t - last < 12 * 3600000) continue;
+      last = p.t;
+      const vel = B.velocity(before, p);
+      out.push({ sid: s.sid, basin: s.basin, points: s.points, i,
+        init: { lat: p.lat, lon: p.lon, kt: p.kt, u: vel.u, v: vel.v }, end: trueEnd(s.points, i) });
+    }
+  }
+  return out;
+}
+
+function truthAt(start, lead) {
+  const t = start.points[start.i].t + lead * 3600000;
+  for (const p of start.points) if (Math.abs(p.t - t) <= 3600000) return p;
+  return null;
+}
+
+/// Runs one method on every case and returns its positions at each lead (null once gone).
+function positions(cases, runner) {
+  return cases.map(c => {
+    const run = runner(c);
+    const at = {};
+    for (const lead of LEADS) at[lead] = run.points && run.points[lead] ? run.points[lead] : null;
+    return { at, end: run.end, points: run.points };
+  });
+}
+
+function persistence(c) {
+  const points = [];
+  let { lat, lon } = c.init;
+  for (let t = 0; t <= 120; t++) {
+    points.push({ t, lat, lon, kt: c.init.kt });
+    lat += c.init.v / KM_PER_DEGREE;
+    lon = wrap(lon + c.init.u / (KM_PER_DEGREE * Math.max(0.2, Math.cos(toRad(lat)))));
+  }
+  return { points, end: { t: 120, reason: 'straight line' } };
+}
+
+function trackErrors(cases, runs) {
+  const rows = [];
+  for (const lead of LEADS) {
+    const byMethod = Object.fromEntries(Object.keys(runs).map(k => [k, []]));
+    let aliveTruth = 0, aliveModel = 0, total = 0;
+    cases.forEach((c, i) => {
+      const truth = truthAt(c, lead);
+      if (!truth) return;
+      total++;
+      if (truth.t <= c.end) aliveTruth++;
+      if (runs.model[i].at[lead]) aliveModel++;
+      // One sample for all methods: every method must still have the storm, or none count.
+      if (Object.values(runs).some(r => !r[i].at[lead])) return;
+      for (const [k, r] of Object.entries(runs)) byMethod[k].push(km(r[i].at[lead], truth));
+    });
+    const row = { lead, n: byMethod.model.length, cases: total,
+      aliveTruth: total ? +(aliveTruth / total).toFixed(3) : null,
+      aliveModel: total ? +(aliveModel / total).toFixed(3) : null };
+    for (const [k, v] of Object.entries(byMethod)) row[k] = { median: Math.round(median(v)), mean: Math.round(mean(v)) };
+    rows.push(row);
+  }
+  return rows;
+}
+
+function main() {
+  const tracks = opt('--tracks', null);
+  if (!tracks) { console.error('need --tracks <ibtracs csv>'); process.exit(2); }
+  const storms = B.parseTracks(fs.readFileSync(path.resolve(tracks), 'utf8'));
+  const land = B.landMask();
+  const latest = Math.max(...storms.map(s => s.season));
+
+  const trained = new TyphoonModel(B.buildModel(storms, { fromSeason: TRAIN[0], toSeason: TRAIN[1], land }));
+
+  // The persistence time, chosen on older storms by the 48-hour median error.
+  const tune = starts(storms, TUNE[0], TUNE[1]);
+  const tauScores = {};
+  for (const tau of TAUS) {
+    const errors = [];
+    for (const c of tune) {
+      const truth = truthAt(c, 48);
+      const run = trained.run(c.init, { tau, hours: 48 });
+      if (truth && run.points[48]) errors.push(km(run.points[48], truth));
+    }
+    tauScores[tau] = Math.round(median(errors));
+  }
+  const chosenTau = +Object.entries(tauScores).sort((a, b) => a[1] - b[1])[0][0];
+
+  const cases = starts(storms, TEST_FROM, latest);
+  const runs = {
+    model: positions(cases, c => trained.run(c.init, { tau: chosenTau })),
+    climatology: positions(cases, c => trained.run(c.init, { tau: 0, regime: 'all' })),
+    persistence: positions(cases, persistence),
+  };
+
+  // How long it lasts, for the cases whose real end is inside the fifteen days the model runs.
+  const lifetimes = [], constant = [];
+  const trainStarts = starts(storms, TRAIN[0], TRAIN[1]);
+  const typical = median(trainStarts.map(c => (c.end - c.points[c.i].t) / 3600000));
+  cases.forEach((c, i) => {
+    const remaining = (c.end - c.points[c.i].t) / 3600000;
+    if (remaining > 360) return;
+    lifetimes.push(runs.model[i].end.t - remaining);
+    constant.push(Math.abs(typical - remaining));
+  });
+
+  // Strength along the way, against keeping it as it was.
+  const intensity = [24, 48, 72].map(lead => {
+    const model = [], still = [];
+    cases.forEach((c, i) => {
+      const truth = truthAt(c, lead);
+      const m = runs.model[i].at[lead];
+      if (!truth || !m || !isFinite(truth.kt) || truth.t > c.end) return;
+      model.push(Math.abs(m.kt - truth.kt));
+      still.push(Math.abs(c.init.kt - truth.kt));
+    });
+    return { lead, n: model.length, modelMAE: +mean(model).toFixed(1), persistenceMAE: +mean(still).toFixed(1) };
+  });
+
+  // Things that would be plainly wrong on screen.
+  let crossed = 0, modelRecurved = 0, trueRecurved = 0, counted = 0;
+  cases.forEach((c, i) => {
+    const pts = runs.model[i].points;
+    if (pts.some(p => Math.sign(p.lat) !== Math.sign(c.init.lat))) crossed++;
+    if (c.init.u >= 0) return;                 // only storms still heading west can recurve
+    counted++;
+    const until = c.end;
+    const truthPts = c.points.slice(c.i).filter(p => p.t <= until);
+    const eastward = (a, b) => B.velocity(a, b).u > 5;
+    if (truthPts.some((p, k) => k > 0 && eastward(truthPts[k - 1], p))) trueRecurved++;
+    const sampled = pts.filter(p => p.t % 6 === 0);
+    if (sampled.some((p, k) => k > 0 && (wrap(p.lon - sampled[k - 1].lon) * KM_PER_DEGREE
+      * Math.cos(toRad(p.lat)) / 6) > 5)) modelRecurved++;
+  });
+
+  const report = {
+    method: 'scripts/hindcast-typhoon.cjs: model built from ' + TRAIN.join('-') + ', started on every '
+      + `storm of ${TEST_FROM}-${latest} at every twelfth hour at ${START_KT} kt or more, compared with the `
+      + 'best track. Errors in km are great-circle distance at each lead, on the cases every method still had.',
+    trainedOn: TRAIN, testedOn: [TEST_FROM, latest], starts: cases.length,
+    tauScores48h: tauScores, chosenTau,
+    track: trackErrors(cases, runs),
+    lifetime: { n: lifetimes.length, medianAbsErrorH: Math.round(median(lifetimes.map(Math.abs))),
+      medianBiasH: Math.round(median(lifetimes)), constantBaselineAbsErrorH: Math.round(median(constant)),
+      typicalRemainingH: Math.round(typical) },
+    intensity,
+    plausibility: { crossedEquator: crossed, recurvedModel: modelRecurved, recurvedTruth: trueRecurved,
+      westwardStarts: counted },
+  };
+  const reportPath = path.resolve(opt('--report', path.join(ROOT, 'records', 'typhoon-hindcast.json')));
+  fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 1) + '\n');
+
+  console.log(`trained ${TRAIN.join('-')}, tested ${TEST_FROM}-${latest}: ${cases.length} starts at >= ${START_KT} kt`);
+  console.log(`persistence time chosen on ${TUNE.join('-')}: ${chosenTau} h  (48 h median km by tau: ${JSON.stringify(tauScores)})`);
+  console.log('\nlead   n     model  climatology  persistence   alive model/truth');
+  for (const r of report.track) {
+    console.log(`${String(r.lead).padStart(4)}h ${String(r.n).padStart(5)}  ${String(r.model.median).padStart(6)}`
+      + `  ${String(r.climatology.median).padStart(11)}  ${String(r.persistence.median).padStart(11)}`
+      + `   ${r.aliveModel} / ${r.aliveTruth}`);
+  }
+  const L = report.lifetime;
+  console.log(`\nlifetime: median |error| ${L.medianAbsErrorH} h (bias ${L.medianBiasH} h) over ${L.n}; `
+    + `a constant ${L.typicalRemainingH} h would be ${L.constantBaselineAbsErrorH} h off`);
+  for (const r of intensity) console.log(`strength ${r.lead}h: model ${r.modelMAE} kt, unchanged ${r.persistenceMAE} kt (n ${r.n})`);
+  const P = report.plausibility;
+  console.log(`equator crossings ${P.crossedEquator}; recurved ${P.recurvedModel} in the model, `
+    + `${P.recurvedTruth} in reality, of ${P.westwardStarts} starts heading west`);
+}
+
+if (require.main === module) main();
+module.exports = { trueEnd, starts, persistence };
