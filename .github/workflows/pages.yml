@@ -32,15 +32,23 @@ name: Publish site
 #
 # The standalone single-file build is produced here rather than committed, so the
 # published copy is always rebuilt from the same observations the site serves.
+#
+# The Japan Meteorological Agency's typhoon forecasts are fetched on every run - a few
+# small XML files - and every three hours on a schedule, which publishes the bundled
+# observations again with the newest forecasts. The schedule never touches SSEC: the
+# observation fetch runs only when started by hand. The forecasts are published, not
+# committed, since they change every few hours.
 
 on:
   push:
     branches: [main]
     # The record this workflow writes must not start it again.
     paths-ignore: ['records/**']
-  # No schedule. A day of observations is a full turn of the Earth, which is what
-  # this set out to show, so it is fetched when someone asks for it rather than
-  # every morning for ever.
+  # A day of observations is a full turn of the Earth, which is what this set out to
+  # show, so observations are fetched when someone asks for them rather than every
+  # morning for ever. The schedule is for the typhoon forecasts alone (see above).
+  schedule:
+    - cron: '23 */3 * * *'
   workflow_dispatch:
     inputs:
       fetch:
@@ -140,6 +148,13 @@ jobs:
             console.log(`${m.length} frames, ${m[0].time} to ${m.at(-1).time}`);
           ' | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # After the step above, which can put dist/data back as committed. Best effort: a
+      # failure leaves a file with no storms, and the simulation moves storms by the
+      # typhoon object alone.
+      - name: Fetch the Japan Meteorological Agency's typhoon forecasts
+        continue-on-error: true
+        run: node scripts/fetch-jma-typhoon.cjs --dump | tee jma.log
+
       # The measured motion belongs to the observations it was measured from, so it is
       # rebuilt whenever they are replaced. No network: scripts/build-motion.cjs reads
       # only the frames just fetched. A test holds each field to its two frames.
@@ -227,6 +242,8 @@ jobs:
           # which is why it is not what a fetch does by default.
           if [ "$COMMIT_OBSERVATIONS" = "true" ]; then
             git add -A dist/weather dist/data
+            # Published, never bundled: it is out of date within hours.
+            git reset -q dist/data/jma-typhoon.json
           fi
           git status --short
           if git diff --cached --quiet; then
@@ -254,6 +271,8 @@ jobs:
           path: |
             .check-shots/
             fetch.log
+            jma.log
+            dist/data/jma-typhoon.json
             records/published-observations.json
           # .check-shots starts with a dot, and the upload skips hidden files unless
           # told otherwise - which is why the first run's artifact held no screenshots.
