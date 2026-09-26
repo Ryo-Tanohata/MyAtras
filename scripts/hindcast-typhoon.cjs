@@ -19,8 +19,10 @@
 // The model has to beat both to be worth drawing.
 //
 // The one number chosen here, the persistence time, is chosen on the older storms
-// (2005-2014), never on the ones it is then scored on: the smallest error over 24 to 120
-// hours among those that turn at least 70% as many storms as really turned. Written to
+// (2005-2014), never on the ones it is then scored on: at least six hours, so the hand-over
+// from the last observation does not kink; then the smallest error over 24 to 120 hours
+// among those that turn at least 70% as many storms as really turned, or failing that the
+// one that turns most. Written to
 // records/typhoon-hindcast.json; scripts/build-typhoon.cjs reads the choice from there.
 const fs = require('fs');
 const path = require('path');
@@ -40,6 +42,11 @@ const TEST_FROM = 2015;
 const LEADS = [12, 24, 48, 72, 96, 120];
 const TAUS = [0, 3, 6, 12, 24, 48, 72, 96];
 const RECURVE_FLOOR = 0.7;      // of the real storms' turns, how many the model must make
+// The shortest persistence allowed, whatever the scores say. The object takes over from
+// the last observation, and with none it swings at once from the storm's real motion to
+// the local average - a kink at the one moment everyone is watching. Six hours bends it
+// round over about six hours instead. On 2005-2014 it costs 68% -> 61% of real turns.
+const MIN_TAU = 6;
 const START_KT = 64;
 
 const toRad = d => d * Math.PI / 180;
@@ -197,7 +204,8 @@ function main() {
     tauScores[tau] = { km: Math.round(mean(byLead.map(median))),
       turnRatio: realTurns ? +(turns / realTurns).toFixed(3) : 0 };
   }
-  const ranked = Object.entries(tauScores).map(([tau, sc]) => ({ tau: +tau, ...sc }));
+  const ranked = Object.entries(tauScores).map(([tau, sc]) => ({ tau: +tau, ...sc }))
+    .filter(r => r.tau >= MIN_TAU);
   const turning = ranked.filter(r => r.turnRatio >= RECURVE_FLOOR).sort((a, b) => a.km - b.km);
   const chosenTau = turning.length ? turning[0].tau
     : ranked.sort((a, b) => b.turnRatio - a.turnRatio || a.km - b.km)[0].tau;
@@ -257,7 +265,7 @@ function main() {
       + `storm of ${TEST_FROM}-${latest} at every twelfth hour at ${START_KT} kt or more, compared with the `
       + 'best track. Errors in km are great-circle distance at each lead, on the cases every method still had.',
     trainedOn: TRAIN, testedOn: [TEST_FROM, latest], starts: cases.length,
-    tauScores: tauScores, recurveFloor: RECURVE_FLOOR, chosenTau,
+    tauScores: tauScores, recurveFloor: RECURVE_FLOOR, minTau: MIN_TAU, chosenTau,
     track: trackErrors(cases, runs),
     lifetime: { n: lifetimes.length, medianAbsErrorH: Math.round(median(lifetimes.map(Math.abs))),
       medianBiasH: Math.round(median(lifetimes)), constantBaselineAbsErrorH: Math.round(median(constant)),
