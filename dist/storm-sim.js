@@ -148,10 +148,16 @@
    // detail match the observations', not a model of any weather.
    vec2 q=vec2(from.x*cos(radians(from.y)),from.y)/flickerCell;float t=hour/flickerTau;
    float n=(vnoise(vec3(q,t))*.6+vnoise(vec3(q*2.3+17.,t*1.4+5.))*.4)*2.-1.;
-   // Each typhoon: its own cloud as last observed around origin.xy, turned by origin.z,
-   // set down around where it is now. Past its forecast (motion.w, 0..1) it is drawn out
-   // ahead along its path and fades into what lies beneath.
+   // Each typhoon's own cloud is lifted out of where it was last observed - else, left
+   // there as well, it stayed behind as a second storm while the carried one moved off -
+   // and set down around where the storm is now, turned by origin.z. Lifted and set down
+   // with the same weights, so at the start nothing changes. Past its forecast (motion.w,
+   // 0..1) it is drawn out ahead along its path and fades away.
+   float carried=0.;
    for(int i=0;i<${MAX_STORMS};i++){if(float(i)>=count)break;
+    float fl=mod(from.x-origin[i].y+540.,360.)-180.;
+    vec2 o=vec2(fl*KM*cos(radians(origin[i].x)),(from.y-origin[i].x)*KM);
+    c*=smoothstep(patchInner,patchOuter,length(o));
     float dl=mod(lon-storm[i].y+540.,360.)-180.;
     vec2 k=vec2(dl*KM*cos(radians(lat)),(lat-storm[i].x)*KM);
     float st=motion[i].w;vec2 dir=length(motion[i].xy)>1.?normalize(motion[i].xy):vec2(0.,1.);
@@ -162,7 +168,8 @@
     float hemi=origin[i].x>=0.?1.:-1.,ang=-hemi*origin[i].z;
     vec2 src=vec2(cos(ang)*rel.x-sin(ang)*rel.y,sin(ang)*rel.x+cos(ang)*rel.y);
     vec2 at=vec2(origin[i].y+src.x/(KM*max(.15,cos(radians(origin[i].x)))),origin[i].x+src.y/KM);
-    c=mix(c,observed(at)*(1.-.3*st),w);}
+    carried+=observed(at)*(1.-.3*st)*w;}
+   c=min(1.,c+carried);
    c=clamp(c+flickerAmp*n*(4.*c*(1.-c)+flickerBirth),0.,1.);
    gl_FragColor=vec4(c,c,c,1.);}`;
 
