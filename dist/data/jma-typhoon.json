@@ -1,5 +1,90 @@
 {
  "source": "気象庁 気象防災情報XML（台風解析・予報情報）",
- "fetched": null,
- "storms": []
+ "feed": "https://www.data.jma.go.jp/developer/xml/feed/extra_l.xml",
+ "for": "20260925.200000",
+ "fetched": "2026-09-26T08:47:13.084Z",
+ "storms": [
+  {
+   "eventId": "TC2632",
+   "number": "2626",
+   "name": "SURIGAE",
+   "kana": "スリゲ",
+   "issued": "2026-09-25T21:45:00.000Z",
+   "status": "通常",
+   "infoType": "発表",
+   "points": [
+    {
+     "time": "2026-09-25T21:00:00.000Z",
+     "kind": "analysis",
+     "lat": 22.3,
+     "lon": 127.5,
+     "pressure": 996,
+     "windKt": 50,
+     "circleKm": null,
+     "class": "台風(STS)"
+    },
+    {
+     "time": "2026-09-26T09:00:00.000Z",
+     "kind": "forecast",
+     "lat": 23,
+     "lon": 126.9,
+     "pressure": 990,
+     "windKt": 60,
+     "circleKm": 75,
+     "class": "台風(STS)"
+    },
+    {
+     "time": "2026-09-26T21:00:00.000Z",
+     "kind": "forecast",
+     "lat": 23.9,
+     "lon": 127.3,
+     "pressure": 975,
+     "windKt": 70,
+     "circleKm": 105,
+     "class": "台風(TY)"
+    },
+    {
+     "time": "2026-09-27T18:00:00.000Z",
+     "kind": "forecast",
+     "lat": 25.5,
+     "lon": 128.9,
+     "pressure": 960,
+     "windKt": 80,
+     "circleKm": 155,
+     "class": "台風(TY)"
+    },
+    {
+     "time": "2026-09-28T18:00:00.000Z",
+     "kind": "forecast",
+     "lat": 26.9,
+     "lon": 131.3,
+     "pressure": 960,
+     "windKt": 80,
+     "circleKm": 220,
+     "class": "台風(TY)"
+    },
+    {
+     "time": "2026-09-29T18:00:00.000Z",
+     "kind": "forecast",
+     "lat": 27.9,
+     "lon": 133.1,
+     "pressure": 965,
+     "windKt": 75,
+     "circleKm": 320,
+     "class": "台風(TY)"
+    },
+    {
+     "time": "2026-09-30T18:00:00.000Z",
+     "kind": "forecast",
+     "lat": 29.7,
+     "lon": 134,
+     "pressure": 970,
+     "windKt": 70,
+     "circleKm": 460,
+     "class": "台風(TY)"
+    }
+   ],
+   "url": "https://www.data.jma.go.jp/developer/xml/data/20260925214059_0_VPTW61_010000.xml"
+  }
+ ]
 }
