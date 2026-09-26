@@ -9,26 +9,52 @@
   2026
  ],
  "starts": 3684,
- "tauScoresMeanOfLeads": {
-  "0": 681,
-  "6": 642,
-  "12": 608,
-  "24": 577,
-  "48": 571,
-  "72": 585,
-  "96": 593
+ "tauScores": {
+  "0": {
+   "km": 681,
+   "turnRatio": 0.68
+  },
+  "3": {
+   "km": 661,
+   "turnRatio": 0.653
+  },
+  "6": {
+   "km": 642,
+   "turnRatio": 0.61
+  },
+  "12": {
+   "km": 608,
+   "turnRatio": 0.521
+  },
+  "24": {
+   "km": 577,
+   "turnRatio": 0.415
+  },
+  "48": {
+   "km": 571,
+   "turnRatio": 0.26
+  },
+  "72": {
+   "km": 585,
+   "turnRatio": 0.135
+  },
+  "96": {
+   "km": 593,
+   "turnRatio": 0.067
+  }
  },
- "chosenTau": 48,
+ "recurveFloor": 0.7,
+ "chosenTau": 0,
  "track": [
   {
    "lead": 12,
-   "n": 3666,
+   "n": 3667,
    "cases": 3673,
    "aliveTruth": 0.995,
    "aliveModel": 0.998,
    "model": {
-    "median": 58,
-    "mean": 71
+    "median": 113,
+    "mean": 135
    },
    "climatology": {
     "median": 120,
@@ -41,137 +67,137 @@
   },
   {
    "lead": 24,
-   "n": 3464,
+   "n": 3500,
    "cases": 3629,
    "aliveTruth": 0.956,
-   "aliveModel": 0.961,
+   "aliveModel": 0.966,
    "model": {
-    "median": 133,
-    "mean": 172
+    "median": 228,
+    "mean": 275
    },
    "climatology": {
-    "median": 235,
-    "mean": 290
+    "median": 236,
+    "mean": 292
    },
    "persistence": {
-    "median": 142,
-    "mean": 177
+    "median": 143,
+    "mean": 178
    }
   },
   {
    "lead": 48,
-   "n": 2662,
+   "n": 2808,
    "cases": 3382,
    "aliveTruth": 0.825,
-   "aliveModel": 0.817,
+   "aliveModel": 0.838,
    "model": {
-    "median": 335,
-    "mean": 416
+    "median": 451,
+    "mean": 542
    },
    "climatology": {
-    "median": 454,
-    "mean": 558
+    "median": 458,
+    "mean": 564
    },
    "persistence": {
-    "median": 368,
-    "mean": 450
+    "median": 370,
+    "mean": 452
    }
   },
   {
    "lead": 72,
-   "n": 1756,
+   "n": 1908,
    "cases": 2970,
    "aliveTruth": 0.715,
-   "aliveModel": 0.651,
+   "aliveModel": 0.657,
    "model": {
-    "median": 559,
-    "mean": 700
+    "median": 677,
+    "mean": 802
    },
    "climatology": {
     "median": 671,
-    "mean": 823
+    "mean": 822
    },
    "persistence": {
-    "median": 641,
-    "mean": 795
+    "median": 646,
+    "mean": 802
    }
   },
   {
    "lead": 96,
-   "n": 1009,
+   "n": 1136,
    "cases": 2504,
    "aliveTruth": 0.62,
-   "aliveModel": 0.483,
+   "aliveModel": 0.467,
    "model": {
-    "median": 813,
-    "mean": 993
+    "median": 897,
+    "mean": 1045
    },
    "climatology": {
-    "median": 892,
-    "mean": 1078
+    "median": 887,
+    "mean": 1058
    },
    "persistence": {
-    "median": 999,
-    "mean": 1193
+    "median": 989,
+    "mean": 1176
    }
   },
   {
    "lead": 120,
-   "n": 570,
+   "n": 666,
    "cases": 2044,
    "aliveTruth": 0.532,
-   "aliveModel": 0.364,
+   "aliveModel": 0.34,
    "model": {
-    "median": 1030,
-    "mean": 1286
+    "median": 1064,
+    "mean": 1257
    },
    "climatology": {
-    "median": 1057,
-    "mean": 1299
+    "median": 1038,
+    "mean": 1272
    },
    "persistence": {
-    "median": 1360,
-    "mean": 1610
+    "median": 1372,
+    "mean": 1624
    }
   }
  ],
  "lifetime": {
   "n": 3680,
-  "medianAbsErrorH": 27,
-  "medianBiasH": 1,
+  "medianAbsErrorH": 31,
+  "medianBiasH": 2,
   "constantBaselineAbsErrorH": 39,
   "typicalRemainingH": 84
  },
  "intensity": [
   {
    "lead": 24,
-   "n": 3371,
-   "modelMAE": 18.1,
+   "n": 3383,
+   "modelMAE": 18.7,
    "persistenceMAE": 22.4
   },
   {
    "lead": 48,
-   "n": 2481,
-   "modelMAE": 24.3,
-   "persistenceMAE": 29.3
+   "n": 2482,
+   "modelMAE": 25.3,
+   "persistenceMAE": 29.7
   },
   {
    "lead": 72,
-   "n": 1579,
-   "modelMAE": 26.9,
-   "persistenceMAE": 31.1
+   "n": 1551,
+   "modelMAE": 27.7,
+   "persistenceMAE": 31.5
   }
  ],
  "plausibility": {
   "crossedEquator": 0,
-  "recurvedModel": 384,
+  "recurvedModel": 976,
   "recurvedTruth": 1227,
   "westwardStarts": 2743,
   "endReasons": {
-   "as storms here end": 2389,
-   "weakened": 1285,
-   "left the record": 7,
-   "reached the equator": 3
+   "as storms here end": 2648,
+   "weakened": 1032,
+   "time": 1,
+   "left the record": 3
   }
  }
 }
