@@ -124,9 +124,15 @@ function legs(storms, fromSeason, toSeason) {
         motion.push({ ...mid, u: vel.u, v: vel.v, regime });
       }
       // Ends at sea: every hour a tropical storm of at least 34 kt spent over the sea, and
-      // whether the leg is where it went extratropical or fell apart.
+      // whether the leg is where its life as one ended - by any road: it went extratropical,
+      // fell apart, dropped below 34 kt, or the record of it simply stops. Counting only
+      // the first two found 415 ends in 139,000 legs, because most storms weaken below
+      // 34 kt before anyone reclassifies them, and an object with nothing but that to go
+      // on wandered warm seas for fifteen days.
       if (a.nature === 'TS' && a.landKm > 0 && a.kt >= CLASSES[0]) {
-        ends.push({ ...mid, hours: vel.hours, ended: b.nature === 'ET' || b.nature === 'DS' });
+        const ended = b.nature === 'ET' || b.nature === 'DS' || (isFinite(b.kt) && b.kt < CLASSES[0])
+          || i === p.length - 1;
+        ends.push({ ...mid, hours: vel.hours, ended });
       }
       // Strength: tropical at the start, a measured wind at both ends.
       if (a.nature !== 'TS' || !isFinite(a.kt) || !isFinite(b.kt) || a.kt < CLASSES[0]) continue;

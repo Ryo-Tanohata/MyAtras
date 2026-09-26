@@ -108,7 +108,7 @@ s.test('over warm sea it strengthens, over cold sea it fades and ends', () => {
   assert.ok(run.end.t < 360, 'and it does end');
 });
 
-s.test('it ends where past storms stopped being tropical', () => {
+s.test('it ends where past storms ended', () => {
   // A band at 30-40N where one storm in ten ends each hour: the object gets about seven
   // hours in (half-life) and stops, well before any wind limit.
   const hazard = [];
@@ -118,7 +118,7 @@ s.test('it ends where past storms stopped being tropical', () => {
   }
   const model = madeUpModel({ hazard: { cell: 2.5, cells: hazard } });
   const run = model.run({ lat: 31, lon: 160, kt: 120, u: 25, v: 12 });
-  assert.strictEqual(run.end.reason, 'went extratropical or fell apart');
+  assert.strictEqual(run.end.reason, 'as storms here end');
   assert.ok(run.end.t >= 5 && run.end.t <= 9, `after ${run.end.t} h`);
   assert.ok(run.points[run.points.length - 1].kt > 60, 'while still strong');
 });

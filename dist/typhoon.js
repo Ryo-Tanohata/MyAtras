@@ -86,10 +86,10 @@
           flat[i + 3]);
       }
       this.defaultChange = typeof intensity.fallback === 'number' ? intensity.fallback : -4;
-      // How often a tropical storm here stopped being one - went extratropical or fell
-      // apart - per hour at sea. The median change in strength cannot carry this: an end is
-      // a rare event in any one six hours, so a median never sees it, and the storms still
-      // counted as tropical at 35 degrees are exactly the ones that did not end.
+      // How often a tropical storm here stopped being one, by any road, per hour at sea.
+      // The median change in strength cannot carry this: an end is a rare event in any one
+      // six hours, so a median never sees it, and the storms still counted as tropical at
+      // 35 degrees are exactly the ones that did not end.
       const hazard = data.hazard || {};
       this.hazardCell = hazard.cell || 2.5;
       this.hazardCols = Math.round(360 / this.hazardCell);
@@ -203,9 +203,8 @@
         wasLand = land;
         points.push({ t, lat, lon, kt, land, regime });
         if (kt < p.endKt) { reason = 'weakened'; break; }
-        // Past the point where half the storms on this path would have stopped being
-        // tropical, this one has too.
-        if (survival < 0.5) { reason = 'went extratropical or fell apart'; break; }
+        // Past the point where half the storms on this path would have ended, this one has.
+        if (survival < 0.5) { reason = 'as storms here end'; break; }
         if (Math.abs(lat) > 60) { reason = 'left the tropics'; break; }
         if (t === hours) reason = 'time';
       }
